@@ -1,7 +1,96 @@
 ---
 import "../styles/site.css";
+import Icon from "../components/Icon.astro";
+import type { IconName } from "../components/Icon.astro";
+import Status from "../components/Status.astro";
+import Tile from "../components/Tile.astro";
+
 const title = "KeyHandoff: API keys, hands off";
-const description = "A small desktop app for handing someone an API key without pasting it into a chat or leaving it in a plain file. No servers, no accounts.";
+const description = "Your .env is announcing itself. KeyHandoff catches, seals and hands off API keys so they stop living in plain text files and chats. No servers, no accounts.";
+const GITHUB = "https://github.com/junovhs/keyhandoff";
+
+// All sample values, shaped like real keys and truncated.
+const ENV_FILES = [
+  { path: "~/work/billing-api/.env", vars: [
+    { name: "STRIPE_SECRET_KEY", key: "sk_live_51Nq8vTzK2mPx", pointer: "handoff:Stripe" },
+    { name: "DATABASE_URL", key: "postgres://admin:hG7xQ2@db", pointer: "handoff:BillingDB" },
+  ] },
+  { path: "~/work/report-bot/.env", vars: [
+    { name: "OPENAI_API_KEY", key: "sk-proj-Xk29fLmQ7vRb", pointer: "handoff:OpenAI" },
+    { name: "DIALPAD_API_KEY", key: "dp_7Qm2vX9kLw4Tz", pointer: "handoff:Dialpad" },
+  ] },
+  { path: "~/side/old-prototype/.env", vars: [
+    { name: "AWS_SECRET_ACCESS_KEY", key: "wJ8rTq0ZnB5yHc2Lp", pointer: "handoff:AWS" },
+  ] },
+];
+
+const READERS: { icon: IconName; name: string; what: string; blocked?: boolean }[] = [
+  { icon: "bot", name: "Your AI assistant", what: "Stopped by an ignore rule", blocked: true },
+  { icon: "package", name: "A poisoned npm package", what: "Runs as you on install" },
+  { icon: "plugin", name: "A rogue editor extension", what: "Sees your whole workspace" },
+  { icon: "bug", name: "An infostealer", what: "Searches for this filename" },
+  { icon: "user", name: "Someone in your session", what: "One search and they're done" },
+  { icon: "cloud", name: "Backup and sync", what: "Copies it off your machine" },
+];
+
+const INCIDENTS = [
+  { when: "Aug 2025", name: "Nx build system", text: "Poisoned releases searched developer machines for .env files and other secrets, and turned local AI coding tools into the search party.", source: "StepSecurity", href: "https://www.stepsecurity.io/blog/supply-chain-security-alert-popular-nx-build-system-package-compromised-with-data-stealing-malware" },
+  { when: "Sep 2025", name: "Shai-Hulud worm", text: "A self-replicating npm worm ran a secret scanner on infected machines, published what it found, and used stolen tokens to backdoor more packages.", source: "Varonis", href: "https://www.varonis.com/blog/shai-hulud-campaigns" },
+  { when: "May 2026", name: "node-ipc", text: "Malicious versions were live for about two hours. The list of files they went after spelled it out: .env.local, .env.production.", source: "Semgrep", href: "https://semgrep.dev/blog/2026/not-your-ipc-but-node-ipc-npm-hit-again-with-supply-chain-attack-but-this-time-its-not-a-worm" },
+];
+
+// The replay. Times are ms from the start; the keys are the same samples as the hero.
+const YOU_SEE = [
+  { at: 0, text: "$ npm install" },
+  { at: 900, text: "" },
+  { at: 7000, text: "added 312 packages in 9s" },
+  { at: 7300, text: "" },
+  { at: 7500, text: "64 packages are looking for funding" },
+  { at: 7700, text: "  run `npm fund` for details" },
+  { at: 8000, text: "$ " },
+];
+const IT_RAN: { at: number; text: string; kind?: string }[] = [
+  { at: 1000, text: "postinstall: running as you" },
+  { at: 1900, text: "$ find ~ -name \".env*\"" },
+  { at: 2500, text: "  ~/work/billing-api/.env" },
+  { at: 2700, text: "  ~/work/report-bot/.env" },
+  { at: 2900, text: "  ~/side/old-prototype/.env" },
+  { at: 3100, text: "  ...and 44 more" },
+  { at: 3900, text: "STRIPE_SECRET_KEY=sk_live_51Nq8vTzK2mPx", kind: "hit" },
+  { at: 4150, text: "OPENAI_API_KEY=sk-proj-Xk29fLmQ7vRb", kind: "hit" },
+  { at: 4400, text: "AWS_SECRET_ACCESS_KEY=wJ8rTq0ZnB5yHc2Lp", kind: "hit" },
+  { at: 4650, text: "DATABASE_URL=postgres://admin:hG7xQ2@db", kind: "hit" },
+  { at: 5400, text: "checking which keys still work... 4 of 4" },
+  { at: 6300, text: "uploaded. removing traces.", kind: "done" },
+];
+
+const WORTH: { icon: IconName; name: string; text: string }[] = [
+  { icon: "key", name: "STRIPE_SECRET_KEY", text: "A live key can read customer records and issue refunds and payouts. It's your money." },
+  { icon: "cloud", name: "AWS_SECRET_ACCESS_KEY", text: "Servers on your account, your bill, and whatever is sitting in your buckets." },
+  { icon: "bot", name: "OPENAI_API_KEY", text: "Someone else's traffic on your credit card, until the limit or the invoice stops them." },
+  { icon: "users", name: "DATABASE_URL", text: "Every row you have. Now you get to write the email to your customers." },
+];
+
+const AUDIT = [
+  { os: "macOS / Linux", cmd: "find ~ -name \".env*\" -not -path \"*/node_modules/*\" 2>/dev/null | wc -l" },
+  { os: "Windows", cmd: "(gci $HOME -Recurse -Force -Filter .env* -EA 0 | ? FullName -notmatch 'node_modules').Count" },
+];
+
+const TEAM_SCREENS = [
+  { src: "/shots/ask.png", who: "Ann", title: "Ask", text: "One click copies a request. It holds no secret, so any chat is fine.", alt: "KeyHandoff showing Request copied, with a file called Key request from Ann.handoff" },
+  { src: "/shots/listening.png", who: "Ben", title: "Catch", text: "Ben opens it and copies the key from the provider's page. KeyHandoff catches that one copy.", alt: "KeyHandoff Safe Copy listening for a copy, showing that Ann is asking and her computer's fingerprint" },
+  { src: "/shots/sealed.png", who: "Ben", title: "Seal", text: "Sealed so only Ann's computer can open it. Ben's computer keeps nothing.", alt: "KeyHandoff showing Sealed for Ann, with a file called Key for Ann.handoff" },
+  { src: "/shots/accepted.png", who: "Ann", title: "Keep", text: "Ann opens the file once. The key is in Ann's vault and the copy in the chat is dead.", alt: "KeyHandoff showing Ben sent you a key, with choices of Once, 30 days or Keep" },
+];
+
+const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
+  { icon: "eyeoff", title: "Nothing to shoulder-surf", text: "KeyHandoff has no way to show a key on screen. Not in the vault, not anywhere." },
+  { icon: "chip", title: "Secrets stay in the Rust core", text: "The app's screens only ever receive names, states and ids. The values never reach them." },
+  { icon: "flame", title: "One open, then gone", text: "A sealed file opens once. After that, every copy of it is permanently unreadable." },
+  { icon: "chat", title: "Works in any chat", text: "Requests and keys are ordinary files. If a channel only takes text, paste them. They repair themselves when mangled." },
+  { icon: "offline", title: "No servers, no accounts", text: "No sign-up, no cloud, no telemetry and no network code. Nothing to breach but your own machine." },
+  { icon: "book", title: "Open to read", text: "Read every line, free to use at work. The sealing library is Apache 2.0, so it can be reviewed and reused." },
+];
 ---
 <!doctype html>
 <html lang="en">
@@ -16,71 +105,360 @@ const description = "A small desktop app for handing someone an API key without 
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="canonical" href="https://keyhandoff.dev/" />
+    <script is:inline>document.documentElement.classList.add("js");</script>
   </head>
   <body>
-    <div class="wrap">
-      <nav class="nav">
-        <a class="brand" href="/"><img src="/icon.png" alt="" />KeyHandoff</a>
+    <div class="glow" aria-hidden="true"></div>
+
+    <nav class="nav">
+      <div class="wrap nav-in">
+        <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
         <span class="sp"></span>
+        <a class="l hide-s" href="#blind-spot">The blind spot</a>
+        <a class="l hide-s" href="#fronts">What it does</a>
+        <a class="l hide-s" href="#roadmap">Roadmap</a>
         <a class="l" href="/docs/">Docs</a>
-        <a class="l" href="https://github.com/junovhs/keyhandoff">GitHub</a>
-      </nav>
+        <a class="btn secondary small" href={GITHUB}><svg class="gh" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="hide-xs">GitHub</span></a>
+      </div>
+    </nav>
 
-      <header class="hero">
-        <span class="pill">pre-release · Windows and Linux</span>
-        <h1>API keys,<br /><em>hands off.</em></h1>
-        <p class="lede">
-          Hand someone an API key, or any secret, without pasting it into a chat or leaving it in a plain file.
-          No servers, no accounts. Requests and keys travel as ordinary files over whatever channel you already use.
-        </p>
+    <header class="wrap hero">
+      <div class="hero-copy">
+        <span class="pill"><i></i>Pre-release · Windows and Linux</span>
+        <h1>Your <code>.env</code> is announcing itself.</h1>
+        <p class="lede">Working API keys, in plain text, in a file with the same name in every project you've ever touched. Anything that lands on your machine can find them in one search. KeyHandoff keeps your keys in a sealed vault, and moves them between people and programs without anyone ever seeing them.</p>
         <div class="cta">
-          <a class="btn primary" href="/docs/">Read the docs</a>
-          <a class="btn secondary" href="https://github.com/junovhs/keyhandoff">View on GitHub</a>
+          <a class="btn primary" href="#blind-spot">See the blind spot <Icon name="down" /></a>
+          <a class="btn secondary" href="#fronts">What KeyHandoff does</a>
         </div>
-      </header>
+        <ul class="trust">
+          <li><Icon name="offline" />No servers</li>
+          <li><Icon name="user" />No accounts</li>
+          <li><Icon name="eyeoff" />Keys never shown</li>
+          <li><Icon name="book" />Free and open to read</li>
+        </ul>
+      </div>
 
-      <section id="how">
-        <h2>How it works</h2>
-        <p class="sub">Four steps. The key is never shown on screen, and the sender keeps nothing.</p>
-        <ol class="steps">
-          <li><span class="n">1</span><b>Ask</b><p>Click <em>Request a key</em> and send the request file to whoever has the key.</p></li>
-          <li><span class="n">2</span><b>Catch</b><p>They copy the key from the provider's page. KeyHandoff catches that one copy and wipes the clipboard.</p></li>
-          <li><span class="n">3</span><b>Seal</b><p>It's encrypted so only your computer can open it, and only once. They send it back and keep nothing.</p></li>
-          <li><span class="n">4</span><b>Keep</b><p>You open the file. The key goes into your vault, and every copy of the sealed file becomes unreadable.</p></li>
-        </ol>
-      </section>
-
-      <section id="honest">
-        <h2>What it protects, and what it doesn't</h2>
-        <p class="sub">KeyHandoff removes the places a key normally lingers. It can't fix a compromised computer.</p>
-        <div class="cols">
-          <div class="card">
-            <h3>Removed</h3>
-            <ul>
-              <li>Chat and email only carry a sealed file, useless to anyone else.</li>
-              <li>A sealed file can't be opened twice.</li>
-              <li>Keys are never displayed. Only the Rust core handles values.</li>
-              <li>No servers, accounts, telemetry or network code.</li>
-            </ul>
+      <figure class="scan" id="scan" data-state="exposed">
+        <div class="win-bar">
+          <span class="win-title"><Icon name="search" />Find in files</span>
+          <span class="caps" aria-hidden="true"><kbd>Ctrl</kbd><kbd>F</kbd></span>
+        </div>
+        <div class="scan-field">
+          <Icon name="search" />
+          <span class="q"><span id="scan-q">.env</span><i class="caret"></i></span>
+          <span class="count"><span class="count-bad"><Icon name="flame" size={14} />3 files, 5 live keys</span><span class="count-ok"><Icon name="shield" size={14} />3 files, 0 keys</span></span>
+        </div>
+        <div class="scan-rows" id="scan-rows">
+          {ENV_FILES.map((f) => (
+            <div class="group">
+              <div class="row path"><Icon name="file" />{f.path}</div>
+              {f.vars.map((v) => (
+                <div class="row var"><span class="k">{v.name}=</span><span class="v" data-key={v.key} data-pointer={v.pointer}>{v.key}</span></div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div class="scan-foot">
+          <div class="segmented" role="group" aria-label="Compare">
+            <button type="button" data-to="exposed" aria-pressed="true">Today</button>
+            <button type="button" data-to="safe" aria-pressed="false">With KeyHandoff</button>
           </div>
-          <div class="card dashed">
-            <h3>Not covered</h3>
-            <ul>
-              <li>The brief moment a copied key sits on the clipboard before the wipe.</li>
-              <li>Malware running as you.</li>
-              <li>Lost computers: keys are tied to one machine, with no recovery.</li>
-              <li>Pre-release: no security audit yet. Use test keys.</li>
-            </ul>
+          <Status kind="building" label="Pointers in progress" />
+        </div>
+      </figure>
+    </header>
+
+    <section class="wrap" id="blind-spot">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="search" />The blind spot</span>
+        <h2>Everyone's guarding the file from the AI. Who's guarding it from everyone else?</h2>
+        <p class="sub">The advice right now is to stop your LLM reading <code>.env</code>. Sure. Obviously. Do that. But you've locked one door of a house with a sign on the lawn. Developer machines get compromised all the time, and an attacker who lands on yours doesn't need to be clever. They search for a filename.</p>
+      </div>
+
+      <div class="readers rv">
+        <svg class="reader-lines" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
+          <path class="stop" d="M300 70 C 400 70, 400 150, 440 180" />
+          <path class="leak" d="M500 210 C 400 210, 400 210, 300 210" />
+          <path class="leak" d="M500 210 C 420 250, 400 350, 300 350" />
+          <path class="leak" d="M500 210 C 600 170, 600 70, 700 70" />
+          <path class="leak" d="M500 210 C 600 210, 600 210, 700 210" />
+          <path class="leak" d="M500 210 C 580 250, 600 350, 700 350" />
+        </svg>
+        {READERS.map((r, i) => (
+          <div class:list={["reader", `r${i}`, { blocked: r.blocked }]}>
+            <span class="reader-ico"><Icon name={r.icon} size={18} /></span>
+            <span class="reader-txt"><b>{r.name}</b><span>{r.what}</span></span>
+            <span class="reader-state"><Icon name={r.blocked ? "shield" : "key"} size={15} /></span>
+          </div>
+        ))}
+        <div class="envfile">
+          <span class="ring"></span><span class="ring two"></span>
+          <span class="envfile-ico"><Tile name="file" scale={4} size="lg" plain /></span>
+          <code>.env</code>
+          <span>plain text</span>
+        </div>
+      </div>
+      <p class="punch rv">Ignore rules stop <em>one</em> of these.</p>
+    </section>
+
+    <section class="wrap" id="replay">
+      <div class="head rv">
+        <span class="eyebrow alarm"><Icon name="flame" />How it actually goes</span>
+        <h2>You won't see it happen. It looks like a normal Tuesday.</h2>
+        <p class="sub">One dependency of a dependency ships a bad release. You run an install, like you do every day. This is the same moment from both sides.</p>
+      </div>
+
+      <div class="replay rv" id="replay-stage">
+        <div class="replay-bar">
+          <span class="replay-clock"><i></i><span id="replay-clock">00:09</span></span>
+          <span class="replay-note">Illustration, based on the real campaigns below</span>
+          <button type="button" class="replay-again" id="replay-again"><Icon name="right" size={14} />Replay</button>
+        </div>
+        <div class="replay-panes">
+          <div class="pane calm">
+            <span class="pane-label"><Icon name="eyeoff" size={14} />What you see</span>
+            <pre class="term">{YOU_SEE.map((l) => <span class="line" data-at={l.at}>{l.text}</span>)}</pre>
+          </div>
+          <div class="pane hostile">
+            <span class="pane-label"><Icon name="bug" size={14} />What ran as you</span>
+            <pre class="term">{IT_RAN.map((l) => <span class:list={["line", l.kind]} data-at={l.at}>{l.text}</span>)}</pre>
           </div>
         </div>
-      </section>
+        <p class="replay-end line" data-at="8200"><b>No crash. No warning. No prompt.</b> Your tests pass, your day goes on, and you find out from an invoice, or from a customer.</p>
+      </div>
 
-      <footer>
-        <span>© KeyHandoff</span>
-        <a href="/docs/">Documentation</a>
-        <a href="https://github.com/junovhs/keyhandoff">GitHub</a>
-        <a href="https://github.com/junovhs/keyhandoff/security">Security</a>
-      </footer>
-    </div>
+      <div class="head sub-head rv">
+        <h3 class="big">One key is never just one key.</h3>
+      </div>
+      <div class="worth">
+        {WORTH.map((w, i) => (
+          <div class="worth-cell rv" style={`--d:${i * 70}ms`}>
+            <span class="worth-top"><Icon name={w.icon} size={18} /><code>{w.name}</code></span>
+            <p>{w.text}</p>
+          </div>
+        ))}
+      </div>
+
+      <div class="audit rv">
+        <div class="audit-copy">
+          <h3 class="big">Now go look. It takes ten seconds.</h3>
+          <p>This is the entire technique. It only prints a number, and nothing leaves your machine. Don't forget the prototype from two years ago: those keys usually still work.</p>
+        </div>
+        <div class="audit-cmds">
+          {AUDIT.map((a) => (
+            <div class="cmd">
+              <span class="cmd-os">{a.os}</span>
+              <code>{a.cmd}</code>
+              <button type="button" class="copy" data-copy={a.cmd} aria-label={`Copy the ${a.os} command`}><Icon name="clip" size={15} /><span>Copy</span></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="head sub-head rv">
+        <h3 class="big">This keeps happening.</h3>
+      </div>
+      <div class="incidents">
+        {INCIDENTS.map((n, i) => (
+          <a class="incident rv" style={`--d:${i * 80}ms`} href={n.href}>
+            <span class="when">{n.when}</span>
+            <h3>{n.name}</h3>
+            <p>{n.text}</p>
+            <span class="src">{n.source} <Icon name="out" size={13} /></span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="wrap" id="fronts">
+      <div class="head center rv">
+        <span class="eyebrow"><Icon name="key" />What KeyHandoff does</span>
+        <h2>One vault. Three places your keys stop leaking.</h2>
+        <p class="sub">Whether it's just you, your code or your whole team, KeyHandoff keeps custody of a key from the provider's page onward, so people and their tools barely touch it.</p>
+      </div>
+      <div class="hub rv" aria-hidden="true">
+        <span class="hub-mark"><Tile name="mark" scale={3} size="lg" /></span>
+        <svg viewBox="0 0 1000 90" preserveAspectRatio="none">
+          <path d="M500 0 C 500 50, 166 40, 166 90" /><path d="M500 0 V 90" /><path d="M500 0 C 500 50, 834 40, 834 90" />
+        </svg>
+      </div>
+      <div class="fronts">
+        <a class="front rv" href="#solo">
+          <Tile name="key" scale={3} />
+          <h3>Just you</h3>
+          <p>Bring every key into one sealed place. Then have it typed out for you whenever you need it, with nothing to paste.</p>
+          <span class="stack"><Status kind="now" label="Save: now" /><Status kind="building" label="Type: in progress" /></span>
+        </a>
+        <a class="front rv" style="--d:80ms" href="#code">
+          <Tile name="file" scale={3} />
+          <h3>Your code</h3>
+          <p>Replace the secrets in <code>.env</code> with pointers. Your programs ask the vault, and a search of your disk finds no keys.</p>
+          <span class="stack"><Status kind="building" /></span>
+        </a>
+        <a class="front rv" style="--d:160ms" href="#team">
+          <Tile name="send" scale={4} />
+          <h3>Your team</h3>
+          <p>Need a key from someone? Send a request, get a sealed reply. The chat only ever carries a file that's useless to anyone else.</p>
+          <span class="stack"><Status kind="now" /></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="wrap split" id="solo">
+      <div class="split-copy rv">
+        <span class="eyebrow"><Icon name="user" />Just you</span>
+        <h2>Every key in one place. None of them in your way.</h2>
+        <p class="sub">Solo devs end up with keys in notes apps, old chats and a dozen <code>.env</code> files. Give them one home, and stop handling them.</p>
+        <ul class="feats">
+          <li><span class="f-ico"><Icon name="clip" size={18} /></span><div><h3>Bring it in <Status kind="now" /></h3><p>Click <b>Add your own</b> and copy the key from the provider's page. Safe Copy catches that one copy, wipes the clipboard and switches off.</p></div></li>
+          <li><span class="f-ico"><Icon name="clock" size={18} /></span><div><h3>Keep it your way <Status kind="now" /></h3><p>Name it, then one tap: <b>Once</b>, <b>30 days</b> or <b>Keep</b>. Sealed on this device, and gone on schedule.</p></div></li>
+          <li><span class="f-ico"><Icon name="type" size={18} /></span><div><h3>Have it typed out <Status kind="building" /></h3><p>Click a box and KeyHandoff types the key straight into it. No clipboard, no paste, no peeking.</p></div></li>
+        </ul>
+      </div>
+      <div class="split-art solo-art rv">
+        <figure class="shot back"><img src="/shots/listening.png" width="800" height="1200" loading="lazy" alt="KeyHandoff Safe Copy listening for one copy, with a countdown ring around Ctrl and C" /></figure>
+        <figure class="shot front-shot"><img src="/shots/home.png" width="800" height="1200" loading="lazy" alt="The KeyHandoff vault showing 3 keys, sealed: Dialpad, Stripe and OpenAI" /></figure>
+        <div class="typer" aria-hidden="true">
+          <span class="typer-label"><Icon name="key" size={14} />Typing Stripe (billing)</span>
+          <span class="typer-field"><span class="dots"></span><i class="caret"></i></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap" id="code">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="terminal" />Your code <Status kind="building" /></span>
+        <h2>A search finds a pointer. Not a key.</h2>
+        <p class="sub">We're building a better <code>.env</code>. The file stays, your code stays, and the secret leaves. A one-line loader reads each pointer and asks the running app for the value over a private pipe on your own machine. An AI assistant or a stranger who opens the file sees a name and nothing else.</p>
+      </div>
+      <div class="code-grid rv">
+        <div class="diff">
+          <div class="diff-pane bad">
+            <span class="diff-label"><Icon name="flame" size={14} />.env today</span>
+            <pre><code>DIALPAD_API_KEY=<mark>dp_7Qm2vX9kLw4Tz</mark>
+OPENAI_API_KEY=<mark>sk-proj-Xk29fLmQ7vRb</mark></code></pre>
+          </div>
+          <div class="diff-pane good">
+            <span class="diff-label"><Icon name="shield" size={14} />.env with KeyHandoff</span>
+            <pre><code>DIALPAD_API_KEY=<mark>handoff:Dialpad</mark>
+OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
+          </div>
+        </div>
+        <div class="prompt">
+          <div class="prompt-top"><Tile name="mark" scale={2} size="sm" /><b>KeyHandoff</b><span>A program is asking</span></div>
+          <p class="prompt-q"><code>report.py</code> wants the <b>Dialpad</b> key</p>
+          <p class="prompt-where"><Icon name="file" size={14} />~/work/report-bot</p>
+          <div class="prompt-btns"><span class="btn secondary small">Just this once</span><span class="btn primary small">Always allow</span></div>
+        </div>
+      </div>
+      <div class="flow rv">
+        <div class="flow-track" aria-hidden="true"><i class="ask"></i><i class="back"></i></div>
+        <div class="flow-node n1"><span class="node-ico"><Icon name="terminal" size={22} /></span><h3>Your program starts</h3><p>The loader reads <code>.env</code> and finds a pointer where a key used to be.</p></div>
+        <div class="flow-node n2"><span class="node-ico"><Icon name="lock" size={22} /></span><h3>It asks privately</h3><p>The request goes over a local pipe. Nothing leaves your machine.</p></div>
+        <div class="flow-node n3"><span class="node-ico"><Icon name="shield" size={22} /></span><h3>KeyHandoff checks</h3><p>Which program, in which folder? First time, you approve it once. Others get nothing.</p></div>
+        <div class="flow-node n4"><span class="node-ico"><Icon name="key" size={22} /></span><h3>The key arrives</h3><p>Straight into that program's memory. The file on disk never changes.</p></div>
+      </div>
+    </section>
+
+    <section class="wrap" id="team">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="users" />Your team <Status kind="now" /></span>
+        <h2>Need a key from someone? Stop asking them to paste it.</h2>
+        <p class="sub">The key you need is with your boss, a client or the one person with billing access. Today it lands in a chat, forever. With KeyHandoff, the chat only ever carries a sealed file.</p>
+      </div>
+      <div class="screens rv">
+        {TEAM_SCREENS.map((s, i) => (
+          <figure class="screen" style={`--i:${i}`}>
+            <div class="shot"><img src={s.src} width="800" height="1200" loading="lazy" alt={s.alt} /></div>
+            <figcaption>
+              <span class="who">{s.who}'s computer</span>
+              <h3>{s.title}</h3>
+              <p>{s.text}</p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <div class="wire rv" aria-hidden="true">
+        <span class="wire-end"><Icon name="user" size={18} />Ann</span>
+        <span class="wire-line">
+          <span class="wire-file up"><Icon name="file" size={14} />Key request from Ann.handoff</span>
+          <span class="wire-file down"><Icon name="lock" size={14} />Key for Ann.handoff</span>
+        </span>
+        <span class="wire-end"><Icon name="user" size={18} />Ben</span>
+      </div>
+      <p class="wire-note rv"><Icon name="chat" />Slack, Teams, email, whatever you already use. No links, nothing to sign up for.</p>
+    </section>
+
+    <section class="wrap" id="built-in">
+      <div class="head center rv">
+        <span class="eyebrow"><Icon name="shield" />Built in, everywhere</span>
+        <h2>Calm on the surface. Serious underneath.</h2>
+      </div>
+      <div class="bento">
+        {BUILT_IN.map((b, i) => (
+          <div class="cell rv" style={`--d:${i * 60}ms`}>
+            <span class="f-ico"><Icon name={b.icon} size={18} /></span>
+            <h3>{b.title}</h3>
+            <p>{b.text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="wrap" id="roadmap">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="clock" />Where it's going</span>
+        <h2>Your boss gives you a key in a few clicks. Your code and your AI use it. Nobody ever sees it.</h2>
+        <p class="sub">That's the bar. Here's where we are.</p>
+      </div>
+      <div class="road rv">
+        <div class="road-col on">
+          <Status kind="now" label="Works today" />
+          <ul>
+            <li><Icon name="check" />Requests and sealed replies between two people</li>
+            <li><Icon name="check" />Safe Copy: catch one copy, wipe the clipboard</li>
+            <li><Icon name="check" />Encrypted vault with Once, 30 days or Keep</li>
+            <li><Icon name="check" />Windows and Linux (X11)</li>
+          </ul>
+        </div>
+        <div class="road-col">
+          <Status kind="building" label="Building now" />
+          <ul>
+            <li><Icon name="file" /><code>.env</code> pointers over a private pipe</li>
+            <li><Icon name="shield" />Approvals tied to program and folder</li>
+            <li><Icon name="type" />Typing a key into a field, no clipboard</li>
+          </ul>
+        </div>
+        <div class="road-col">
+          <span class="status next"><i></i>Up next</span>
+          <ul>
+            <li><Icon name="chip" />Hardware-backed vault with TPM and Windows Hello</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap end rv">
+      <Tile name="mark" scale={4} size="lg" />
+      <h2>Get your keys out of the file.</h2>
+      <p class="sub">KeyHandoff is in pre-release, so start with test keys. Build it from source and try a handoff today.</p>
+      <div class="cta">
+        <a class="btn primary" href={GITHUB}>Get it on GitHub <Icon name="right" /></a>
+        <a class="btn secondary" href="/docs/">Read the docs</a>
+      </div>
+    </section>
+
+    <footer class="wrap">
+      <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+      <span class="sp"></span>
+      <a href="/docs/">Documentation</a>
+      <a href={GITHUB}>GitHub</a>
+      <a href={`${GITHUB}/security`}>Security</a>
+    </footer>
+
+    <script>
+      import "../scripts/site.ts";
+    </script>
   </body>
 </html>

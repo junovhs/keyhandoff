@@ -1,0 +1,20 @@
+---
+// The app's pixel art (../../../src/art.tsx) on its blue tile. Whole-number scales only.
+const ICONS = {
+  mark: [10, 10, "M0 0h6v2h-6zM0 2h2v2h-2zM4 3h6v2h-6zM0 4h2v1h-2zM0 5h6v2h-6zM8 5h2v3h-2zM4 8h6v2h-6z"],
+  key: [12, 8, "M1 2h3v1h-3zM0 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h7v1h-7zM0 5h1v1h-1zM4 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM1 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1z"],
+  shield: [12, 11, "M1 0h10v1h-10zM0 1h12v2h-12zM0 3h5v1h-5zM7 3h5v1h-5zM0 4h4v2h-4zM8 4h4v2h-4zM0 6h5v1h-5zM7 6h5v1h-5zM1 7h10v1h-10zM2 8h8v1h-8zM3 9h6v1h-6zM5 10h2v1h-2z"],
+  sealed: [12, 10, "M1 0h10v1h-10zM1 1h1v8h-1zM10 1h1v8h-1zM3 2h6v1h-6zM3 4h4v1h-4zM5 6h3v1h-3zM4 7h5v1h-5zM5 8h3v1h-3zM1 9h10v1h-10z"],
+  clip: [10, 10, "M3 0h4v1h-4zM1 1h2v1h-2zM4 1h2v1h-2zM7 1h2v1h-2zM1 2h1v7h-1zM8 2h1v7h-1zM3 3h4v1h-4zM3 5h3v1h-3zM3 7h4v1h-4zM1 9h8v1h-8z"],
+  send: [10, 7, "M5 0h1v1h-1zM5 1h2v1h-2zM1 2h8v1h-8zM1 3h9v1h-9zM1 4h8v1h-8zM5 5h2v1h-2zM5 6h1v1h-1z"],
+  file: [10, 9, "M1 0h6v1h-6zM1 1h1v7h-1zM6 1h2v1h-2zM6 2h1v1h-1zM8 2h1v1h-1zM6 3h4v1h-4zM3 4h2v2h-2zM9 4h1v4h-1zM6 5h2v2h-2zM1 8h9v1h-9z"],
+  clock: [10, 9, "M3 0h4v1h-4zM1 1h2v1h-2zM7 1h2v1h-2zM1 2h1v1h-1zM4 2h1v2h-1zM8 2h1v1h-1zM0 3h1v3h-1zM9 3h1v3h-1zM4 4h3v1h-3zM1 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM7 7h2v1h-2zM3 8h4v1h-4z"],
+} as const;
+
+interface Props { name: keyof typeof ICONS; scale?: number; size?: "sm" | "md" | "lg"; plain?: boolean }
+const { name, scale = 3, size = "md", plain = false } = Astro.props;
+const [w, h, d] = ICONS[name];
+---
+<span class:list={[plain ? "tile-plain" : "tile", size]}>
+  <svg class="px" viewBox={`0 0 ${w} ${h}`} width={w * scale} height={h * scale} shape-rendering="crispEdges" aria-hidden="true"><path d={d} fill="currentColor" /></svg>
+</span>
