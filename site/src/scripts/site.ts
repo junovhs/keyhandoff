@@ -19,19 +19,6 @@ if (scan) runScan(scan);
 const replay = document.getElementById("replay-stage");
 if (replay) runReplay(replay);
 
-document.querySelectorAll<HTMLButtonElement>(".copy").forEach((b) => {
-  const label = b.querySelector("span")!;
-  b.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(b.dataset.copy!);
-    b.classList.add("done");
-    label.textContent = "Copied";
-    setTimeout(() => {
-      b.classList.remove("done");
-      label.textContent = "Copy";
-    }, 1600);
-  });
-});
-
 /** Plays the attack line by line the first time it scrolls into view. */
 function runReplay(root: HTMLElement) {
   const lines = Array.from(root.querySelectorAll<HTMLElement>(".line"));

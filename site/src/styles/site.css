@@ -211,15 +211,6 @@ html.js .replay.ready .line:not(.on) { visibility: hidden; }
 .worth-top { display: flex; flex-direction: column; gap: 10px; color: var(--exposed); min-width: 0; }
 .worth-top code { font-size: 12.5px; font-weight: 500; overflow-wrap: anywhere; }
 .worth-cell p { margin: 0; color: var(--text-2); font-size: 15.5px; }
-.audit { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 32px; align-items: center; margin-top: 112px; padding: 40px; border: 1px solid var(--exposed); border-radius: 18px; background: linear-gradient(120deg, #150807, var(--surface) 60%); }
-.audit-copy p { margin: 10px 0 0; color: var(--text-2); font-size: 16px; }
-.audit-cmds { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; min-width: 0; padding: 12px 12px 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--ground); }
-.cmd-os { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--text-3); }
-.cmd code { min-width: 0; padding-bottom: 4px; font-size: 12.5px; line-height: 1.5; white-space: nowrap; overflow-x: auto; }
-.copy { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--raised); color: var(--text); font: 500 13px var(--font); cursor: pointer; transition: border-color .15s; }
-.copy:hover { border-color: var(--text-3); }
-.copy.done { border-color: var(--accent); color: var(--accent-ink); }
 
 /* fronts */
 .hub { position: relative; height: 150px; margin-bottom: -2px; }
@@ -356,7 +347,7 @@ html.js .front.rv.in:hover { transform: translateY(-3px); }
   .screens { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin-inline: -16px; padding: 12px 16px; gap: 12px; }
   .screen { flex: 0 0 min(72vw, 280px); scroll-snap-align: center; animation: none; }
   .wire { display: none; }
-  .bento, .fronts, .incidents, .road, .audit { grid-template-columns: minmax(0, 1fr); }
+  .bento, .fronts, .incidents, .road { grid-template-columns: minmax(0, 1fr); }
   .worth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .replay-panes { grid-template-columns: minmax(0, 1fr); }
   .pane.hostile { border-left: 0; border-top: 1px solid var(--line); }
@@ -385,7 +376,6 @@ html.js .front.rv.in:hover { transform: translateY(-3px); }
   .replay-note { display: none; }
   .replay-clock { flex: 1; }
   .term { font-size: 12.5px; }
-  .audit { padding: 22px; }
   .front, .cell, .road-col, .incident, .worth-cell { padding: 24px; }
   section { padding: 72px 0; }
   .flow { grid-template-columns: minmax(0, 1fr); }
