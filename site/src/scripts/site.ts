@@ -73,10 +73,15 @@ function runReplay(root: HTMLElement) {
   start.observe(root);
 }
 
-/** Types the search, then the keys turn up one after another. */
+type State = "exposed" | "safe";
+
+/** Searches for .env and finds the keys, then shows KeyHandoff turning them into pointers. */
 function runScan(root: HTMLElement) {
   const q = document.getElementById("scan-q")!;
   const rows = Array.from(root.querySelectorAll<HTMLElement>(".row"));
+  const values = Array.from(root.querySelectorAll<HTMLElement>(".v"));
+  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-to]"));
+  let run = 0;
   let visible = true;
 
   const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -84,31 +89,83 @@ function runScan(root: HTMLElement) {
     while (!visible) await wait(250);
   };
 
-  async function loop() {
-    for (;;) {
+  function setState(state: State, animate: boolean) {
+    root.dataset.state = state;
+    for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.to === state));
+    for (const v of values) {
+      const text = state === "safe" ? v.dataset.pointer! : v.dataset.key!;
+      if (animate && !reduced) scramble(v, text);
+      else {
+        rolling.set(v, text);
+        v.textContent = text;
+      }
+    }
+  }
+
+  async function loop(id: number) {
+    while (id === run) {
       await whileVisible();
+      setState("exposed", false);
       root.classList.remove("found");
       rows.forEach((r) => r.classList.remove("on"));
       q.textContent = "";
       root.classList.add("pressing");
       await wait(700);
+      if (id !== run) return;
       root.classList.remove("pressing");
       for (const ch of ".env") {
         q.textContent += ch;
         await wait(130);
+        if (id !== run) return;
       }
       await wait(250);
       for (const r of rows) {
+        if (id !== run) return;
         r.classList.add("on");
         await wait(70);
       }
+      if (id !== run) return;
       root.classList.add("found");
-      await wait(6500);
+      await wait(3600);
+      if (id !== run) return;
+      await whileVisible();
+      setState("safe", true);
+      await wait(5200);
     }
+  }
+
+  for (const b of buttons) {
+    b.addEventListener("click", () => {
+      run++; // the viewer took over; the loop stops
+      q.textContent = ".env";
+      rows.forEach((r) => r.classList.add("on"));
+      root.classList.add("found");
+      root.classList.remove("pressing");
+      setState(b.dataset.to as State, true);
+    });
   }
 
   new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(root);
   rows.forEach((r) => r.classList.add("on"));
   root.classList.add("found");
-  if (!reduced) void loop();
+  if (!reduced) void loop(++run);
+}
+
+const GLYPHS = "abcdefghijkmnpqrstuvwxyz0123456789";
+const rolling = new WeakMap<HTMLElement, string>();
+
+/** Rolls an element's text over to a new value, left to right. A newer roll replaces it. */
+function scramble(el: HTMLElement, to: string) {
+  rolling.set(el, to);
+  const start = performance.now();
+  const length = Math.max(el.textContent?.length ?? 0, to.length);
+  const step = (now: number) => {
+    if (rolling.get(el) !== to) return;
+    const done = Math.floor(((now - start) / 700) * length);
+    let out = to.slice(0, done);
+    for (let i = done; i < Math.min(length, to.length + 2); i++) out += GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+    el.textContent = done >= length ? to : out;
+    if (done < length) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }

@@ -15,15 +15,15 @@ const MAKER = "https://strangesystems.dev";
 // All sample values, shaped like real keys and truncated.
 const ENV_FILES = [
   { path: "~/work/billing-api/.env", vars: [
-    { name: "STRIPE_SECRET_KEY", key: "sk_live_51Nq8vTzK2mPx" },
-    { name: "DATABASE_URL", key: "postgres://admin:hG7xQ2@db" },
+    { name: "STRIPE_SECRET_KEY", key: "sk_live_51Nq8vTzK2mPx", pointer: "handoff:Stripe" },
+    { name: "DATABASE_URL", key: "postgres://admin:hG7xQ2@db", pointer: "handoff:BillingDB" },
   ] },
   { path: "~/work/report-bot/.env", vars: [
-    { name: "OPENAI_API_KEY", key: "sk-proj-Xk29fLmQ7vRb" },
-    { name: "DIALPAD_API_KEY", key: "dp_7Qm2vX9kLw4Tz" },
+    { name: "OPENAI_API_KEY", key: "sk-proj-Xk29fLmQ7vRb", pointer: "handoff:OpenAI" },
+    { name: "DIALPAD_API_KEY", key: "dp_7Qm2vX9kLw4Tz", pointer: "handoff:Dialpad" },
   ] },
   { path: "~/side/old-prototype/.env", vars: [
-    { name: "AWS_SECRET_ACCESS_KEY", key: "wJ8rTq0ZnB5yHc2Lp" },
+    { name: "AWS_SECRET_ACCESS_KEY", key: "wJ8rTq0ZnB5yHc2Lp", pointer: "handoff:AWS" },
   ] },
 ];
 
@@ -141,8 +141,8 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
         </div>
       </div>
 
-      <div class="scan-stage">
-        <figure class="scan" id="scan">
+      <div class="scan-stage" id="scan" data-state="exposed">
+        <figure class="scan">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i></div>
           <div class="scan-top">
             <span class="win-title"><Icon name="search" size={18} />Find in files</span>
@@ -151,21 +151,24 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
           <div class="scan-field">
             <Icon name="search" size={18} />
             <span class="q"><span id="scan-q">.env</span><i class="caret"></i></span>
-            <span class="count"><Icon name="alert" size={15} />3 files, 5 keys</span>
+            <span class="count"><span class="count-bad"><Icon name="alert" size={15} />3 files, 5 live keys</span><span class="count-ok"><Icon name="shield" size={15} />3 files, 0 keys</span></span>
           </div>
           <div class="scan-rows" id="scan-rows">
             {ENV_FILES.map((f) => (
               <div class="group">
                 <div class="row path"><Icon name="file" />{f.path}</div>
                 {f.vars.map((v) => (
-                  <div class="row var"><span class="k">{v.name}=</span><span class="v">{v.key}</span></div>
+                  <div class="row var"><span class="k">{v.name}=</span><span class="v" data-key={v.key} data-pointer={v.pointer}>{v.key}</span></div>
                 ))}
               </div>
             ))}
           </div>
           <div class="scan-foot">
-            <span class="scan-status"><Icon name="terminal" size={16} />Searching your machine...</span>
-            <span class="count"><Icon name="alert" size={15} />3 files, 5 keys found</span>
+            <div class="segmented" role="group" aria-label="Compare">
+              <button type="button" data-to="exposed" aria-pressed="true">Today</button>
+              <button type="button" data-to="safe" aria-pressed="false">With KeyHandoff</button>
+            </div>
+            <Status kind="building" label="Pointers in progress" />
           </div>
         </figure>
       </div>
