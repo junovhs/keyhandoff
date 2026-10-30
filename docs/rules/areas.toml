@@ -1,0 +1,5 @@
+# Which rule page covers which source paths. The longest matching prefix wins.
+
+[areas.keyhandoff]
+page = "keyhandoff.md"
+prefixes = ["src/", "src-tauri/", "crates/seal/", "docs/", "scripts/"]
