@@ -1,0 +1,6 @@
+---
+// The KeyHandoff logo, Monolith. The app draws the same path (../../../src/art.tsx).
+interface Props { height: number }
+const { height } = Astro.props;
+---
+<svg class="logo" viewBox="28 8 64 104" height={height} width={height * 64 / 104} aria-hidden="true"><path fill-rule="evenodd" d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z" /></svg>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Icon, Px, Tile, useDragOut } from "./art";
+import { Icon, Logo, Tile, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, useView, type Keep, type KeyView, type View } from "./ipc";
 import { enter, stagger } from "./motion";
 import { SafeCopy } from "./SafeCopy";
@@ -56,7 +56,7 @@ export function MainWindow() {
   return (
     <div className="app">
       <header className="titlebar" data-tauri-drag-region>
-        <Px name="mark" scale={2} />
+        <Logo />
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
         <span className="shield" title="Keys are sealed on this device. KeyHandoff has no servers or accounts.">
           <Icon name="shield" /> Protected

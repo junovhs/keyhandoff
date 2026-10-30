@@ -1,11 +1,10 @@
-// Art for the Calm look. Pixel art appears only in the logo and in icon tiles
+// Art for the Calm look. Pixel art appears only in icon tiles
 // at 3x or more, at whole-number scales so edges stay crisp. Small UI icons are
 // line icons: tiny pixel icons read as grainy.
 
 import { useRef, type PointerEvent } from "react";
 
 const ICONS = {
-  mark: [10, 10, "M0 0h6v2h-6zM0 2h2v2h-2zM4 3h6v2h-6zM0 4h2v1h-2zM0 5h6v2h-6zM8 5h2v3h-2zM4 8h6v2h-6z"],
   key: [12, 8, "M1 2h3v1h-3zM0 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h7v1h-7zM0 5h1v1h-1zM4 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM1 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1z"],
   shield: [12, 11, "M1 0h10v1h-10zM0 1h12v2h-12zM0 3h5v1h-5zM7 3h5v1h-5zM0 4h4v2h-4zM8 4h4v2h-4zM0 6h5v1h-5zM7 6h5v1h-5zM1 7h10v1h-10zM2 8h8v1h-8zM3 9h6v1h-6zM5 10h2v1h-2z"],
   sealed: [12, 10, "M1 0h10v1h-10zM1 1h1v8h-1zM10 1h1v8h-1zM3 2h6v1h-6zM3 4h4v1h-4zM5 6h3v1h-3zM4 7h5v1h-5zM5 8h3v1h-3zM1 9h10v1h-10z"],
@@ -36,6 +35,15 @@ export function Tile({ name, scale = 3, size = "md" }: { name: IconName; scale?:
     <span className={`tile-ico ${size}`}>
       <Px name={name} scale={scale} />
     </span>
+  );
+}
+
+/** The KeyHandoff logo, Monolith, coloured by the surrounding text colour. */
+export function Logo({ height = 22 }: { height?: number }) {
+  return (
+    <svg className="logo" viewBox="28 8 64 104" height={height} width={(height * 64) / 104} aria-hidden>
+      <path fillRule="evenodd" fill="currentColor" d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z" />
+    </svg>
   );
 }
 

@@ -1,6 +1,7 @@
 ---
 import "../styles/site.css";
 import Icon from "../components/Icon.astro";
+import Logo from "../components/Logo.astro";
 import type { IconName } from "../components/Icon.astro";
 import Status from "../components/Status.astro";
 import StrangeGlyph from "../components/StrangeGlyph.astro";
@@ -115,7 +116,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
     <nav class="nav">
       <div class="wrap nav-in">
         <div class="brand-stack">
-          <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+          <a class="brand" href="/"><Logo height={26} />KeyHandoff</a>
           <a class="byline" href={MAKER}>by <StrangeGlyph /> strange systems</a>
         </div>
         <span class="sp"></span>
@@ -283,7 +284,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
         <p class="sub">Whether it's just you, your code or your whole team, KeyHandoff keeps custody of a key from the provider's page onward, so people and their tools barely touch it.</p>
       </div>
       <div class="hub rv" aria-hidden="true">
-        <span class="hub-mark"><Tile name="mark" scale={3} size="lg" /></span>
+        <span class="hub-mark"><span class="tile lg"><Logo height={42} /></span></span>
         <svg viewBox="0 0 1000 90" preserveAspectRatio="none">
           <path d="M500 0 C 500 50, 166 40, 166 90" /><path d="M500 0 V 90" /><path d="M500 0 C 500 50, 834 40, 834 90" />
         </svg>
@@ -351,7 +352,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
           </div>
         </div>
         <div class="prompt">
-          <div class="prompt-top"><Tile name="mark" scale={2} size="sm" /><b>KeyHandoff</b><span>A program is asking</span></div>
+          <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>A program is asking</span></div>
           <p class="prompt-q"><code>report.py</code> wants the <b>Dialpad</b> key</p>
           <p class="prompt-where"><Icon name="file" size={14} />~/work/report-bot</p>
           <div class="prompt-btns"><span class="btn secondary small">Just this once</span><span class="btn primary small">Always allow</span></div>
@@ -445,7 +446,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
     </section>
 
     <section class="wrap end rv">
-      <Tile name="mark" scale={4} size="lg" />
+      <span class="tile lg"><Logo height={42} /></span>
       <h2>Get your keys out of the file.</h2>
       <p class="sub">KeyHandoff is in pre-release, so start with test keys. Build it from source and try a handoff today.</p>
       <div class="cta">
@@ -455,7 +456,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
     </section>
 
     <footer class="wrap">
-      <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+      <a class="brand" href="/"><Logo height={26} />KeyHandoff</a>
       <a class="made-by" href={MAKER}>made by <StrangeGlyph /> strange systems</a>
       <span class="sp"></span>
       <a href="/docs/">Documentation</a>

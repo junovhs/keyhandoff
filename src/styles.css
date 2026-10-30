@@ -26,7 +26,7 @@ body { background: var(--ground); color: var(--text); font: 14px/1.45 var(--font
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 ::selection { background: rgba(47, 107, 255, .45); color: var(--text); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-.px { display: block; flex-shrink: 0; }
+.px, .logo { display: block; flex-shrink: 0; }
 .icon { display: block; flex-shrink: 0; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 /* buttons */
