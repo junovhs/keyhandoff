@@ -1,0 +1,62 @@
+@import "@fontsource-variable/host-grotesk";
+@import "@fontsource-variable/geist-mono";
+
+/* The Calm look, shared with the app (../src/styles.css) */
+:root {
+  --ground: #000; --surface: #0a0a0a; --raised: #141414;
+  --line: #1f1f1f; --line-strong: #333;
+  --text: #fff; --text-2: #a1a1a1; --text-3: #8a8a8a;
+  --accent: #2f6bff; --accent-2: #5a5cff; --accent-ink: #6b95ff;
+  --accent-grad: linear-gradient(100deg, var(--accent), var(--accent-2));
+  --font: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, monospace;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--ground); color: var(--text); font: 17px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+::selection { background: rgba(47, 107, 255, .45); }
+:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; border-radius: 4px; }
+.wrap { width: min(1040px, calc(100% - 40px)); margin: 0 auto; }
+
+.nav { display: flex; align-items: center; gap: 24px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; letter-spacing: -.02em; }
+.brand img { width: 28px; height: 28px; border-radius: 7px; }
+.nav .sp { flex: 1; }
+.nav a.l { color: var(--text-2); text-decoration: none; font-size: 15px; font-weight: 500; }
+.nav a.l:hover { color: var(--text); }
+
+.btn { height: 46px; padding: 0 20px; border-radius: 10px; display: inline-flex; align-items: center; gap: 10px; font-weight: 500; font-size: 16px; text-decoration: none; transition: background .15s, transform .1s; }
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--accent-grad); color: #fff; font-weight: 600; }
+.btn.primary:hover { background: linear-gradient(100deg, #4a7dff, #6d6eff); }
+.btn.secondary { border: 1px solid var(--line-strong); }
+.btn.secondary:hover { background: var(--raised); }
+
+.hero { padding: 96px 0 72px; display: flex; flex-direction: column; gap: 24px; align-items: flex-start; }
+.pill { font: 500 12.5px var(--mono); color: var(--accent-ink); border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 12px; }
+h1 { margin: 0; font-size: clamp(44px, 8vw, 84px); line-height: 1; font-weight: 600; letter-spacing: -.045em; }
+h1 em { font-style: normal; background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { margin: 0; max-width: 56ch; font-size: 20px; color: var(--text-2); }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+section { padding: 56px 0; border-top: 1px solid var(--line); }
+h2 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.04em; font-weight: 600; }
+.sub { margin: 0 0 32px; color: var(--text-2); max-width: 60ch; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.steps li { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.steps .n { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 600 13px var(--font); }
+.steps b { font-size: 19px; letter-spacing: -.02em; }
+.steps p { margin: 0; color: var(--text-2); font-size: 15px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 24px; background: var(--surface); }
+.card h3 { margin: 0 0 12px; font-size: 18px; letter-spacing: -.02em; }
+.card ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 15.5px; display: flex; flex-direction: column; gap: 8px; }
+.card.dashed { border-style: dashed; border-color: var(--line-strong); }
+code, kbd { font-family: var(--mono); font-size: .88em; }
+footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--text-3); font-size: 14px; display: flex; gap: 24px; flex-wrap: wrap; }
+footer a { color: var(--text-2); text-decoration: none; }
+footer a:hover { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }

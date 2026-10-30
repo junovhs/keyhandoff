@@ -1,0 +1,86 @@
+---
+import "../styles/site.css";
+const title = "KeyHandoff: API keys, hands off";
+const description = "A small desktop app for handing someone an API key without pasting it into a chat or leaving it in a plain file. No servers, no accounts.";
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content="https://keyhandoff.dev/" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="canonical" href="https://keyhandoff.dev/" />
+  </head>
+  <body>
+    <div class="wrap">
+      <nav class="nav">
+        <a class="brand" href="/"><img src="/icon.png" alt="" />KeyHandoff</a>
+        <span class="sp"></span>
+        <a class="l" href="/docs/">Docs</a>
+        <a class="l" href="https://github.com/junovhs/keyhandoff">GitHub</a>
+      </nav>
+
+      <header class="hero">
+        <span class="pill">pre-release · Windows and Linux</span>
+        <h1>API keys,<br /><em>hands off.</em></h1>
+        <p class="lede">
+          Hand someone an API key, or any secret, without pasting it into a chat or leaving it in a plain file.
+          No servers, no accounts. Requests and keys travel as ordinary files over whatever channel you already use.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="/docs/">Read the docs</a>
+          <a class="btn secondary" href="https://github.com/junovhs/keyhandoff">View on GitHub</a>
+        </div>
+      </header>
+
+      <section id="how">
+        <h2>How it works</h2>
+        <p class="sub">Four steps. The key is never shown on screen, and the sender keeps nothing.</p>
+        <ol class="steps">
+          <li><span class="n">1</span><b>Ask</b><p>Click <em>Request a key</em> and send the request file to whoever has the key.</p></li>
+          <li><span class="n">2</span><b>Catch</b><p>They copy the key from the provider's page. KeyHandoff catches that one copy and wipes the clipboard.</p></li>
+          <li><span class="n">3</span><b>Seal</b><p>It's encrypted so only your computer can open it, and only once. They send it back and keep nothing.</p></li>
+          <li><span class="n">4</span><b>Keep</b><p>You open the file. The key goes into your vault, and every copy of the sealed file becomes unreadable.</p></li>
+        </ol>
+      </section>
+
+      <section id="honest">
+        <h2>What it protects, and what it doesn't</h2>
+        <p class="sub">KeyHandoff removes the places a key normally lingers. It can't fix a compromised computer.</p>
+        <div class="cols">
+          <div class="card">
+            <h3>Removed</h3>
+            <ul>
+              <li>Chat and email only carry a sealed file, useless to anyone else.</li>
+              <li>A sealed file can't be opened twice.</li>
+              <li>Keys are never displayed. Only the Rust core handles values.</li>
+              <li>No servers, accounts, telemetry or network code.</li>
+            </ul>
+          </div>
+          <div class="card dashed">
+            <h3>Not covered</h3>
+            <ul>
+              <li>The brief moment a copied key sits on the clipboard before the wipe.</li>
+              <li>Malware running as you.</li>
+              <li>Lost computers: keys are tied to one machine, with no recovery.</li>
+              <li>Pre-release: no security audit yet. Use test keys.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <span>© KeyHandoff</span>
+        <a href="/docs/">Documentation</a>
+        <a href="https://github.com/junovhs/keyhandoff">GitHub</a>
+        <a href="https://github.com/junovhs/keyhandoff/security">Security</a>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+/* dopedocs theme: the app's Calm tokens (see ../src/styles.css) */
+@font-face { font-family: "Host Grotesk Variable"; font-weight: 300 800; font-display: swap; src: url("/fonts/host-grotesk-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Geist Mono Variable"; font-weight: 100 900; font-display: swap; src: url("/fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+
+/* dopedocs theme */
+:root {
+  color-scheme: dark;
+  --dd-bg: #000;
+  --dd-panel: #0a0a0a;
+  --dd-panel-muted: #141414;
+  --dd-ink: #141414;
+  --dd-text: #fff;
+  --dd-text-soft: #a1a1a1;
+  --dd-muted: #8a8a8a;
+  --dd-on-ink: #d4d4d4;
+  --dd-on-ink-strong: #fff;
+  --dd-on-accent: #fff;
+  --dd-line: #1f1f1f;
+  --dd-line-soft: #1f1f1f;
+  --dd-edge: #333;
+  --dd-accent: #2f6bff;
+  --dd-scrim: rgb(0 0 0 / .8);
+  --dd-shadow-lift: 0 22px 70px rgb(0 0 0 / .6);
+  --dd-sans: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --dd-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --dd-ease: cubic-bezier(.22, 1, .36, 1);
+}
