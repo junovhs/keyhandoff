@@ -216,7 +216,7 @@ html.js .replay.ready .line:not(.on) { visibility: hidden; }
 .audit-cmds { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; min-width: 0; padding: 12px 12px 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--ground); }
 .cmd-os { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--text-3); }
-.cmd code { min-width: 0; font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.cmd code { min-width: 0; padding-bottom: 4px; font-size: 12.5px; line-height: 1.5; white-space: nowrap; overflow-x: auto; }
 .copy { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--raised); color: var(--text); font: 500 13px var(--font); cursor: pointer; transition: border-color .15s; }
 .copy:hover { border-color: var(--text-3); }
 .copy.done { border-color: var(--accent); color: var(--accent-ink); }

@@ -1,0 +1,1 @@
+$n=0;$d=0;robocopy $HOME "$env:TEMP\kh-list-only" .env* /L /S /XJ /R:0 /W:0 /NJH /NJS /NC /NS /NP /XD node_modules .git AppData|%{$l=$_.Trim();if($l -like '*\'){$d++;if($d%100 -eq 0){Write-Host -NoNewline "`rSearched $d folders, found $n...".PadRight(60)}}elseif($l){$n++;Write-Host ("`r$l".PadRight(60))}};Write-Host "`rSearched $d folders, found $n .env files".PadRight(60)
