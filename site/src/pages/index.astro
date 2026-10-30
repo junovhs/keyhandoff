@@ -3,11 +3,13 @@ import "../styles/site.css";
 import Icon from "../components/Icon.astro";
 import type { IconName } from "../components/Icon.astro";
 import Status from "../components/Status.astro";
+import StrangeGlyph from "../components/StrangeGlyph.astro";
 import Tile from "../components/Tile.astro";
 
 const title = "KeyHandoff: API keys, hands off";
 const description = "Your .env is announcing itself. KeyHandoff catches, seals and hands off API keys so they stop living in plain text files and chats. No servers, no accounts.";
 const GITHUB = "https://github.com/junovhs/keyhandoff";
+const MAKER = "https://strangesystems.dev";
 
 // All sample values, shaped like real keys and truncated.
 const ENV_FILES = [
@@ -112,7 +114,10 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
 
     <nav class="nav">
       <div class="wrap nav-in">
-        <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+        <div class="brand-stack">
+          <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+          <a class="byline" href={MAKER}>by <StrangeGlyph /> strange systems</a>
+        </div>
         <span class="sp"></span>
         <a class="l hide-s" href="#blind-spot">The blind spot</a>
         <a class="l hide-s" href="#fronts">What it does</a>
@@ -451,6 +456,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
 
     <footer class="wrap">
       <a class="brand" href="/"><Tile name="mark" scale={2} size="sm" plain />KeyHandoff</a>
+      <a class="made-by" href={MAKER}>made by <StrangeGlyph /> strange systems</a>
       <span class="sp"></span>
       <a href="/docs/">Documentation</a>
       <a href={GITHUB}>GitHub</a>

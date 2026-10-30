@@ -1,9 +1,17 @@
 import { defineDocs, defineFacts } from "dopedocs";
 
+/** The Strange Systems glyph, for the maker card: the same vectors No Ceremony's uses. */
+const STRANGE_SYSTEMS = `<svg viewBox="0 0 505 474" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+  <path d="M0,0 L0,411.878 L216.914,411.878 L216.914,350.713 L62.937,350.713 L62.937,61.163 L216.914,61.163 L216.914,0 Z" />
+  <path d="M216.914,153.657 L288.081,122.522 L288.081,319.256 L216.914,350.391 Z" />
+  <path d="M505,61.503 L505,473.381 L288.081,473.381 L288.081,412.216 L442.058,412.216 L442.058,122.666 L288.081,122.666 L288.081,61.503 Z" />
+</svg>`;
+
 export const docs = defineDocs({
   entity: {
     name: "KeyHandoff",
     url: "https://keyhandoff.dev",
+    legalName: "Strange Systems",
     notToBeConfusedWith: ["Other products and services named KeyHandoff or Key Handoff"],
   },
   title: "KeyHandoff",
@@ -71,6 +79,26 @@ export const docs = defineDocs({
       question: "Which platforms does KeyHandoff support?",
       answer: "KeyHandoff supports {fact:platforms}. macOS and Wayland are not supported.",
       blocks: [],
+    },
+    {
+      id: "strange-systems",
+      title: "Who makes this",
+      question: "Who makes KeyHandoff?",
+      answer: "KeyHandoff is made by Strange Systems, a one-person indie developer studio in Eugene, Oregon, run by Spencer Nunamaker.",
+      blocks: [
+        {
+          kind: "facts",
+          title: "Strange Systems",
+          mark: STRANGE_SYSTEMS,
+          href: "https://strangesystems.dev",
+          rows: [
+            ["Based in", "Eugene, Oregon"],
+            ["Size", "One person, for now"],
+            ["That person", "Spencer Nunamaker - UI/UX designer, musician, artist"],
+            ["Also made", "No Ceremony, and Tip Top Brushes for Procreate"],
+          ],
+        },
+      ],
     },
   ],
 });
