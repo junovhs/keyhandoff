@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CopyPages, Icon, useDragOut } from "./art";
+import { CaughtPages, CopyPages, Icon, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, type KeyView, type SafeState, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
 
@@ -78,8 +78,8 @@ function Listening({ safe }: { safe: SafeView }) {
           <CopyPages />
         </div>
         <div className="hero-text center">
-          <h2 className="title">Copy your key</h2>
-          <p className="help">From anywhere · {Math.ceil(left / 1000)}s</p>
+          <h2 className="display md">Copy your key</h2>
+          <p className="lede">From anywhere · {Math.ceil(left / 1000)}s</p>
         </div>
         {safe.apps.length > 0 && (
           <p className="apps">
@@ -121,52 +121,46 @@ function Caught({ view, run }: { view: View; run: Run }) {
     input.current?.focus();
     input.current?.select();
   }, []);
+  const save = (keep = view.keep) => void run(forSomeone ? api.seal(label) : api.keepOwn(label, keep));
   return (
     <>
-      <div className="caught-head">
-        <Icon name="check" />
-        <h2 className="title">Caught. Clipboard wiped.</h2>
+      <div className="listen-center">
+        <div className="copy-now">
+          <CaughtPages />
+        </div>
+        <div className="hero-text center">
+          <h2 className="display md">Caught.</h2>
+          <p className="lede">Clipboard wiped.</p>
+          {view.safe.message && <p className="help">{view.safe.message}</p>}
+        </div>
       </div>
-      {view.safe.message && <p className="help">{view.safe.message}</p>}
-      <label className="field">
-        Name this key
+      <div className="caught-form">
         <input
           ref={input}
           className="name-in"
           value={label}
           maxLength={64}
           placeholder="Name this key"
+          aria-label="Name this key"
           onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            void run(forSomeone ? api.seal(label) : api.keepOwn(label, view.keep));
-          }}
+          onKeyDown={(e) => e.key === "Enter" && save()}
         />
-      </label>
-      {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
-      {forSomeone ? (
-        <button className="btn primary" onClick={() => void run(api.seal(label))}>
-          Seal for {view.safe.for_name}
-        </button>
-      ) : (
-        <div className="keep-block">
-          <span className="label">Keep it for</span>
-          <div className="keep-buttons">
+        {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
+        {forSomeone ? (
+          <button className="btn primary" onClick={() => save()}>
+            Seal for {view.safe.for_name}
+          </button>
+        ) : (
+          <div className="keep-buttons" role="group" aria-label="Keep it for">
             {KEEP_CHOICES.map((c) => (
-              <button
-                key={c.keep}
-                className={view.keep === c.keep ? "pick" : ""}
-                onClick={() => void run(api.keepOwn(label, c.keep))}
-              >
+              <button key={c.keep} className={view.keep === c.keep ? "pick" : ""} onClick={() => save(c.keep)}>
                 {c.label}
               </button>
             ))}
           </div>
-          <p className="help">One tap saves it.</p>
-        </div>
-      )}
-      <span className="grow-space" />
-      <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
+        )}
+        <button className="link center" onClick={() => void api.closeSafe()}>Cancel</button>
+      </div>
     </>
   );
 }

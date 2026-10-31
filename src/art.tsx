@@ -58,6 +58,26 @@ export function CopyPages({ scale = 10 }: { scale?: number }) {
   );
 }
 
+/**
+ * Safe Copy's "caught" picture: the same two pages, still, with a big green
+ * pixel check dropping onto them. The check is drawn in three-pixel strokes so it
+ * reads at this size, on a ground-coloured outline one pixel wide that cuts it
+ * off from the pages.
+ */
+export function CaughtPages({ scale = 7 }: { scale?: number }) {
+  return (
+    <svg className="caught-pages" viewBox="0 -1 19 19" width={19 * scale} height={19 * scale} shapeRendering="crispEdges" aria-hidden>
+      <path fill="currentColor" d="M0 0h8v1h-8zM0 1h1v11h-1zM7 1h1v11h-1zM1 11h6v1h-6z" />
+      <rect x="2" y="2" width="10" height="14" style={{ fill: "var(--ground)" }} />
+      <path fill="currentColor" d="M3 3h6v1h-6zM3 4h1v11h-1zM8 4h1v2h-1zM9 4h1v1h-1zM10 5h1v1h-1zM8 6h3v1h-3zM11 6h1v9h-1zM3 15h9v1h-9zM5 8h5v1h-5zM5 10h5v1h-5zM5 12h3v1h-3z" />
+      <g className="badge">
+        <path style={{ fill: "var(--ground)" }} d="M14 7h5v1h-5zM13 8h6v1h-6zM12 9h7v1h-7zM5 10h5v1h-5zM11 10h8v1h-8zM5 11h13v1h-13zM5 12h12v1h-12zM5 13h11v1h-11zM6 14h9v1h-9zM7 15h7v1h-7zM8 16h5v1h-5zM9 17h3v1h-3z" />
+        <path style={{ fill: "var(--ok)" }} d="M15 8h3v1h-3zM14 9h4v1h-4zM13 10h4v1h-4zM6 11h3v1h-3zM12 11h4v1h-4zM6 12h4v1h-4zM11 12h4v1h-4zM7 13h7v1h-7zM8 14h5v1h-5zM9 15h3v1h-3zM10 16h1v1h-1z" />
+      </g>
+    </svg>
+  );
+}
+
 /** The KeyHandoff logo, Monolith, coloured by the surrounding text colour. */
 export function Logo({ height = 22 }: { height?: number }) {
   return (

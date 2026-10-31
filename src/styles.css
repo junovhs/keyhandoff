@@ -12,6 +12,7 @@
   /* Vibrant blue, the only colour. Fills run as a subtle gradient towards a
      near, slightly violet blue; --accent-ink is the lighter tint for small icons
      and text on black. Text on blue is white. */
+  --ok: #2fd567;
   --accent: #2f6bff; --accent-2: #5a5cff; --accent-ink: #6b95ff;
   --accent-grad: linear-gradient(100deg, var(--accent), var(--accent-2));
   --font: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -162,6 +163,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
   16.67%, 66.67% { transform: translateY(-0.1px); }
   33.33%, 50% { transform: translateY(-0.2px); }
 }
+/* Caught: the badge drops onto the still pages in two steps; the name and the
+   choice sit at the bottom. */
+.caught-pages .badge { animation: drop calc(.24s / var(--tempo)) steps(2, end) both; }
+@keyframes drop { from { transform: translateY(-2px); } }
+.caught-form { display: flex; flex-direction: column; gap: 10px; }
+.link.center { align-self: center; }
 .safe-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .safe-body .grow-space { flex: 1; }
 .asking { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
