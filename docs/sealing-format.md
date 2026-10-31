@@ -18,7 +18,7 @@ Sealing, requests and the vault can't be built until the primitives, the file fo
 1. **Primitives** (RustCrypto and dalek crates): **Ed25519** device identity for signatures, **X25519** for the one-time and ephemeral keys, **HKDF-SHA256** for key derivation, **ChaCha20-Poly1305** as the AEAD. Randomness comes from the OS (`getrandom`).
 2. **Pairing shape:** ECDH, then HKDF salted with a hash of the request context, then an AEAD with record-bound associated data. Requests travel through chat rather than an authenticated server, so they are also signed.
 3. **File format v0**, binary inside armored text (layout below). Every object starts with `HOF` + version `0` + kind.
-4. **Windows key protection: DPAPI** (`CryptProtectData`, current user) wraps the identity, the pending one-time keys and the vault key. A TPM-backed key (CNG Platform Crypto Provider or Windows Hello `KeyCredentialManager`) is the planned upgrade.
+4. **Key protection: a passphrase** (Argon2id) wraps the profile's master key, which seals the identity, the pending one-time keys and the vault key; a recovery code is a second way in. This replaced DPAPI, which any process running as the user can unwrap. Hardware slots (TPM PIN, Windows Hello, security key) are planned.
 5. **Armored text:** Crockford base32 in groups of four, Reed-Solomon parity over GF(2^8) with interleaving, and an integrity check that rejects anything repaired wrongly.
 
 ## Sealing in detail
@@ -106,11 +106,12 @@ Each part is verified and opened like a sealed key; a recipient opens the parts 
 - **Pending entry lost before open:** the sender kept nothing, so they have to safe-copy the key again, which may mean making a new key with the provider.
 - **No recovery or escrow.** Rotating with the provider is the real fix .
 
-## Device key storage (Windows)
+## Device key storage
 
-- **Current:** DPAPI (current user, `CRYPTPROTECT_UI_FORBIDDEN`, entropy naming the profile) wraps one 32-byte master key per profile in `master.key` (`src-tauri/src/os/windows/protect.rs`). `identity.bin`, `pending.bin` and `vault.bin` are ChaCha20-Poly1305 sealed under it with the file name as associated data, and each kept item is sealed again under the vault key with its id as associated data (`store.rs`, `vault.rs`), the same layout as on Linux. The TPM upgrade only changes how `master.key` is wrapped.
-- **Honest limit:** DPAPI keys are released to any process running as the same Windows user, so malware running as the user can unwrap them. DPAPI does protect against copying the files to another machine or user, and against offline disk theft once the account password is strong.
-- **Planned upgrade:** a non-exportable TPM key (CNG Platform Crypto Provider) or Windows Hello wraps the vault key instead, optionally asking for Hello when a key is used. The file format doesn't change; only the wrapping does.
+- **Current:** one 32-byte master key per profile, stored only in `keyslots.bin` (`src-tauri/src/slots.rs`): `HOFK`, version 0, a slot count, then per slot its kind (1 passphrase, 2 recovery code), Argon2id memory in KiB and passes (u32 LE), lanes, a 16-byte salt, a 12-byte nonce and the 48-byte ChaCha20-Poly1305 sealed master key, with everything before it as associated data. `identity.bin`, `pending.bin` and `vault.bin` are sealed under the master key with the file name as associated data, and each kept item is sealed again under the vault key with its id (`store.rs`, `vault.rs`).
+- **Honest limit:** a copy of the folder can be attacked offline by guessing the passphrase, so its strength matters; a suggested passphrase is five words from the EFF long list (about 64 bits). Once unlocked, the key is in KeyHandoff's memory until it quits.
+- **Before key slots:** DPAPI (Windows) or the Secret Service or a `0600` file (Linux) held the master key and released it to any process running as the user. Those profiles move into slots when the passphrase is first set, and the old copy is deleted.
+- **Planned:** more slot kinds, each wrapping the same master key: a TPM 2.0 key behind a PIN, Windows Hello signing a stored challenge, and a FIDO2 security key's hmac-secret. The rest of the format doesn't change.
 
 ## Armored text
 

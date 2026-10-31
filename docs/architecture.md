@@ -11,7 +11,8 @@ src-tauri/src/
   core.rs          Every flow: ask, Safe Copy, seal, accept, add, give keys to
                    allowed programs. Holds the secrets.
   pointer.rs       What programs asking for keys send and get back
-  store.rs         Profile files sealed under the OS-protected master key
+  store.rs         Profile files sealed under the master key; the locked profile
+  slots.rs         keyslots.bin: the master key wrapped by passphrase and recovery code
   vault.rs         Kept keys, keep times, expiry
   os/              Per-OS backends: clipboard capture, offer and read, master key,
                    drag-out, one instance per profile, the key socket or pipe
@@ -38,12 +39,16 @@ See [sealing-format.md](sealing-format.md) for the details.
 
 ## Key storage
 
-Each profile has a 32-byte master key held by the OS. `identity.bin`, `pending.bin`, `vault.bin`, `approvals.bin`, `contacts.bin` and `teams.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
+Each profile has a 32-byte master key. `identity.bin`, `pending.bin`, `vault.bin`, `approvals.bin`, `contacts.bin` and `teams.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
 
-- **Windows:** the master key is wrapped with DPAPI (current user) in `master.key`.
-- **Linux:** the master key lives in the Secret Service. Without one it falls back to a `0600` file, which only stops other users.
+The master key is stored only in `keyslots.bin`, wrapped once per way in, and any one slot opens it:
 
-DPAPI and the Secret Service release keys to programs running as the same user. Hardware-backed wrapping (TPM and Windows Hello) is planned, and only changes how the master key is wrapped.
+- **Passphrase:** Argon2id (256 MiB, 3 passes, 4 lanes) turns the passphrase into a key that seals the master key with ChaCha20-Poly1305.
+- **Recovery code:** 160 random bits shown once at setup, as eight groups of four Crockford base32 characters. It opens the vault and sets a new passphrase.
+
+The app starts locked and nothing else runs until a slot opens: the core, and the socket programs ask for keys over, start only then. Files opened while locked open right after. Profiles from before key slots kept the master key in DPAPI (Windows) or the Secret Service or a `0600` file (Linux), which hand it to any program running as you; on the first start the passphrase is set, the key moves into its slots and the old copy is deleted.
+
+Hardware slots are planned and add a kind each: a TPM 2.0 key behind a PIN, Windows Hello, and a FIDO2 security key. See [the research report](../reports/Hardware%20key%20protection%20everywhere.md).
 
 Profile data lives in a `handoff` folder under the system's data directory. Each profile has its own data, master key and running instance.
 

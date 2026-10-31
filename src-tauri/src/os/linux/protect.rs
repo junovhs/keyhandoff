@@ -1,7 +1,7 @@
-//! The profile's master key lives in the Secret Service (GNOME Keyring or
-//! KWallet), unlocked with the user's login. Without a Secret Service the key
-//! falls back to a 0600 file, which only protects against other users; the
-//! backend in use is recorded so a later run never silently switches.
+//! Where profiles from before key slots kept their master key: the Secret
+//! Service (GNOME Keyring or KWallet), or a 0600 file without one. Both hand
+//! it to any program running as you, so it's read once to move it behind the
+//! passphrase (`slots`), then deleted here.
 
 use std::fs;
 use std::path::Path;
@@ -27,6 +27,18 @@ pub fn master_key(dir: &Path, profile: &str, backend: Option<&str>) -> Result<(M
                 file_key(dir).map(|k| (k, FILE))
             }
         },
+    }
+}
+
+/// Delete the old copy once the key is in its slots.
+pub fn forget_master_key(dir: &Path, profile: &str, backend: &str) -> Result<(), String> {
+    if backend == FILE {
+        return fs::remove_file(dir.join("master.key")).map_err(|e| e.to_string());
+    }
+    let entry = keyring::Entry::new(SERVICE, profile).map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
     }
 }
 

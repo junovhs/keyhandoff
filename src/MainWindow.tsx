@@ -5,6 +5,7 @@ import {
   api,
   attempt,
   KEEP_CHOICES,
+  useGate,
   useView,
   type ContactView,
   type Keep,
@@ -14,12 +15,15 @@ import {
   type View,
 } from "./ipc";
 import { enter, stagger } from "./motion";
+import { Gate } from "./Gate";
 import { SafeCopy } from "./SafeCopy";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function MainWindow() {
-  const view = useView();
+  const gate = useGate();
+  const open = gate?.state === "open" && !gate.recovery;
+  const view = useView(open);
   const stage = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const shown = useRef(false);
@@ -28,11 +32,11 @@ export function MainWindow() {
     // The window starts hidden and is shown once React has rendered, so it
     // never flashes white. (No requestAnimationFrame here: webviews don't run
     // it while the window is hidden.)
-    if (!view || shown.current) return;
+    if (!gate || shown.current) return;
     shown.current = true;
     stagger(stage.current);
     void api.ready();
-  }, [view]);
+  }, [gate]);
 
   // Ctrl+V anywhere pastes a KeyHandoff file or message (Rust reads the clipboard).
   // Typing anywhere, "/" or Ctrl+F jumps to the key search.
@@ -40,13 +44,13 @@ export function MainWindow() {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement;
       const mod = e.ctrlKey || e.metaKey;
-      if (!typing && mod && e.key.toLowerCase() === "v") {
+      if (!typing && mod && e.key.toLowerCase() === "v" && !document.querySelector(".gate")) {
         e.preventDefault();
         void run(api.paste());
         return;
       }
       const search = document.getElementById(SEARCH_ID);
-      const covered = document.querySelector(".sheet, .safe") !== null;
+      const covered = document.querySelector(".sheet, .safe, .gate") !== null;
       if (typing || covered || !(search instanceof HTMLInputElement)) return;
       if ((mod && e.key.toLowerCase() === "f") || e.key === "/") {
         e.preventDefault();
@@ -82,6 +86,7 @@ export function MainWindow() {
         </button>
       </header>
       <main className="stage" ref={stage}>
+        {gate && !open && <Gate gate={gate} />}
         {view && !safeOn && <Home view={view} run={run} onSend={() => setSending(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}

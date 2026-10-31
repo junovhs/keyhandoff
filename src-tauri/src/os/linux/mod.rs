@@ -12,7 +12,7 @@ pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;
-pub use protect::master_key;
+pub use protect::{forget_master_key, master_key};
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;

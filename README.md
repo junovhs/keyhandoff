@@ -57,7 +57,7 @@ Typing a key into a field, without the clipboard, is still being built.
 
 Chat and email only ever carry a sealed file. The sender keeps nothing, a sealed file opens once, keys are encrypted on disk and never shown, and there are no servers, accounts, telemetry or network code.
 
-It can't stop a program that's watching the clipboard from reading a key at the moment you copy it, or stop anything running as you from reaching the vault. A program you allow can do anything with the key it gets. **[docs/threats.md](docs/threats.md)** has the full list, with the test or design rule behind each claim.
+It can't stop a program that's watching the clipboard from reading a key at the moment you copy it, or stop anything running as you from reaching the vault while it is unlocked. While it is locked, only your passphrase or recovery code opens it. A program you allow can do anything with the key it gets. **[docs/threats.md](docs/threats.md)** has the full list, with the test or design rule behind each claim.
 
 The sender can't control what the receiver does with a key afterwards, and KeyHandoff doesn't pretend otherwise. It isn't trying to be a general password manager, a phone app or a service with accounts.
 

@@ -39,6 +39,10 @@ pub fn master_key(_dir: &Path, _profile: &str, _backend: Option<&str>) -> Result
     Err(NOT_YET.into())
 }
 
+pub fn forget_master_key(_dir: &Path, _profile: &str, _backend: &str) -> Result<(), String> {
+    Err(NOT_YET.into())
+}
+
 pub fn forward_to_running(_profile: &str, _files: &[PathBuf]) -> bool {
     false
 }

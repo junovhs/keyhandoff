@@ -54,7 +54,9 @@ Provider pages show you a key, and you copy it. From that copy until KeyHandoff 
 
 ### Anything running as you, or as an administrator
 
-- **The vault is protected by your sign-in, not by hardware.** On Windows the master key is wrapped with DPAPI, and on Linux it's held by the Secret Service, or a `0600` file if there's none. Both release it to any program running as you. Hardware-backed protection (TPM and Windows Hello) is planned. See [architecture.md](architecture.md#key-storage).
+- **The vault is locked by your passphrase, not by hardware.** While KeyHandoff is locked or closed, a program running as you can read every profile file and still can't open a key without the passphrase or recovery code. Test: [`only_the_passphrase_or_recovery_code_opens_the_vault`](../src-tauri/src/store.rs). But a copy of the files can be attacked offline by guessing passphrases; Argon2id makes each guess slow, and five random words are out of reach, but a short or common passphrase isn't. Hardware slots (TPM PIN, Windows Hello, security key) that rate-limit guessing are planned. See [architecture.md](architecture.md#key-storage).
+- **Once you unlock, it stays unlocked until you quit.** While it's open, a program running as you could read KeyHandoff's memory or ask it for keys the way an allowed program does. Locking on idle and screen lock is planned.
+- **The passphrase is typed into KeyHandoff's window,** so a keylogger running as you can record it. On X11 any program can read the keyboard.
 - **Memory isn't locked yet.** A key being used is decrypted in KeyHandoff's memory, which could reach the page file or a crash dump.
 - **An administrator, or malware running as one, can do everything above and more:** read KeyHandoff's memory while a key is in use, record the keyboard and screen, watch the clipboard, and replace KeyHandoff itself. No app can protect a secret on a computer an attacker controls.
 

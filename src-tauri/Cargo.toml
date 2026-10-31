@@ -21,6 +21,7 @@ keyhandoff-seal = { path = "../crates/seal" }
 chacha20poly1305 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
+argon2 = "0.5"
 
 [dev-dependencies]
 # The pointer loader test compares a hash the script prints.
@@ -68,3 +69,9 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Argon2id at 256 MiB takes minutes unoptimised; dev builds unlock in seconds.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3

@@ -1,7 +1,7 @@
-//! The profile's master key, wrapped with DPAPI (current user) in
-//! `master.key`, with entropy naming the profile so one profile's file can't
-//! stand in for another's. Any process running as this Windows user can
-//! unwrap it; that honest limit is in sealing-adr.md.
+//! Where profiles from before key slots kept their master key: wrapped with
+//! DPAPI (current user) in `master.key`, with entropy naming the profile. Any
+//! process running as this Windows user can unwrap it, so it's read once to
+//! move it behind the passphrase (`slots`), then deleted here.
 
 use std::fs;
 use std::path::Path;
@@ -45,6 +45,11 @@ pub fn master_key(dir: &Path, profile: &str, backend: Option<&str>) -> Result<(M
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Delete the old copy once the key is in its slots.
+pub fn forget_master_key(dir: &Path, _profile: &str, _backend: &str) -> Result<(), String> {
+    fs::remove_file(dir.join(FILE)).map_err(|e| e.to_string())
 }
 
 fn blob(bytes: &[u8]) -> CRYPT_INTEGER_BLOB {

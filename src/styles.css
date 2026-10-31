@@ -122,6 +122,20 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .foot button b { color: var(--text); font-weight: 500; }
 .foot input { font: inherit; color: var(--text); background: var(--ground); border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px 8px; width: 140px; user-select: text; }
 
+/* gate: choose a passphrase, unlock, recovery code. Same frame as home. */
+.gate { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+.gate .grow-space { flex: 1; }
+.gate-art { display: flex; justify-content: center; }
+.gate-art svg { width: 88px; height: 88px; }
+.pass { position: relative; display: flex; }
+.pass .name-in { flex: 1; min-width: 0; padding-right: 64px; }
+.pass .quiet { position: absolute; right: 10px; top: 0; bottom: 0; }
+.name-in.mono { font: 400 13.5px var(--mono); letter-spacing: .02em; }
+.link.inline { font-size: inherit; }
+.code { margin: 0; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 17px; line-height: 1.6; letter-spacing: .06em; text-align: center; user-select: text; }
+.code.words { font: 500 19px var(--font); letter-spacing: 0; overflow-wrap: anywhere; }
+.btn:disabled { opacity: .55; cursor: default; transform: none; }
+
 /* toast */
 .toast { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; background: var(--raised); color: var(--text); border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; padding: 11px 16px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .6); animation: up calc(.3s / var(--tempo)) var(--ease); z-index: 3; text-align: left; }
 .toast .icon { color: var(--accent-ink); }

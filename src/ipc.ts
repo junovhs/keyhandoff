@@ -1,5 +1,5 @@
 // The only bridge to the Rust core. These calls carry names, states
-// and ids; no secret value ever crosses into TypeScript.
+// and ids; no key ever crosses into TypeScript.
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -91,6 +91,39 @@ export interface View {
   teams: TeamView[];
 }
 
+/** Before the vault opens: no passphrase yet, locked, or open. */
+export interface GateView {
+  state: "setup" | "locked" | "open";
+  /** An older profile whose keys move behind the new passphrase. */
+  migrating: boolean;
+  /** The recovery code, shown once after setup to write down. */
+  recovery: string | null;
+  min_passphrase: number;
+}
+
+// The passphrase and recovery code are the one thing typed or shown here
+// that guards keys: they go straight to Rust and are never stored.
+export const gateApi = {
+  gate: () => invoke<GateView>("gate"),
+  suggest: () => invoke<string>("suggest"),
+  setUp: (passphrase: string) => invoke<void>("set_up", { passphrase }),
+  unlock: (passphrase: string) => invoke<void>("unlock", { passphrase }),
+  recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
+  recoveryDone: () => invoke<void>("recovery_done"),
+};
+
+/** The gate, refreshed whenever the core reports a change. */
+export function useGate(): GateView | null {
+  const [gate, setGate] = useState<GateView | null>(null);
+  useEffect(() => {
+    const refresh = () => void gateApi.gate().then(setGate);
+    refresh();
+    const off = listen("changed", refresh);
+    return () => void off.then((f) => f());
+  }, []);
+  return gate;
+}
+
 export const api = {
   view: () => invoke<View>("view"),
   copyCard: () => invoke<void>("copy_card"),
@@ -118,15 +151,16 @@ export const api = {
 };
 
 /** The current view, refreshed whenever the core reports a change. */
-export function useView(): View | null {
+export function useView(open: boolean): View | null {
   const [view, setView] = useState<View | null>(null);
   useEffect(() => {
+    if (!open) return;
     const refresh = () => void api.view().then(setView);
     refresh();
     const off = listen("changed", refresh);
     return () => void off.then((f) => f());
-  }, []);
-  return view;
+  }, [open]);
+  return open ? view : null;
 }
 
 export const KEEP_CHOICES: { keep: Keep; label: string; icon: "once" | "calendar" | "forever" }[] = [
