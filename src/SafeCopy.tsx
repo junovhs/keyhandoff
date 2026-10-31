@@ -73,18 +73,20 @@ function Listening({ safe }: { safe: SafeView }) {
   }, [safe.ends_at]);
   return (
     <>
-      <div className="copy-now">
-        <CopyPages />
+      <div className="listen-center">
+        <div className="copy-now">
+          <CopyPages />
+        </div>
+        <div className="hero-text center">
+          <h2 className="title">Copy your key</h2>
+          <p className="help">From anywhere · {Math.ceil(left / 1000)}s</p>
+        </div>
+        {safe.apps.length > 0 && (
+          <p className="apps">
+            {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
+          </p>
+        )}
       </div>
-      <div className="hero-text center">
-        <h2 className="title">Copy your key</h2>
-        <p className="help">From anywhere · {Math.ceil(left / 1000)}s</p>
-      </div>
-      {safe.apps.length > 0 && (
-        <p className="apps">
-          {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
-        </p>
-      )}
       {info && (
         <p className="info">
           KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
@@ -92,7 +94,6 @@ function Listening({ safe }: { safe: SafeView }) {
           it as you copy.
         </p>
       )}
-      <span className="grow-space" />
       <div className="btn-row">
         <button className="link" onClick={() => setInfo(!info)} aria-expanded={info}>
           {info ? "Hide" : "How it works"}
