@@ -32,18 +32,15 @@
           ["added", "Ben", "Opens Ann's card", MAIN],
         ]],
         ["Send a key", [
-          ["home", "Ben", "Send a key: picks Ann", MAIN, ["Send a key"]],
-          ["listening", "Ben", "Copies the key", SAFE],
-          ["caught-ann", "Ben", "Caught", SAFE],
+          ["home-ben", "Ben", "Send a key: picks Ann", MAIN, ["Send a key"]],
+          ["home-ben", "Ben", "Picks one of his saved keys", MAIN, ["Send a key", "Ann"]],
           ["sealed", "Ben", "Sends the sealed file", SAFE],
           ["accepted", "Ann", "Opens it", MAIN],
           ["home", "Ann", "Has the key", MAIN],
         ]],
         ["Share with a team", [
-          ["home", "Ben", "Send a key: picks a team", MAIN, ["Send a key"]],
-          ["home", "Ben", "New team or Edit: name, people, Welcome", MAIN, ["Send a key", "Edit"]],
-          ["listening-team", "Ben", "Copies the key once", SAFE],
-          ["caught-team", "Ben", "Caught", SAFE],
+          ["home-ben", "Ben", "New team or Edit: name, people, Welcome", MAIN, ["Send a key", "Edit"]],
+          ["home-ben", "Ben", "Picks the team, then a saved key", MAIN, ["Send a key", "Platform"]],
           ["sealed-team", "Ben", "One file for the whole team", SAFE],
           ["home-team", "Cat", "Welcomed: every team key", MAIN],
         ]],
@@ -94,7 +91,7 @@
               const queue = [...press];
               const click = () => {
                 if (!queue.length) return;
-                const button = [...frame.contentDocument.querySelectorAll("button")].find((b) => b.textContent.trim() === queue[0]);
+                const button = [...frame.contentDocument.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith(queue[0]));
                 if (button) {
                   button.click();
                   queue.shift();

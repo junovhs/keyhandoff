@@ -54,6 +54,7 @@ const HOME: View = {
 const SCENES: Record<string, Partial<View>> = {
   home: {},
   "home-empty": { keys: [] },
+  "home-ben": { name: "Ben" },
   card: { keys: [], asked: "KeyHandoff card - Ann.handoff" },
   added: { name: "Ben", keys: [], added: ANN },
   "send-empty": { name: "Ben", keys: [], contacts: [] },

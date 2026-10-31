@@ -217,8 +217,8 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
         {copied
           ? "Now paste it into your chat."
           : safe.for_team
-            ? `You keep a copy too, filed under ${safe.for_name}.`
-            : "This computer keeps nothing."}
+            ? `Your key is filed under ${safe.for_name} too.`
+            : "The file is deleted when you close this."}
       </p>
     </>
   );

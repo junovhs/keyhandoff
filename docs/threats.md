@@ -14,7 +14,7 @@ KeyHandoff is pre-release and has not had a security audit. This page lists what
 
 ### On the sender's computer
 
-- **The sender keeps nothing.** After sealing, the sender's data folder doesn't hold the key, and closing Safe Copy deletes the sealed file. Test: [`request_safe_copy_seal_accept_and_once_only`](../src-tauri/src/core.rs). Rule 6.
+- **Sending leaves nothing new behind.** You send a key you already hold; KeyHandoff seals it from your vault without the clipboard, and closing the window deletes the sealed file. Tests: [`ben_sends_a_key_he_already_holds_from_his_vault`](../src-tauri/src/core.rs), [`request_safe_copy_seal_accept_and_once_only`](../src-tauri/src/core.rs). Rule 6.
 
 ### On the receiver's computer
 

@@ -578,7 +578,10 @@ function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdi
                 <span className="key-ico"><Icon name="key" /></span>
                 <span className="who">
                   <span className="nm">{k.label}</span>
-                  <span className="meta">{describe(k)}</span>
+                  <span className="meta">
+                    {k.from ? `From ${k.from}` : "Yours"}
+                    {k.team ? ` · ${k.team}` : ""}
+                  </span>
                 </span>
               </button>
             ))}

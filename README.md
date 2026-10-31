@@ -21,14 +21,17 @@ Both files hold damage-resistant text, so they can also be pasted as text when a
 
 ## Sending a key
 
-1. **Share your card, once.** Ann clicks **Your card** and sends the file to Ben, in an email or chat. Each copy is for one person and carries fresh locks.
-2. **Add the card.** Ben opens it. Ann becomes a contact, with her computer's fingerprint to check with her if it matters.
-3. **Send a key.** Ben clicks **Send a key**, picks Ann and copies the key on the provider's page. KeyHandoff catches that one copy, wipes the clipboard, seals it to one of Ann's locks, and Ben sends back the file. Ben keeps nothing.
-4. **Keep.** Ann opens the file. The key goes into her vault, and every copy of the sealed file, in the chat or anywhere else, can never be opened again.
+1. **Pick a teammate.** Ben clicks **Send a key** and picks Ann from his list.
+2. **Pick the key.** Ben picks one of his saved keys. KeyHandoff seals it so only Ann's computer can open it, once, and Ben sends her the file. Nothing is copied from anywhere, and the sealed file is deleted once he closes it.
+3. **Keep.** Ann opens the file. The key goes into her vault, and every copy of the sealed file, in the chat or anywhere else, can never be opened again.
+
+## Adding a teammate
+
+To be on Ben's list, Ann sends him her card once: she clicks **Your card** and sends the file in an email or chat. Ben opens it, and Ann becomes a contact, with her computer's fingerprint to check with her if it matters. Each card copy is for one person and carries fresh locks.
 
 Ben can keep sending Ann keys until her card's locks run out; then he asks for a new card.
 
-**Teams.** In **Send a key**, **New team** groups some of your contacts under a name. Sending to a team catches the key once and seals it to every member in one file; you keep a copy too, filed under the team. **Welcome** on a member sends them every key you hold that was shared with the team, so someone new gets them all. There's no server, so a team lives on each person's computer: anyone can set up the same team to share with it, and everyone on it needs to have sent you their card.
+**Teams.** In **Send a key**, **New team** groups some of your contacts under a name. Sending a saved key to a team seals it to every member in one file, and files your key under the team. **Welcome** on a member sends them every key you hold that was shared with the team, so someone new gets them all. There's no server, so a team lives on each person's computer: anyone can set up the same team to share with it, and everyone on it needs to have sent you their card.
 
 To keep a key of your own, click **Add a key**, copy the key on the provider's page and name it. No files are involved. KeyHandoff has no way to show a key on screen.
 
@@ -68,7 +71,7 @@ Typing a key into a field, without the clipboard, is still being built.
 
 ## What it protects, and what it doesn't
 
-Chat and email only ever carry a sealed file. The sender keeps nothing, a sealed file opens once, keys are encrypted on disk and never shown, and there are no servers, accounts, telemetry or network code.
+Chat and email only ever carry a sealed file. Sending leaves nothing new on the sender's computer, a sealed file opens once, keys are encrypted on disk and never shown, and there are no servers, accounts, telemetry or network code.
 
 It can't stop a program that's watching the clipboard from reading a key at the moment you copy it, or stop anything running as you from reaching the vault while it is unlocked. While it is locked, only your passphrase or recovery code opens it. A program you allow can do anything with the key it gets. **[docs/threats.md](docs/threats.md)** has the full list, with the test or design rule behind each claim.
 
