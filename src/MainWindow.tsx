@@ -111,7 +111,7 @@ export function MainWindow() {
           onClose={() => setEditing(null)}
         />
       )}
-      {view && security && !safeOn && <SecuritySheet remembered={view.remembered} run={run} onClose={() => setSecurity(false)} />}
+      {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
@@ -321,11 +321,24 @@ const KEEP_HELP: Record<Keep, string> = {
 
 /** Opening a sealed key: it unlocks itself, then one tap picks how long to keep it. */
 /** How the vault opens: the passphrase, or remembered on this computer. */
-function SecuritySheet({ remembered, run, onClose }: { remembered: boolean; run: Run; onClose: () => void }) {
+/** How the vault opens: a TPM PIN, the passphrase, or remembered here. */
+function SecuritySheet({ view, run, onClose }: { view: View; run: Run; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
-  const [pick, setPick] = useState(remembered);
+  const [pick, setPick] = useState(view.remembered);
+  const [adding, setAdding] = useState(false);
+  const [pin, setPin] = useState("");
+  const [again, setAgain] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => void enter(sheet.current, "rise", 360), []);
   const save = () => void run(gateApi.remember(pick)).then(onClose);
+  const addPin = async () => {
+    setBusy(true);
+    await run(gateApi.addPin(pin));
+    setBusy(false);
+    setAdding(false);
+    setPin("");
+    setAgain("");
+  };
   return (
     <div className="sheet" ref={sheet}>
       <div className="head">
@@ -337,7 +350,7 @@ function SecuritySheet({ remembered, run, onClose }: { remembered: boolean; run:
       </div>
       <div className="keep-buttons two">
         <button className={pick ? "" : "pick"} onClick={() => setPick(false)}>
-          <Icon name="lock" /> Passphrase
+          <Icon name="lock" /> Ask to unlock
         </button>
         <button className={pick ? "pick" : ""} onClick={() => setPick(true)}>
           <Icon name="key" /> Remember here
@@ -355,16 +368,54 @@ function SecuritySheet({ remembered, run, onClose }: { remembered: boolean; run:
           </div>
         </div>
       ) : (
-        <p className="help">
-          KeyHandoff asks for your passphrase when it starts, and again after the computer sleeps or the screen locks.
-          While it's locked, no other program can open your keys.
-        </p>
+        <>
+          <p className="help">
+            KeyHandoff asks when it starts, and again after the computer sleeps or the screen locks. While it's
+            locked, no other program can open your keys.
+          </p>
+          <div className="pin-block">
+            <span className="label">PIN instead of the passphrase</span>
+            {view.tpm === "missing" && (
+              <p className="help">
+                This needs a TPM, and none is turned on here. Many computers have one switched off in the firmware
+                settings (AMD fTPM or Intel PTT).
+              </p>
+            )}
+            {view.tpm === "no-access" && (
+              <p className="help">
+                This computer has a TPM, but KeyHandoff isn't allowed to use it yet. Run{" "}
+                <span className="mono">sudo usermod -aG tss $USER</span>, then sign out and back in.
+              </p>
+            )}
+            {view.tpm === "ready" && view.pin && !adding && (
+              <p className="help">
+                On. This computer's TPM checks the PIN and stops anyone guessing it.{" "}
+                <button className="link inline" onClick={() => void run(gateApi.removePin())}>Turn off</button>
+              </p>
+            )}
+            {view.tpm === "ready" && !view.pin && !adding && (
+              <p className="help">
+                A short PIN, checked by this computer's TPM, which stops anyone guessing it.{" "}
+                <button className="link inline" onClick={() => setAdding(true)}>Add a PIN</button>
+              </p>
+            )}
+            {adding && (
+              <div className="pin-add">
+                <input className="name-in" type="password" autoFocus value={pin} placeholder="PIN" aria-label="PIN" onChange={(e) => setPin(e.target.value)} />
+                <input className="name-in" type="password" value={again} placeholder="Again" aria-label="PIN again" onChange={(e) => setAgain(e.target.value)} />
+                <button className="btn secondary small" disabled={busy || pin.trim().length < 4 || pin !== again} onClick={() => void addPin()}>
+                  {busy ? "Adding…" : "Add"}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
       <span className="grow-space" />
       <div className="btn-row">
-        <button className="btn secondary" onClick={onClose}>Cancel</button>
-        <button className="btn primary grow" disabled={pick === remembered} onClick={save}>
-          {pick ? "Remember on this computer" : "Ask for the passphrase"}
+        <button className="btn secondary" onClick={onClose}>{pick === view.remembered ? "Done" : "Cancel"}</button>
+        <button className="btn primary grow" disabled={pick === view.remembered} onClick={save}>
+          {pick ? "Remember on this computer" : "Ask to unlock"}
         </button>
       </div>
     </div>

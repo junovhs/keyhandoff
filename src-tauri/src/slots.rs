@@ -18,6 +18,7 @@ use rand_core::{OsRng, RngCore};
 use zeroize::Zeroizing;
 
 use crate::os::{self, MasterKey};
+use crate::tpm;
 
 pub const FILE: &str = "keyslots.bin";
 const MAGIC: &[u8; 4] = b"HOFK";
@@ -50,6 +51,78 @@ const RECOVERY: Cost = Cost(64, 1, 1);
 
 /// Shortest passphrase accepted. A suggested one is five words.
 pub const MIN_PASSPHRASE: usize = 12;
+/// Shortest TPM PIN accepted: the TPM, not the length, stops guessing.
+pub const MIN_PIN: usize = 4;
+
+/// The TPM slot: the master key sealed inside this computer's TPM, opened
+/// with a PIN. Its own file, since its blobs vary in size.
+pub const TPM_FILE: &str = "keyslot-tpm.bin";
+const TPM_MAGIC: &[u8; 4] = b"HOFT";
+/// The TPM counts wrong PINs, so the hash only keeps the PIN itself out of
+/// the TPM; it doesn't need to be slow.
+#[cfg(not(test))]
+const PIN: Cost = Cost(19 * 1024, 2, 1);
+#[cfg(test)]
+const PIN: Cost = Cost(64, 1, 1);
+
+pub fn has_pin(dir: &Path) -> bool {
+    dir.join(TPM_FILE).exists()
+}
+
+/// Seal `key` in the TPM behind `pin`.
+pub fn add_pin(dir: &Path, t: &mut dyn tpm::Transport, key: &MasterKey, pin: &str) -> Result<(), String> {
+    let pin = pin.trim();
+    if pin.chars().count() < MIN_PIN {
+        return Err(format!("Use at least {MIN_PIN} characters."));
+    }
+    let mut salt = [0u8; 16];
+    OsRng.fill_bytes(&mut salt);
+    let auth = derive(PIN, pin.as_bytes(), &salt)?;
+    let sealed = tpm::seal(t, &auth, &key.0).map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    out.extend_from_slice(TPM_MAGIC);
+    out.push(VERSION);
+    out.extend_from_slice(&PIN.0.to_le_bytes());
+    out.extend_from_slice(&PIN.1.to_le_bytes());
+    out.push(PIN.2);
+    out.extend_from_slice(&salt);
+    for blob in [&sealed.private, &sealed.public] {
+        out.extend_from_slice(&(blob.len() as u16).to_le_bytes());
+        out.extend_from_slice(blob);
+    }
+    os::write_private(&dir.join(TPM_FILE), &out).map_err(|e| e.to_string())
+}
+
+/// The master key, if the TPM unseals it for `pin`.
+pub fn unlock_pin(dir: &Path, t: &mut dyn tpm::Transport, pin: &str) -> Result<MasterKey, String> {
+    let bytes = fs::read(dir.join(TPM_FILE)).map_err(|e| format!("The PIN slot can't be read: {e}"))?;
+    let damaged = || "The PIN slot is damaged.".to_string();
+    if bytes.len() < 30 || &bytes[..4] != TPM_MAGIC || bytes[4] != VERSION {
+        return Err(damaged());
+    }
+    let u32_at = |i: usize| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+    let cost = Cost(u32_at(5), u32_at(9), bytes[13]);
+    let salt = &bytes[14..30];
+    let mut rest = &bytes[30..];
+    let mut blob = || -> Result<Vec<u8>, String> {
+        let n = u16::from_le_bytes(rest.get(..2).ok_or_else(damaged)?.try_into().unwrap()) as usize;
+        let b = rest.get(2..2 + n).ok_or_else(damaged)?.to_vec();
+        rest = &rest[2 + n..];
+        Ok(b)
+    };
+    let sealed = tpm::Sealed { private: blob()?, public: blob()? };
+    let auth = derive(cost, pin.trim().as_bytes(), salt)?;
+    let plain = tpm::unseal(t, &sealed, &auth).map_err(|e| e.to_string())?;
+    let arr: [u8; 32] = plain[..].try_into().map_err(|_| damaged())?;
+    Ok(MasterKey(Zeroizing::new(arr)))
+}
+
+pub fn remove_pin(dir: &Path) -> Result<(), String> {
+    match fs::remove_file(dir.join(TPM_FILE)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        _ => Ok(()),
+    }
+}
 
 struct Slot {
     kind: Kind,

@@ -77,6 +77,10 @@ export interface View {
   protection: string;
   /** "Remember on this computer" is on: it opens without the passphrase. */
   remembered: boolean;
+  /** A TPM PIN unlocks it. */
+  pin: boolean;
+  /** This computer's TPM: ready, no-access (not in the tss group) or missing. */
+  tpm: "ready" | "no-access" | "missing";
   keep: Keep;
   keys: KeyView[];
   pending: number;
@@ -101,6 +105,9 @@ export interface GateView {
   /** The recovery code, shown once after setup to write down. */
   recovery: string | null;
   min_passphrase: number;
+  /** A TPM PIN unlocks it, so the lock screen asks for that first. */
+  pin: boolean;
+  min_pin: number;
 }
 
 // The passphrase and recovery code are the one thing typed or shown here
@@ -110,6 +117,9 @@ export const gateApi = {
   suggest: () => invoke<string>("suggest"),
   setUp: (passphrase: string) => invoke<void>("set_up", { passphrase }),
   unlock: (passphrase: string) => invoke<void>("unlock", { passphrase }),
+  unlockPin: (pin: string) => invoke<void>("unlock_pin", { pin }),
+  addPin: (pin: string) => invoke<void>("add_pin", { pin }),
+  removePin: () => invoke<void>("remove_pin"),
   recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
   recoveryDone: () => invoke<void>("recovery_done"),
   lock: () => invoke<void>("lock"),

@@ -118,27 +118,38 @@ function SetUp({ gate }: { gate: GateView }) {
   );
 }
 
+type Mode = "pin" | "pass" | "recover";
+
 function Unlock({ gate }: { gate: GateView }) {
-  const [recovering, setRecovering] = useState(false);
+  const [mode, setMode] = useState<Mode>(gate.pin ? "pin" : "pass");
   const [pass, setPass] = useState("");
   const [code, setCode] = useState("");
   const [shown, setShown] = useState(false);
   const { busy, error, run } = useBusy();
-  const short = pass.trim().length < (recovering ? gate.min_passphrase : 1);
+  const short = pass.trim().length < (mode === "recover" ? gate.min_passphrase : 1);
+  const go = (m: Mode) => {
+    setMode(m);
+    setPass("");
+  };
   const submit = () => {
     if (short) return;
-    void run(() => (recovering ? gateApi.recover(code, pass) : gateApi.unlock(pass)));
+    void run(() =>
+      mode === "pin" ? gateApi.unlockPin(pass) : mode === "recover" ? gateApi.recover(code, pass) : gateApi.unlock(pass),
+    );
   };
+  const words = {
+    pin: ["KeyHandoff is locked", "Type your PIN to open your keys.", "PIN"],
+    pass: ["KeyHandoff is locked", "Type your passphrase to open your keys.", "Passphrase"],
+    recover: ["Use your recovery code", "Type the code you wrote down, then choose a new passphrase.", "New passphrase"],
+  }[mode];
   return (
     <form className="gate" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <Art />
       <div className="hero">
-        <h1 className="display sm">{recovering ? "Use your recovery code" : "KeyHandoff is locked"}</h1>
-        <p className="lede">
-          {recovering ? "Type the code you wrote down, then choose a new passphrase." : "Type your passphrase to open your keys."}
-        </p>
+        <h1 className="display sm">{words[0]}</h1>
+        <p className="lede">{words[1]}</p>
       </div>
-      {recovering && (
+      {mode === "recover" && (
         <input
           className="name-in mono"
           value={code}
@@ -151,22 +162,24 @@ function Unlock({ gate }: { gate: GateView }) {
         />
       )}
       <Passphrase
-        key={recovering ? "new" : "old"}
+        key={mode}
         value={pass}
         onChange={setPass}
-        label={recovering ? "New passphrase" : "Passphrase"}
-        autoFocus={!recovering}
+        label={words[2]}
+        autoFocus={mode !== "recover"}
         shown={shown}
         onShown={setShown}
       />
       {error && <p className="err">{error}</p>}
       <span className="grow-space" />
-      <button type="button" className="link" onClick={() => { setRecovering(!recovering); setPass(""); }}>
-        {recovering ? "Back to passphrase" : "Forgot it? Use your recovery code"}
-      </button>
+      <p className="help links">
+        {mode !== "pass" && <button type="button" className="link inline" onClick={() => go("pass")}>Use your passphrase</button>}
+        {mode === "pass" && gate.pin && <button type="button" className="link inline" onClick={() => go("pin")}>Use your PIN</button>}
+        {mode !== "recover" && <button type="button" className="link inline" onClick={() => go("recover")}>Forgot it? Use your recovery code</button>}
+      </p>
       <div className="btn-row">
         <button className="btn primary grow" disabled={busy || short}>
-          {busy ? "Opening…" : recovering ? "Open and set passphrase" : "Unlock"}
+          {busy ? "Opening…" : mode === "recover" ? "Open and set passphrase" : "Unlock"}
         </button>
       </div>
     </form>

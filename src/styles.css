@@ -239,6 +239,11 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .keep-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .keep-buttons button { height: 48px; border-radius: 10px; border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .keep-buttons button:hover { background: var(--raised); }
+.pin-block { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--line); }
+.pin-block .label { padding-top: 10px; }
+.pin-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+.pin-add .name-in { min-width: 0; }
+.help.links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .keep-buttons.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .keep-buttons button.pick { background: var(--accent-grad); color: #fff; border-color: transparent; }
 

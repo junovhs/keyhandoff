@@ -14,6 +14,7 @@ src-tauri/src/
   store.rs         Profile files sealed under the master key; the locked profile
   slots.rs         keyslots.bin: the master key wrapped by passphrase and recovery code
   session.rs       Locked or open: unlock, lock on sleep, screen lock or idle
+  tpm.rs           A small TPM 2.0 client: seal and unseal the master key behind a PIN
   vault.rs         Kept keys, keep times, expiry
   os/              Per-OS backends: clipboard capture, offer and read, master key,
                    drag-out, one instance per profile, the key socket or pipe
@@ -48,6 +49,8 @@ The master key is stored only in `keyslots.bin`, wrapped once per way in, and an
 - **Recovery code:** 160 random bits shown once at setup, as eight groups of four Crockford base32 characters. It opens the vault and sets a new passphrase.
 
 The app starts locked (`session.rs`), and the core starts only once a slot opens. It locks again on sleep, screen lock, the lock button, or after `lock_after_minutes` without use if set; locking drops the core and the master key with it. A program asking for a key while it's locked brings the window forward and waits up to two minutes for the unlock. Files opened while locked open right after. Profiles from before key slots kept the master key in DPAPI (Windows) or the Secret Service or a `0600` file (Linux), which hand it to any program running as you; on the first start the passphrase is set, the key moves into its slots and the old copy is deleted.
+
+**A TPM PIN** (opt-in, from Security, where the computer has a TPM KeyHandoff may open) seals the master key inside the TPM in `keyslot-tpm.bin`, and the lock screen then asks for the PIN first. `tpm.rs` speaks the few TPM 2.0 commands this needs directly over `/dev/tpmrm0`, so no TPM libraries are needed: a P-256 storage key rebuilt from the owner seed, and under it a sealed keyed-hash object whose password is the PIN's Argon2id hash. The TPM's dictionary-attack protection limits guessing. On Linux the device belongs to the `tss` group, so Security says when you need to join it; a TPM switched off in the firmware shows as none. Windows support (over TBS) isn't built; Windows Hello is planned there instead.
 
 **Remember on this computer** (opt-in, from Security in the home footer) keeps a copy of the master key with the OS again: DPAPI on Windows, the Secret Service or a `0600` file on Linux. The vault then opens at launch without asking and doesn't lock on sleep or screen lock; turning it off deletes the copy. The passphrase and recovery code keep working either way.
 

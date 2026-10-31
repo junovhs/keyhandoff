@@ -221,6 +221,10 @@ pub struct View {
     pub protection: String,
     /// "Remember on this computer" is on: it opens without the passphrase.
     pub remembered: bool,
+    /// A TPM PIN unlocks it.
+    pub pin: bool,
+    /// The TPM: ready, no-access (not in the tss group) or missing.
+    pub tpm: &'static str,
     pub keep: Keep,
     pub keys: Vec<KeyView>,
     pub pending: usize,
@@ -618,6 +622,16 @@ impl Handoff {
         self.lock().close_safe();
     }
 
+    /// Unlock with a PIN from now on: seal the master key in the TPM.
+    pub fn add_pin(&self, pin: &str) -> Result<(), String> {
+        let mut t = crate::tpm::open()?;
+        self.lock().store.add_pin(&mut *t, pin)
+    }
+
+    pub fn remove_pin(&self) -> Result<(), String> {
+        self.lock().store.remove_pin()
+    }
+
     /// Turn "Remember on this computer" on or off.
     pub fn remember(&self, on: bool) -> Result<(), String> {
         let mut core = self.lock();
@@ -965,6 +979,12 @@ impl Core {
             computer: self.identity.public().fingerprint(),
             protection: self.settings.protection.clone().unwrap_or_default(),
             remembered: self.settings.remembered.is_some(),
+            pin: self.store.has_pin(),
+            tpm: match crate::tpm::available() {
+                crate::tpm::Status::Ready => "ready",
+                crate::tpm::Status::NoAccess => "no-access",
+                crate::tpm::Status::Missing => "missing",
+            },
             keep: self.settings.keep,
             keys,
             pending: self.keyring.len(),

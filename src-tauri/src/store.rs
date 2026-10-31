@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::os::{self, MasterKey};
-use crate::slots::Slots;
+use crate::slots::{self, Slots};
+use crate::tpm;
 use crate::vault::{Keep, Vault};
 
 const MAGIC: &[u8; 4] = b"HOFP";
@@ -179,6 +180,16 @@ impl Locked {
         self.opened(key)
     }
 
+    /// A TPM PIN is set up, so the lock screen asks for it first.
+    pub fn has_pin(&self) -> bool {
+        self.setup.is_none() && slots::has_pin(&self.dir)
+    }
+
+    pub fn unlock_pin(&self, t: &mut dyn tpm::Transport, pin: &str) -> Result<(Store, Settings), String> {
+        let key = slots::unlock_pin(&self.dir, t, pin)?;
+        self.opened(key)
+    }
+
     pub fn unlock(&self, passphrase: &str) -> Result<(Store, Settings), String> {
         let key = Slots::load(&self.dir)?.unlock(passphrase)?;
         self.opened(key)
@@ -224,6 +235,19 @@ impl Store {
             }
         }
         self.save_settings(settings)
+    }
+
+    /// Seal the master key in the TPM behind `pin` (replacing any earlier PIN).
+    pub fn add_pin(&self, t: &mut dyn tpm::Transport, pin: &str) -> Result<(), String> {
+        slots::add_pin(&self.dir, t, &self.key, pin)
+    }
+
+    pub fn remove_pin(&self) -> Result<(), String> {
+        slots::remove_pin(&self.dir)
+    }
+
+    pub fn has_pin(&self) -> bool {
+        slots::has_pin(&self.dir)
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<(), String> {
@@ -466,6 +490,33 @@ mod tests {
         assert!(locked.open_remembered().is_err());
         assert!(!has(&folder_bytes(&dir), &key[..]), "turning it off leaves no copy of the master key");
         assert!(locked.unlock("correct horse battery staple").is_ok(), "the passphrase still works");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_tpm_pin_opens_the_vault_on_this_tpm_only() {
+        let Some(tpm) = tpm::sim::Swtpm::start() else {
+            eprintln!("swtpm isn't installed; skipping");
+            return;
+        };
+        let dir = temp_dir("pin");
+        let (store, _, _) = Locked::open_in(dir.clone(), "t").unwrap().set_up("correct horse battery staple").unwrap();
+        let key = store.key.0.clone();
+        assert!(store.add_pin(&mut tpm.connect(), "12").is_err(), "too short");
+        store.add_pin(&mut tpm.connect(), "2468").unwrap();
+        drop(store);
+        assert!(!folder_bytes(&dir).windows(32).any(|w| w == &key[..]));
+
+        let locked = Locked::open_in(dir.clone(), "t").unwrap();
+        assert!(locked.has_pin());
+        assert!(locked.unlock_pin(&mut tpm.connect(), "1357").err().unwrap().contains("isn't right"));
+        let (store, _) = locked.unlock_pin(&mut tpm.connect(), "2468").unwrap();
+        assert_eq!(&store.key.0[..], &key[..]);
+        let other = tpm::sim::Swtpm::start().unwrap();
+        assert!(locked.unlock_pin(&mut other.connect(), "2468").is_err(), "another TPM can't open it");
+
+        store.remove_pin().unwrap();
+        assert!(!Locked::open_in(dir.clone(), "t").unwrap().has_pin());
         fs::remove_dir_all(dir).unwrap();
     }
 

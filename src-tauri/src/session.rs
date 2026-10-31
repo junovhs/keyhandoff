@@ -118,6 +118,14 @@ impl Session {
         Ok(remembered)
     }
 
+    /// Locked with a TPM PIN set up: the lock screen asks for the PIN.
+    pub fn has_pin(&self) -> bool {
+        match &*guard(&self.state) {
+            State::Locked(l) => l.try_lock().is_ok_and(|l| l.has_pin()),
+            State::Open(_) => false,
+        }
+    }
+
     pub fn remembered(&self) -> bool {
         *guard(&self.remembered)
     }

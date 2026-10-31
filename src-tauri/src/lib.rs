@@ -12,6 +12,7 @@ mod pointer;
 mod session;
 mod slots;
 mod store;
+mod tpm;
 mod vault;
 
 use std::path::PathBuf;
@@ -121,6 +122,9 @@ struct GateView {
     /// Shown once, after setup, to write down.
     recovery: Option<String>,
     min_passphrase: usize,
+    /// A TPM PIN unlocks it, so the lock screen asks for that first.
+    pin: bool,
+    min_pin: usize,
 }
 
 #[tauri::command]
@@ -131,6 +135,8 @@ fn gate(s: S) -> GateView {
         migrating,
         recovery: s.recovery.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.to_string()),
         min_passphrase: slots::MIN_PASSPHRASE,
+        pin: s.has_pin(),
+        min_pin: slots::MIN_PIN,
     }
 }
 
@@ -162,6 +168,25 @@ async fn unlock(app: AppHandle, passphrase: String) -> Result<(), String> {
 async fn recover(app: AppHandle, code: String, passphrase: String) -> Result<(), String> {
     let (code, passphrase) = (Zeroizing::new(code), Zeroizing::new(passphrase));
     opening(app, Box::new(move |locked, _| locked.recover(&code, &passphrase))).await
+}
+
+#[tauri::command]
+async fn unlock_pin(app: AppHandle, pin: String) -> Result<(), String> {
+    let pin = Zeroizing::new(pin);
+    opening(app, Box::new(move |locked, _| locked.unlock_pin(&mut *tpm::open()?, &pin))).await
+}
+
+#[tauri::command]
+async fn add_pin(app: AppHandle, h: H, pin: String) -> Result<(), String> {
+    let pin = Zeroizing::new(pin);
+    let handoff = h.0.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || handoff.add_pin(&pin)).await.map_err(|e| e.to_string())?;
+    done(&app, result)
+}
+
+#[tauri::command]
+fn remove_pin(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.remove_pin())
 }
 
 #[tauri::command]
@@ -402,7 +427,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, unlock_pin, add_pin, remove_pin, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {
