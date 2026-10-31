@@ -346,6 +346,21 @@ impl Handoff {
         Ok(hex(&team_id))
     }
 
+    /// Forget a contact: their card's locks go, and so do they from your
+    /// teams; a team left with nobody goes too. Keys they hold stay theirs.
+    pub fn forget_contact(&self, id: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let contact = core.contacts.iter().find(|c| hex32(&c.identity) == id).ok_or("That contact is no longer here.")?;
+        let (identity, name) = (contact.identity, contact.name.clone());
+        core.contacts.retain(|c| c.identity != identity);
+        core.store.save_contacts(&core.contacts)?;
+        core.teams.iter_mut().for_each(|t| t.members.retain(|m| *m != identity));
+        core.teams.retain(|t| !t.members.is_empty());
+        core.store.save_teams(&core.teams)?;
+        core.notice = Some(format!("Forgot {name}. Keys you already sent stay with {name}."));
+        Ok(())
+    }
+
     pub fn delete_team(&self, id: &str) -> Result<(), String> {
         let mut core = self.lock();
         core.teams.retain(|t| hex(&t.id) != id);
@@ -1286,6 +1301,36 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         bundles.iter().for_each(|f| drop(fs::remove_file(f)));
+    }
+
+    #[test]
+    fn a_forgotten_contact_leaves_your_teams_and_gets_no_more_keys() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ben, ann, priya) = (app("Ben"), app("Ann"), app("Priya"));
+        let (ann_id, priya_id) = (give_card(&ann, &ben), give_card(&priya, &ben));
+        let team = ben.handoff.save_team(None, "Platform", &[ann_id.clone(), priya_id.clone()]).unwrap();
+        let solo = ben.handoff.save_team(None, "Just Priya", &[priya_id.clone()]).unwrap();
+
+        ben.handoff.forget_contact(&priya_id).unwrap();
+        let view = ben.handoff.view();
+        assert_eq!(view.contacts.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Ann"]);
+        assert_eq!(view.teams.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Platform"], "a team left empty goes");
+        assert_eq!(view.teams[0].members.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["Ann"]);
+        assert!(view.notice.unwrap().contains("stay with Priya"));
+        assert!(ben.handoff.send_kept(&priya_id, &hold(&ben, "Old", KEY)).is_err());
+        assert!(ben.handoff.send_kept_to_team(&solo, &hold(&ben, "Solo", KEY)).is_err());
+
+        // The team's next key is sealed for Ann only.
+        ben.handoff.send_kept_to_team(&team, &hold(&ben, "Dialpad", KEY)).unwrap();
+        let bundle = send_out(&ben);
+        ann.handoff.open_path(&bundle).unwrap();
+        assert_eq!(ann.handoff.view().accepted.unwrap().label, "Dialpad");
+        assert!(priya.handoff.open_path(&bundle).unwrap_err().contains("Nothing in this file"), "no copy for Priya");
+
+        for a in [ben, ann, priya] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        let _ = fs::remove_file(bundle);
     }
 
     #[test]

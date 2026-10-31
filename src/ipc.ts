@@ -144,6 +144,8 @@ export const api = {
   copyCard: () => invoke<void>("copy_card"),
   saveTeam: (id: string | null, name: string, members: string[]) => invoke<string>("save_team", { id, name, members }),
   deleteTeam: (id: string) => invoke<void>("delete_team", { id }),
+  /** Forget a contact and take them off your teams. */
+  forgetContact: (id: string) => invoke<void>("forget_contact", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */
   sendKept: (contact: string, key: string) => invoke<void>("send_kept", { contact, key }),
   sendKeptToTeam: (team: string, key: string) => invoke<void>("send_kept_to_team", { team, key }),

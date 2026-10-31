@@ -165,6 +165,7 @@ export const docs = defineDocs({
                 },
                 { kind: "p", text: "**When someone sends you their card,** open it: double-click it, drop it on the window, or press Ctrl V in KeyHandoff. **Card added** shows their name and computer fingerprint, and they're on your Send a key list." },
                 { kind: "p", text: "When someone opens your card, you become one of their contacts and they see how many keys they can still send you. When the locks run out, Send a key says to ask you for a new card." },
+                { kind: "p", text: "**To forget a contact,** point at them in Send a key, click the cross and then **Forget for good?**. Their locks go and they come off your teams; a team left with nobody goes too. Keys you already sent them stay with them." },
               ],
             },
             {

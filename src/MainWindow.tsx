@@ -579,6 +579,8 @@ type To = { team: boolean; id: string; name: string };
 function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run; start: To | null; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
   const [to, setTo] = useState<To | null>(start);
+  // The contact whose Forget was clicked once; a second click forgets them.
+  const [armed, setArmed] = useState<string | null>(null);
   useEffect(() => void enter(sheet.current, "rise", 360), [to === null]);
   const { contacts, teams } = view;
   if (to) {
@@ -642,17 +644,31 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <div className="keys">
           {teams.length > 0 && <span className="label">People</span>}
           {contacts.map((c) => (
-            <button key={c.id} className="key-row contact" onClick={() => setTo({ team: false, id: c.id, name: c.name })}>
-              <span className="key-ico"><Icon name="user" /></span>
-              <span className="who">
-                <span className="nm">{c.name}</span>
-                <span className="meta">
-                  {c.sends_left > 0 ? `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left` : "Card used up: ask for a new one"}
-                  {" · "}
-                  <span className="mono">{c.computer}</span>
+            <div key={c.id} className="key-row">
+              <button className="who contact" onClick={() => setTo({ team: false, id: c.id, name: c.name })}>
+                <span className="key-ico"><Icon name="user" /></span>
+                <span className="who">
+                  <span className="nm">{c.name}</span>
+                  <span className="meta">
+                    {c.sends_left > 0 ? `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left` : "Card used up: ask for a new one"}
+                    {" · "}
+                    <span className="mono">{c.computer}</span>
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+              <button
+                className={`forget ${armed === c.id ? "sure" : ""}`}
+                aria-label={`Forget ${c.name}`}
+                title={`Forget ${c.name}. Keys you already sent stay with them.`}
+                onClick={() => {
+                  if (armed === c.id) void run(api.forgetContact(c.id));
+                  else setArmed(c.id);
+                }}
+                onBlur={() => setArmed(null)}
+              >
+                {armed === c.id ? "Forget for good?" : <Icon name="close" />}
+              </button>
+            </div>
           ))}
         </div>
       ) : (

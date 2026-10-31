@@ -27,7 +27,7 @@ Both files hold damage-resistant text, so they can also be pasted as text when a
 
 ## Adding a teammate
 
-To be on Ben's list, Ann sends him her card once: she clicks **Your card** and sends the file in an email or chat. Ben opens it, and Ann becomes a contact, with her computer's fingerprint to check with her if it matters. Each card copy is for one person and carries fresh locks.
+To be on Ben's list, Ann sends him her card once: she clicks **Your card** and sends the file in an email or chat. Ben opens it, and Ann becomes a contact, with her computer's fingerprint to check with her if it matters. Each card copy is for one person and carries fresh locks. To drop someone, click the cross on their row in **Send a key**: they come off your teams too, and keys you already sent stay with them.
 
 Ben can keep sending Ann keys until her card's locks run out; then he asks for a new card.
 
