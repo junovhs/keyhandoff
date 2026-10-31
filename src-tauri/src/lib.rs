@@ -9,6 +9,7 @@
 mod core;
 mod os;
 mod pointer;
+mod session;
 mod slots;
 mod store;
 mod vault;
@@ -22,19 +23,22 @@ use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, WebviewWindow, Wi
 use zeroize::Zeroizing;
 
 use crate::core::{Answer, Clipboard, Handoff, View};
-use crate::store::{Locked, Settings, Store};
+use crate::session::Session;
 use crate::vault::Keep;
 
 const MAIN: &str = "main";
 const EXPIRY_CHECK: Duration = Duration::from_secs(60);
-
-type H<'a> = State<'a, Arc<Handoff>>;
+const LOCK_CHECK: Duration = Duration::from_secs(5);
+/// A check this late means the computer was asleep.
+const SLEPT: Duration = Duration::from_secs(60);
+/// A program asking while locked waits this long for you to unlock.
+const UNLOCK_WAIT: Duration = Duration::from_secs(120);
 
 /// Tell the screens to refresh. While Safe Copy is on, the window stays above
 /// other apps so you can copy a key from them; it keeps its size, so nothing
 /// jumps between screens. A program asking for a key brings the window forward.
 fn changed(app: &AppHandle) {
-    let Some(handoff) = app.try_state::<Arc<Handoff>>() else {
+    let Some(handoff) = app.try_state::<Arc<Session>>().and_then(|s| s.current()) else {
         let _ = app.emit("changed", ());
         return;
     };
@@ -52,6 +56,15 @@ fn changed(app: &AppHandle) {
         }
     }
     let _ = app.emit("changed", ());
+}
+
+/// Bring the main window forward, for a program waiting on you.
+fn raise(app: &AppHandle) {
+    if let Some(main) = app.get_webview_window(MAIN) {
+        let _ = main.unminimize();
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
 }
 
 /// Whether Safe Copy last put the window on top, so it's only changed on the switch.
@@ -75,18 +88,29 @@ fn done(app: &AppHandle, result: Result<(), String>) -> Result<(), String> {
     result
 }
 
-/// The profile until the passphrase opens it. Everything else waits: the
-/// `Handoff` core, and the socket programs ask for keys over, start only then.
-struct Gate {
-    profile: String,
-    locked: Mutex<Option<Locked>>,
-    /// Files opened before unlock, opened right after it.
-    files: Mutex<Vec<PathBuf>>,
-    /// The recovery code from setup, shown until you say it's written down.
-    recovery: Mutex<Option<Zeroizing<String>>>,
+type S<'a> = State<'a, Arc<Session>>;
+
+/// The open core, for a command from the window; locked, the command fails.
+/// Using it counts as activity, so the idle lock waits.
+struct H(Arc<Handoff>);
+
+impl std::ops::Deref for H {
+    type Target = Handoff;
+    fn deref(&self) -> &Handoff {
+        &self.0
+    }
 }
 
-type G<'a> = State<'a, Arc<Gate>>;
+impl<'de, R: tauri::Runtime> tauri::ipc::CommandArg<'de, R> for H {
+    fn from_command(command: tauri::ipc::CommandItem<'de, R>) -> Result<Self, tauri::ipc::InvokeError> {
+        let session = command.message.webview().state::<Arc<Session>>().inner().clone();
+        session.touch(now_ms()).map(H).map_err(Into::into)
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+}
 
 #[derive(Serialize)]
 struct GateView {
@@ -100,17 +124,12 @@ struct GateView {
 }
 
 #[tauri::command]
-fn gate(g: G) -> GateView {
-    let locked = g.locked.lock().unwrap_or_else(|e| e.into_inner());
-    let state = match locked.as_ref() {
-        Some(l) if l.needs_setup() => "setup",
-        Some(_) => "locked",
-        None => "open",
-    };
+fn gate(s: S) -> GateView {
+    let (state, migrating) = s.state();
     GateView {
         state,
-        migrating: locked.as_ref().is_some_and(Locked::migrating),
-        recovery: g.recovery.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.to_string()),
+        migrating,
+        recovery: s.recovery.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.to_string()),
         min_passphrase: slots::MIN_PASSPHRASE,
     }
 }
@@ -125,46 +144,43 @@ fn suggest() -> String {
 #[tauri::command]
 async fn set_up(app: AppHandle, passphrase: String) -> Result<(), String> {
     let passphrase = Zeroizing::new(passphrase);
-    opening(app, move |locked, gate| {
+    opening(app, Box::new(move |locked, session| {
         let (store, settings, code) = locked.set_up(&passphrase)?;
-        *gate.recovery.lock().unwrap_or_else(|e| e.into_inner()) = Some(code);
+        *session.recovery.lock().unwrap_or_else(|e| e.into_inner()) = Some(code);
         Ok((store, settings))
-    })
+    }))
     .await
 }
 
 #[tauri::command]
 async fn unlock(app: AppHandle, passphrase: String) -> Result<(), String> {
     let passphrase = Zeroizing::new(passphrase);
-    opening(app, move |locked, _| locked.unlock(&passphrase)).await
+    opening(app, Box::new(move |locked, _| locked.unlock(&passphrase))).await
 }
 
 #[tauri::command]
 async fn recover(app: AppHandle, code: String, passphrase: String) -> Result<(), String> {
     let (code, passphrase) = (Zeroizing::new(code), Zeroizing::new(passphrase));
-    opening(app, move |locked, _| locked.recover(&code, &passphrase)).await
+    opening(app, Box::new(move |locked, _| locked.recover(&code, &passphrase))).await
 }
 
 #[tauri::command]
-fn recovery_done(app: AppHandle, g: G) {
-    g.recovery.lock().unwrap_or_else(|e| e.into_inner()).take();
+fn recovery_done(app: AppHandle, s: S) {
+    s.recovery.lock().unwrap_or_else(|e| e.into_inner()).take();
     changed(&app);
 }
 
-/// Open the locked profile with `how`, then start everything that needs it.
-async fn opening(
-    app: AppHandle,
-    how: impl FnOnce(&mut Locked, &Gate) -> Result<(Store, Settings), String> + Send + 'static,
-) -> Result<(), String> {
+#[tauri::command]
+fn lock(app: AppHandle, s: S) -> Result<(), String> {
+    done(&app, s.lock())
+}
+
+/// Open the locked profile with `how`, then open the files that waited.
+async fn opening(app: AppHandle, how: session::How<'static>) -> Result<(), String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let gate = app.state::<Arc<Gate>>().inner().clone();
-        let mut locked = gate.locked.lock().unwrap_or_else(|e| e.into_inner());
-        let profile = locked.as_mut().ok_or("KeyHandoff is already unlocked.")?;
-        let (store, settings) = how(profile, &gate)?;
-        start(&app, &gate, store, settings)?;
-        *locked = None;
-        drop(locked);
-        let files = std::mem::take(&mut *gate.files.lock().unwrap_or_else(|e| e.into_inner()));
+        let session = app.state::<Arc<Session>>().inner().clone();
+        session.open(how, now_ms())?;
+        let files = std::mem::take(&mut *session.files.lock().unwrap_or_else(|e| e.into_inner()));
         open_files(&app, &files, false);
         changed(&app);
         Ok(())
@@ -173,20 +189,10 @@ async fn opening(
     result.map_err(|e| e.to_string())?
 }
 
-fn start(app: &AppHandle, gate: &Gate, store: Store, settings: Settings) -> Result<(), String> {
-    let outbox = os::runtime_dir().join(format!("handoff-{}", gate.profile));
-    let notify_handle = app.clone();
-    let handoff = Handoff::open(store, settings, outbox, Clipboard::system(), Box::new(move || changed(&notify_handle)))?;
-    app.manage(handoff.clone());
-    if let Err(e) = os::listen_for_keys(&gate.profile, Arc::new(move |peer, stream| pointer::serve(&handoff, &peer, stream))) {
-        eprintln!("keyhandoff: programs can't ask for keys: {e}");
-    }
-    Ok(())
-}
-
+/// Not activity: the screens refresh on every change, including the clock.
 #[tauri::command]
-fn view(h: H) -> View {
-    h.view()
+fn view(s: S) -> Result<View, String> {
+    Ok(s.current().ok_or("KeyHandoff is locked.")?.view())
 }
 
 #[tauri::command]
@@ -319,11 +325,10 @@ struct Started(Instant);
 /// Errors become the main window's notice. `raise` brings the main window
 /// forward; at startup the screens show it themselves once painted.
 fn open_files(app: &AppHandle, files: &[PathBuf], raise: bool) {
-    let Some(handoff) = app.try_state::<Arc<Handoff>>() else {
+    let Some(session) = app.try_state::<Arc<Session>>() else { return };
+    let Some(handoff) = session.current() else {
         // Locked: they open once you unlock.
-        if let Some(gate) = app.try_state::<Arc<Gate>>() {
-            gate.files.lock().unwrap_or_else(|e| e.into_inner()).extend_from_slice(files);
-        }
+        session.files.lock().unwrap_or_else(|e| e.into_inner()).extend_from_slice(files);
         if let (true, Some(main)) = (raise, app.get_webview_window(MAIN)) {
             let _ = main.show();
             let _ = main.unminimize();
@@ -392,28 +397,62 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {
-            let locked = Locked::open(&args.profile)?;
-            app.manage(Arc::new(Gate {
-                profile: args.profile.clone(),
-                locked: Mutex::new(Some(locked)),
-                files: Mutex::new(Vec::new()),
-                recovery: Mutex::new(None),
-            }));
-
             let handle = app.handle().clone();
+            let (profile, starter) = (args.profile.clone(), handle.clone());
+            let start: session::Start = Box::new(move |store, settings| {
+                let outbox = os::runtime_dir().join(format!("handoff-{profile}"));
+                let notify = starter.clone();
+                Handoff::open(store, settings, outbox, Clipboard::system(), Box::new(move || changed(&notify)))
+            });
+            let session = Arc::new(Session::new(store::profile_dir(&args.profile), &args.profile, start)?);
+            app.manage(session.clone());
+
+            // Programs can ask while locked: the window comes forward and
+            // they wait for the unlock.
+            let asking = handle.clone();
+            let serving = session.clone();
+            let serve: os::ServeKeys = Arc::new(move |peer, stream| {
+                if serving.current().is_none() {
+                    raise(&asking);
+                }
+                match serving.wait_open(UNLOCK_WAIT) {
+                    Some(handoff) => pointer::serve(&handoff, &peer, stream),
+                    None => pointer::refuse(stream, "KeyHandoff is locked. Unlock it and try again."),
+                }
+            });
+            if let Err(e) = os::listen_for_keys(&args.profile, serve) {
+                eprintln!("keyhandoff: programs can't ask for keys: {e}");
+            }
+
             open_files(&handle, &args.files, false);
             let launches = handle.clone();
             os::listen_for_launches(&args.profile, move |files| open_files(&launches, &files, true))?;
 
-            // Kept-for-a-while keys and old requests are deleted on schedule.
+            // Kept-for-a-while keys and old requests are deleted on schedule,
+            // and the vault locks when you're away: idle, asleep or the
+            // screen locked. A tick that comes late means the computer slept.
             let ticker = handle.clone();
-            std::thread::spawn(move || loop {
-                std::thread::sleep(EXPIRY_CHECK);
-                changed(&ticker);
+            std::thread::spawn(move || {
+                let (mut last, mut expiry) = (now_ms(), now_ms());
+                loop {
+                    std::thread::sleep(LOCK_CHECK);
+                    let now = now_ms();
+                    let slept = now.saturating_sub(last) > SLEPT.as_millis() as u64;
+                    last = now;
+                    let locked = if slept || os::screen_locked() {
+                        session.current().is_some() && session.lock().is_ok()
+                    } else {
+                        session.lock_if_idle(now)
+                    };
+                    if locked || now.saturating_sub(expiry) >= EXPIRY_CHECK.as_millis() as u64 {
+                        expiry = now;
+                        changed(&ticker);
+                    }
+                }
             });
 
             // Fallback: show the main window even if the screens never call `ready`.
@@ -431,7 +470,7 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // Closing the window stops any Safe Copy and quits.
             WindowEvent::CloseRequested { .. } if window.label() == MAIN => {
-                if let Some(h) = window.app_handle().try_state::<Arc<Handoff>>() {
+                if let Some(h) = window.app_handle().try_state::<Arc<Session>>().and_then(|s| s.current()) {
                     h.close_safe();
                 }
                 window.app_handle().exit(0);

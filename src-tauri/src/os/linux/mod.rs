@@ -14,6 +14,25 @@ pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;
 pub use protect::{forget_master_key, master_key};
 
+thread_local! {
+    static SYSTEM_BUS: std::cell::RefCell<Option<dbus::blocking::Connection>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Whether this login session's screen is locked, as logind reports it
+/// (GNOME, KDE and most lockers set `LockedHint`). False when it can't say.
+pub fn screen_locked() -> bool {
+    use dbus::blocking::stdintf::org_freedesktop_dbus::Properties;
+    SYSTEM_BUS.with(|bus| {
+        let mut bus = bus.borrow_mut();
+        if bus.is_none() {
+            *bus = dbus::blocking::Connection::new_system().ok();
+        }
+        let Some(conn) = bus.as_ref() else { return false };
+        let session = conn.with_proxy("org.freedesktop.login1", "/org/freedesktop/login1/session/auto", std::time::Duration::from_secs(1));
+        session.get::<bool>("org.freedesktop.login1.Session", "LockedHint").unwrap_or(false)
+    })
+}
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};

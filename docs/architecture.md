@@ -13,6 +13,7 @@ src-tauri/src/
   pointer.rs       What programs asking for keys send and get back
   store.rs         Profile files sealed under the master key; the locked profile
   slots.rs         keyslots.bin: the master key wrapped by passphrase and recovery code
+  session.rs       Locked or open: unlock, lock on sleep, screen lock or idle
   vault.rs         Kept keys, keep times, expiry
   os/              Per-OS backends: clipboard capture, offer and read, master key,
                    drag-out, one instance per profile, the key socket or pipe
@@ -46,7 +47,7 @@ The master key is stored only in `keyslots.bin`, wrapped once per way in, and an
 - **Passphrase:** Argon2id (256 MiB, 3 passes, 4 lanes) turns the passphrase into a key that seals the master key with ChaCha20-Poly1305.
 - **Recovery code:** 160 random bits shown once at setup, as eight groups of four Crockford base32 characters. It opens the vault and sets a new passphrase.
 
-The app starts locked and nothing else runs until a slot opens: the core, and the socket programs ask for keys over, start only then. Files opened while locked open right after. Profiles from before key slots kept the master key in DPAPI (Windows) or the Secret Service or a `0600` file (Linux), which hand it to any program running as you; on the first start the passphrase is set, the key moves into its slots and the old copy is deleted.
+The app starts locked (`session.rs`), and the core starts only once a slot opens. It locks again on sleep, screen lock, the lock button, or after `lock_after_minutes` without use if set; locking drops the core and the master key with it. A program asking for a key while it's locked brings the window forward and waits up to two minutes for the unlock. Files opened while locked open right after. Profiles from before key slots kept the master key in DPAPI (Windows) or the Secret Service or a `0600` file (Linux), which hand it to any program running as you; on the first start the passphrase is set, the key moves into its slots and the old copy is deleted.
 
 Hardware slots are planned and add a kind each: a TPM 2.0 key behind a PIN, Windows Hello, and a FIDO2 security key. See [the research report](../reports/Hardware%20key%20protection%20everywhere.md).
 

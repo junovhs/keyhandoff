@@ -4,6 +4,7 @@ import { Glyph, Icon, Logo, useDragOut } from "./art";
 import {
   api,
   attempt,
+  gateApi,
   KEEP_CHOICES,
   useGate,
   useView,
@@ -78,6 +79,11 @@ export function MainWindow() {
       <header className="titlebar" data-tauri-drag-region>
         <Logo />
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
+        {open && (
+          <button aria-label="Lock" title="Lock KeyHandoff" onClick={() => void run(gateApi.lock())}>
+            <Icon name="lock" />
+          </button>
+        )}
         <button aria-label="Minimize" onClick={() => void win.minimize()}>
           <Icon name="minimize" />
         </button>

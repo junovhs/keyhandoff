@@ -3,7 +3,8 @@
 A .env line such as ``DIALPAD_API_KEY=handoff:Dialpad`` names a key kept in
 KeyHandoff instead of holding it. ``load()`` asks the running app for every
 pointed-to key at once. The first time a program asks from a folder,
-KeyHandoff asks you to allow it. The values are set in ``os.environ`` for
+KeyHandoff asks you to allow it. If KeyHandoff is locked, it comes forward
+and this waits for you to unlock it. The values are set in ``os.environ`` for
 this process only; nothing is written to disk.
 
     import keyhandoff_env; keyhandoff_env.load()

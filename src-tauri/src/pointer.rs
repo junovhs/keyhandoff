@@ -36,6 +36,12 @@ pub fn serve(handoff: &Handoff, peer: &Peer, mut stream: Box<dyn KeyStream>) {
     let _ = stream.flush();
 }
 
+/// Turn a program away with `error`.
+pub fn refuse(mut stream: Box<dyn KeyStream>, error: &str) {
+    let _ = stream.write_all(&reply(&Reply::Error { error: error.into() }));
+    let _ = stream.flush();
+}
+
 fn answer(handoff: &Handoff, peer: &Peer, stream: &mut dyn KeyStream) -> Zeroizing<Vec<u8>> {
     let mut line = String::new();
     let read = BufReader::new(stream.take(MAX_ASK_BYTES)).read_line(&mut line);

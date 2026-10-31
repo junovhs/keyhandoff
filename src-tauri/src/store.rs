@@ -37,9 +37,14 @@ pub struct Settings {
     /// The last keep-time chosen; the next default.
     #[serde(default)]
     pub keep: Keep,
-    /// Which OS backend holds the master key, fixed on first run.
+    /// What protects the master key: `passphrase` once it has key slots;
+    /// an OS backend for a profile from before them.
     #[serde(default)]
     pub protection: Option<String>,
+    /// Lock after this many minutes with nothing done in the window. Off by
+    /// default: it locks when the computer sleeps or the screen locks.
+    #[serde(default)]
+    pub lock_after_minutes: Option<u32>,
 }
 
 /// A program allowed to get one kept key when it runs in one folder.
@@ -100,11 +105,7 @@ pub struct Locked {
 pub const PASSPHRASE: &str = "passphrase";
 
 impl Locked {
-    pub fn open(profile: &str) -> Result<Self, String> {
-        Self::open_in(profile_dir(profile), profile)
-    }
-
-    fn open_in(dir: PathBuf, profile: &str) -> Result<Self, String> {
+    pub(crate) fn open_in(dir: PathBuf, profile: &str) -> Result<Self, String> {
         os::private_dir(&dir).map_err(|e| e.to_string())?;
         let mut settings = read_settings(&dir).unwrap_or_default();
         if settings.name.is_empty() {

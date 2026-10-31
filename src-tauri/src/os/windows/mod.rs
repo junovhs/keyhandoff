@@ -18,6 +18,31 @@ pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;
 pub use protect::{forget_master_key, master_key};
 
+/// Whether this session's screen is locked (`WTS_SESSIONSTATE_LOCK`, which
+/// reads correctly from Windows 8 on). False when Windows won't say.
+pub fn screen_locked() -> bool {
+    use ::windows::core::PWSTR;
+    use ::windows::Win32::System::RemoteDesktop::{
+        WTSFreeMemory, WTSQuerySessionInformationW, WTSSessionInfoEx, WTSINFOEXW, WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
+        WTS_SESSIONSTATE_LOCK,
+    };
+    let mut buf = PWSTR::null();
+    let mut len = 0u32;
+    // SAFETY: Windows allocates `buf` on success; we read one WTSINFOEXW from
+    // it (when it's that big) and free it with WTSFreeMemory.
+    unsafe {
+        if WTSQuerySessionInformationW(Some(WTS_CURRENT_SERVER_HANDLE), WTS_CURRENT_SESSION, WTSSessionInfoEx, &mut buf, &mut len).is_err() {
+            return false;
+        }
+        let locked = len as usize >= std::mem::size_of::<WTSINFOEXW>() && {
+            let info = &*(buf.0 as *const WTSINFOEXW);
+            info.Level == 1 && info.Data.WTSInfoExLevel1.SessionFlags == WTS_SESSIONSTATE_LOCK as i32
+        };
+        WTSFreeMemory(buf.0 as *mut _);
+        locked
+    }
+}
+
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};

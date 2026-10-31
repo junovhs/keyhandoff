@@ -3,7 +3,8 @@
 // A .env line such as `DIALPAD_API_KEY=handoff:Dialpad` names a key kept in
 // KeyHandoff instead of holding it. `load()` asks the running app for every
 // pointed-to key at once. The first time a program asks from a folder,
-// KeyHandoff asks you to allow it. The values are set in `process.env` for
+// KeyHandoff asks you to allow it; if it is locked, it comes forward and this
+// waits for you to unlock it. The values are set in `process.env` for
 // this process only; nothing is written to disk.
 //
 //     import { load } from "./keyhandoff_env.mjs"; await load();

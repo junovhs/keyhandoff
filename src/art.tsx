@@ -85,6 +85,7 @@ export function Logo({ height = 22 }: { height?: number }) {
 const LINES = {
   close: "M4 4l8 8M12 4l-8 8",
   minimize: "M4 8h8",
+  lock: "M3.5 7.5h9v6.5h-9zM5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5",
   check: "M3.5 8.5l3 3 6-7",
   key: "M2.5 8a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0M7.5 8h6M11.5 8v2.5M13.5 8v2",
   shield: "M8 1.8l5 2v4c0 3.2-2.2 5.2-5 6.4-2.8-1.2-5-3.2-5-6.4v-4zM5.8 8.2l1.6 1.6 3-3.4",

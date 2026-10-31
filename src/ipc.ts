@@ -110,6 +110,7 @@ export const gateApi = {
   unlock: (passphrase: string) => invoke<void>("unlock", { passphrase }),
   recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
   recoveryDone: () => invoke<void>("recovery_done"),
+  lock: () => invoke<void>("lock"),
 };
 
 /** The gate, refreshed whenever the core reports a change. */

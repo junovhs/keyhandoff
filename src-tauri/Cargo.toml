@@ -31,6 +31,8 @@ sha2 = "0.10"
 x11rb = { version = "0.13", features = ["xfixes"] }
 keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
 gtk = "0.18"
+# Whether the screen is locked (logind's LockedHint); keyring already uses it.
+dbus = "0.9"
 # SO_PEERCRED: which program is asking for a key.
 libc = "0.2"
 
@@ -53,6 +55,7 @@ windows = { version = "0.62.2", features = [
   "Win32_System_Memory",
   "Win32_System_Ole",
   "Win32_System_Pipes",
+  "Win32_System_RemoteDesktop",
   "Win32_System_WinRT",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",

@@ -616,6 +616,12 @@ impl Handoff {
         self.lock().close_safe();
     }
 
+    /// Safe Copy is on, or a program is waiting for Allow: not a moment to lock.
+    pub fn busy(&self) -> bool {
+        let core = self.lock();
+        !matches!(core.safe, Safe::Off) || core.program.is_some()
+    }
+
     pub fn set_keep(&self, id: &str, keep: Keep) -> Result<(), String> {
         let mut core = self.lock();
         let id = parse_id(id)?;
