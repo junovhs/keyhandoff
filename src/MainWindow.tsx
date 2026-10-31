@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon, Logo, Tile, useDragOut } from "./art";
-import { api, attempt, KEEP_CHOICES, useView, type Keep, type KeyView, type View } from "./ipc";
+import { api, attempt, KEEP_CHOICES, useView, type Keep, type KeyView, type ProgramView, type View } from "./ipc";
 import { enter, stagger } from "./motion";
 import { SafeCopy } from "./SafeCopy";
 
@@ -50,7 +50,8 @@ export function MainWindow() {
 
   const run = async (p: Promise<unknown>) => setError(await attempt(p));
   const win = getCurrentWindow();
-  const toast = error ?? view?.notice ?? null;
+  // A program waiting for Allow keeps its buttons clear.
+  const toast = view?.program ? null : (error ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
 
   return (
@@ -74,6 +75,7 @@ export function MainWindow() {
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
       {view?.asked && !view.accepted && <AskSheet fileName={view.asked} run={run} />}
+      {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${error ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
           {!error && <Icon name="check" />}
@@ -301,6 +303,45 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
       </div>
       <span className="grow-space" />
       <button className="btn primary" onClick={() => void api.dismiss()}>Done</button>
+    </div>
+  );
+}
+
+/** A program asks for kept keys through a `handoff:` pointer. */
+function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), [program.path, program.folder]);
+  const one = program.keys.length === 1;
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="head">
+        <Tile name="key" size="lg" />
+        <div>
+          <span className="lede">A program wants {one ? "a key" : `${program.keys.length} keys`}</span>
+          <h2 className="display md">{program.name}</h2>
+        </div>
+      </div>
+      <div className="chip">
+        <Icon name="file" />
+        <span className="mono">{program.path}</span>
+      </div>
+      <p className="lede">
+        Running in <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>, it asks for{" "}
+        {program.keys.map((k, i) => (
+          <span key={k}>{i > 0 && ", "}<strong>{k}</strong></span>
+        ))}
+        .
+      </p>
+      <p className="help">
+        Always allow lets {program.name} get {one ? "this key" : "these keys"} whenever it runs in this folder. Anything else
+        that runs as you could do the same, so allow only programs you started.
+      </p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn secondary" onClick={() => void run(api.answer("deny"))}>Deny</button>
+        <button className="btn secondary" onClick={() => void run(api.answer("once"))}>Just this once</button>
+        <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
+      </div>
     </div>
   );
 }

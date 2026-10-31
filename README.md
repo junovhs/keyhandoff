@@ -15,7 +15,9 @@ KeyHandoff is a small desktop app for handing someone an API key, or any other s
 
 You can also catch a key for yourself with **Add your own**. KeyHandoff has no way to show a key on screen.
 
-Using kept keys from the app is still being built: typing a key into a field, and handing keys to programs on your computer.
+**Use a key in a program.** Your `.env` holds a pointer instead of the key, such as `DIALPAD_API_KEY=handoff:Dialpad`. A one-line loader asks the running app for it (Python: copy [`loaders/keyhandoff_env.py`](loaders/keyhandoff_env.py) next to your script and call `keyhandoff_env.load()`). The first time a program asks from a folder, KeyHandoff shows which program and folder, and you choose Always allow, Just this once or Deny. The value goes into that process's environment and is never written to disk.
+
+Typing a key into a field is still being built.
 
 ## What it protects, and what it doesn't
 
@@ -30,6 +32,7 @@ Using kept keys from the app is still being built: typing a key into a field, an
 
 - **The copy moment.** A key copied from a web page is on the system clipboard, unencrypted, for the moment before KeyHandoff wipes it. Another program watching the clipboard could read it in that moment. If you suspect your computer is compromised, replace the key.
 - **Malware running as you.** On Windows the vault is protected with DPAPI, and on Linux with the Secret Service, or a private file if there is none. Other programs running under your account can ask those to unlock it. Hardware-backed protection is planned.
+- **A program you allowed.** Once a program has a key, it can do anything with it, including print it or save it. The prompt names the program and folder so you can decide, but anything running as you could start that same program in that folder.
 - **A compromised computer.** No app can fully protect a secret on a machine an attacker controls.
 - **Lost computers.** Keys are tied to one computer and there is no recovery. Replace the keys with the provider.
 

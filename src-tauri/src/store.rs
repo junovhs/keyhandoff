@@ -1,5 +1,5 @@
 //! A profile's files in the app data folder. The identity, the pending
-//! one-time keys and the vault are sealed under the OS-protected master key
+//! one-time keys, the vault and the programs you allowed are sealed under the OS-protected master key
 //! (sealing-adr.md: DPAPI on Windows; the Secret Service on Linux for now).
 //! `settings.json` holds no secret.
 //!
@@ -24,6 +24,7 @@ const VERSION: u8 = 0;
 const IDENTITY: &str = "identity.bin";
 const PENDING: &str = "pending.bin";
 const VAULT: &str = "vault.bin";
+const APPROVALS: &str = "approvals.bin";
 const SETTINGS: &str = "settings.json";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -36,6 +37,14 @@ pub struct Settings {
     /// Which OS backend holds the master key, fixed on first run.
     #[serde(default)]
     pub protection: Option<String>,
+}
+
+/// A program allowed to get one kept key when it runs in one folder.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Approval {
+    pub program: PathBuf,
+    pub folder: Option<PathBuf>,
+    pub key: [u8; 16],
 }
 
 pub struct Store {
@@ -112,6 +121,18 @@ impl Store {
 
     pub fn save_vault(&self, vault: &Vault) -> Result<(), String> {
         self.write(VAULT, &vault.to_bytes())
+    }
+
+    pub fn approvals(&self) -> Result<Vec<Approval>, String> {
+        match self.read(APPROVALS)? {
+            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The allowed programs file is damaged.".to_string()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_approvals(&self, approvals: &[Approval]) -> Result<(), String> {
+        let json = serde_json::to_vec(approvals).map_err(|e| e.to_string())?;
+        self.write(APPROVALS, &json)
     }
 
     fn cipher(&self) -> ChaCha20Poly1305 {

@@ -18,7 +18,7 @@ const OPENED_MEMORY: usize = 500;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Keep {
-    /// Deleted after its first use; nothing uses keys yet.
+    /// Deleted after its first use by a program.
     Once,
     Days30,
     #[default]
@@ -87,9 +87,7 @@ impl Vault {
         (2..).map(|n| format!("{base} {n}")).find(|name| !taken(name)).expect("some numbered name is free")
     }
 
-    /// The kept key a `handoff:Name` pointer names. Nothing resolves
-    /// pointers yet: that arrives with the pointer loader.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// The kept key a `handoff:Name` pointer names.
     pub fn find(&self, name: &str) -> Option<[u8; 16]> {
         self.items.iter().find(|i| same_name(&i.label, name)).map(|i| i.id)
     }
@@ -140,9 +138,7 @@ impl Vault {
         before - self.items.len()
     }
 
-    /// Decrypt one kept key for use. Nothing in the app calls this yet: use
-    /// arrives with key use by programs and typing.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Decrypt one kept key for use.
     pub fn secret(&self, id: [u8; 16]) -> Option<Secret> {
         let item = self.items.iter().find(|i| i.id == id)?;
         let plain = self

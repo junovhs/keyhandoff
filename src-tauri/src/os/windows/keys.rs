@@ -1,0 +1,144 @@
+//! Programs ask for kept keys over a local named pipe. Windows reports the
+//! client's process id; its executable comes from the process, and its
+//! working folder from the process parameters in its PEB.
+
+use std::ffi::c_void;
+use std::fs::File;
+use std::os::windows::io::FromRawHandle;
+use std::path::PathBuf;
+use std::thread;
+
+use ::windows::core::{HSTRING, PWSTR};
+use ::windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
+use ::windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED, HANDLE};
+use ::windows::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
+use ::windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+use ::windows::Win32::System::Pipes::{
+    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+};
+use ::windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
+};
+
+use crate::os::{Peer, ServeKeys};
+
+const BUFFER: u32 = 64 * 1024;
+
+pub fn pipe(profile: &str) -> String {
+    format!("{}-keys", super::instance::pipe(profile))
+}
+
+/// Serve programs asking for keys, each connection on its own thread.
+pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
+    let name = HSTRING::from(pipe(profile));
+    thread::Builder::new()
+        .name("keys".into())
+        .spawn(move || {
+            let mut first = true;
+            loop {
+                let flags = if first { PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE } else { PIPE_ACCESS_DUPLEX };
+                first = false;
+                // SAFETY: plain pipe creation; the handle is owned below.
+                let handle = unsafe {
+                    CreateNamedPipeW(
+                        &name,
+                        flags,
+                        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                        PIPE_UNLIMITED_INSTANCES,
+                        BUFFER,
+                        BUFFER,
+                        0,
+                        None,
+                    )
+                };
+                if handle.is_invalid() {
+                    eprintln!("keyhandoff: no key pipe: {}", ::windows::core::Error::from_thread());
+                    return;
+                }
+                // SAFETY: a client may connect between create and connect; that is ERROR_PIPE_CONNECTED.
+                let connected = match unsafe { ConnectNamedPipe(handle, None) } {
+                    Ok(()) => true,
+                    Err(e) => e.code() == ERROR_PIPE_CONNECTED.to_hresult(),
+                };
+                let peer = if connected { peer(handle) } else { None };
+                let Some(peer) = peer else {
+                    // SAFETY: we own the handle.
+                    let _ = unsafe { CloseHandle(handle) };
+                    continue;
+                };
+                // SAFETY: the File takes ownership of the handle and closes it.
+                let stream = unsafe { File::from_raw_handle(handle.0) };
+                let serve = serve.clone();
+                let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// The process on the other end of the pipe.
+fn peer(pipe: HANDLE) -> Option<Peer> {
+    let mut pid = 0u32;
+    // SAFETY: `pipe` is a connected server end.
+    unsafe { GetNamedPipeClientProcessId(pipe, &mut pid) }.ok()?;
+    // SAFETY: plain process open; closed below.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, pid) }
+        .or_else(|_| unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) })
+        .ok()?;
+    let program = image_path(process);
+    let folder = program.as_ref().and_then(|_| current_dir(process));
+    // SAFETY: we own the handle.
+    let _ = unsafe { CloseHandle(process) };
+    Some(Peer { program: program?, folder })
+}
+
+fn image_path(process: HANDLE) -> Option<PathBuf> {
+    let mut buf = vec![0u16; 32 * 1024];
+    let mut len = buf.len() as u32;
+    // SAFETY: `buf` holds `len` units; on success `len` is the length written.
+    unsafe { QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len) }.ok()?;
+    Some(PathBuf::from(String::from_utf16_lossy(&buf[..len as usize])))
+}
+
+/// `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`, at its x64 offsets. A
+/// 32-bit process or one we can't read gives `None`.
+#[cfg(target_pointer_width = "64")]
+fn current_dir(process: HANDLE) -> Option<PathBuf> {
+    // SAFETY: all-zero is a valid PROCESS_BASIC_INFORMATION (null pointers, zero fields).
+    let mut info: PROCESS_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
+    // SAFETY: `info` is `size` bytes.
+    let status = unsafe { NtQueryInformationProcess(process, ProcessBasicInformation, (&raw mut info).cast(), size, std::ptr::null_mut()) };
+    if status.is_err() {
+        return None;
+    }
+    let params: usize = read(process, info.PebBaseAddress as usize + 0x20)?;
+    let bytes: u16 = read(process, params + 0x38)?;
+    let buffer: usize = read(process, params + 0x40)?;
+    let mut path = vec![0u16; usize::from(bytes) / 2];
+    read_into(process, buffer, &mut path)?;
+    let path = String::from_utf16(&path).ok()?;
+    // Always ends in a backslash; keep it only for a drive root.
+    let path = if path.len() > 3 { path.trim_end_matches('\\') } else { &path };
+    Some(PathBuf::from(path))
+}
+
+#[cfg(not(target_pointer_width = "64"))]
+fn current_dir(_process: HANDLE) -> Option<PathBuf> {
+    None
+}
+
+fn read<T: Copy + Default>(process: HANDLE, at: usize) -> Option<T> {
+    let mut value = T::default();
+    read_into(process, at, std::slice::from_mut(&mut value))?;
+    Some(value)
+}
+
+fn read_into<T>(process: HANDLE, at: usize, out: &mut [T]) -> Option<()> {
+    let size = std::mem::size_of_val(out);
+    let mut got = 0usize;
+    // SAFETY: `out` is `size` writable bytes; the read is checked by the OS.
+    unsafe { ReadProcessMemory(process, at as *const c_void, out.as_mut_ptr().cast(), size, Some(&mut got)) }.ok()?;
+    (got == size).then_some(())
+}

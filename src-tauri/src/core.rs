@@ -1,5 +1,6 @@
 //! Every KeyHandoff flow, without Tauri: ask, Safe Copy,
-//! seal, accept and vault, and add for yourself.
+//! seal, accept and vault, add for yourself, and giving kept keys to the
+//! programs you allow.
 //!
 //! Secret values live here and in `os`; [`View`] is what the screens get:
 //! names, states and ids only.
@@ -7,20 +8,22 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use keyhandoff_seal::{armor, Identity, Keyring, Object, Payload, Request, Secret, DEFAULT_REQUEST_TTL, MAX_LABEL_BYTES, MAX_NAME_BYTES};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::os::{self, Captured, Clip};
-use crate::store::{Settings, Store};
+use crate::os::{self, Captured, Clip, Peer};
+use crate::store::{Approval, Settings, Store};
 use crate::vault::{Item, Keep, Vault};
 
 /// Safe Copy disarms itself after this long.
 pub const ARM_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_FILE_BYTES: u64 = 64 * 1024;
 const ALREADY_ACCEPTED: &str = "This key was already accepted and can't be opened.";
+/// A program waiting for Allow is refused after this long.
+pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Called once when a Safe Copy capture ends.
 pub type OnCaptured = Box<dyn FnOnce(Captured) + Send>;
@@ -71,6 +74,24 @@ enum Safe {
     Sealed { for_name: String, file: PathBuf, text: String },
 }
 
+/// The answer to a program asking for kept keys.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Answer {
+    /// Whenever this program runs in this folder.
+    Always,
+    Once,
+    Deny,
+}
+
+/// A program waiting for Allow.
+struct ProgramAsk {
+    id: u64,
+    peer: Peer,
+    keys: Vec<[u8; 16]>,
+    reply: mpsc::Sender<Answer>,
+}
+
 struct Core {
     store: Store,
     settings: Settings,
@@ -84,6 +105,10 @@ struct Core {
     accepted: Option<[u8; 16]>,
     asked: Option<PathBuf>,
     notice: Option<String>,
+    /// Programs allowed to get a key when they run in a folder.
+    approvals: Vec<Approval>,
+    program: Option<ProgramAsk>,
+    asks: u64,
 }
 
 pub struct Handoff {
@@ -119,6 +144,18 @@ pub struct SafeView {
     pub message: Option<String>,
 }
 
+/// A program asking for kept keys, waiting for Allow.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ProgramView {
+    /// `python3`, `node.exe`.
+    pub name: String,
+    pub path: String,
+    /// Where it runs, with the home folder as `~`; `None` when the OS won't say.
+    pub folder: Option<String>,
+    /// The names of the keys it wants.
+    pub keys: Vec<String>,
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct View {
     pub name: String,
@@ -130,6 +167,7 @@ pub struct View {
     pub accepted: Option<KeyView>,
     pub asked: Option<String>,
     pub notice: Option<String>,
+    pub program: Option<ProgramView>,
 }
 
 impl Handoff {
@@ -137,6 +175,7 @@ impl Handoff {
         let identity = store.identity()?;
         let keyring = store.keyring()?;
         let vault = store.vault()?;
+        let approvals = store.approvals()?;
         os::private_dir(&outbox).map_err(|e| e.to_string())?;
         clear_outbox(&outbox);
         let core = Core {
@@ -151,6 +190,9 @@ impl Handoff {
             accepted: None,
             asked: None,
             notice: None,
+            approvals,
+            program: None,
+            asks: 0,
         };
         let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
         handoff.lock().tick()?;
@@ -379,6 +421,7 @@ impl Handoff {
         let id = parse_id(id)?;
         if core.vault.remove(id) {
             core.store.save_vault(&core.vault)?;
+            core.prune_approvals()?;
         }
         if core.accepted == Some(id) {
             core.accepted = None;
@@ -403,6 +446,56 @@ impl Handoff {
 
     pub fn notice(&self, text: String) {
         self.lock().notice = Some(text);
+    }
+
+    /// A program asks for kept keys by name (`handoff:Name` pointers). Keys
+    /// it was allowed in this folder come back at once; otherwise the window
+    /// asks, and this waits for the answer. Approval is per program, folder
+    /// and key, because allowing `python3` alone would allow every script.
+    pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
+        let (ids, new, id, answer) = {
+            let mut core = self.lock();
+            let _ = core.tick();
+            let ids = names
+                .iter()
+                .map(|n| core.vault.find(n).ok_or_else(|| format!("No kept key is named {n}.")))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, k)).collect();
+            new.dedup();
+            if new.is_empty() {
+                return core.release(&ids);
+            }
+            if core.program.is_some() {
+                return Err("KeyHandoff is asking about another program. Try again in a moment.".into());
+            }
+            let (reply, answer) = mpsc::channel();
+            core.asks += 1;
+            let id = core.asks;
+            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), reply });
+            (ids, new, id, answer)
+        };
+        (self.notify)();
+        let answer = answer.recv_timeout(PROGRAM_TIMEOUT).unwrap_or(Answer::Deny);
+        let result = {
+            let mut core = self.lock();
+            if core.program.as_ref().is_some_and(|a| a.id == id) {
+                core.program = None;
+            }
+            match answer {
+                Answer::Deny => Err("Not allowed in KeyHandoff.".into()),
+                Answer::Once => core.release(&ids),
+                Answer::Always => core.allow(peer, &new).and_then(|()| core.release(&ids)),
+            }
+        };
+        (self.notify)();
+        result
+    }
+
+    /// Answer the program waiting for Allow.
+    pub fn answer(&self, answer: Answer) -> Result<(), String> {
+        let ask = self.lock().program.take().ok_or("No program is waiting.")?;
+        let _ = ask.reply.send(answer);
+        Ok(())
     }
 }
 
@@ -446,6 +539,41 @@ impl Core {
         Ok(())
     }
 
+    fn allowed(&self, peer: &Peer, key: [u8; 16]) -> bool {
+        self.approvals.iter().any(|a| a.key == key && a.program == peer.program && a.folder == peer.folder)
+    }
+
+    fn allow(&mut self, peer: &Peer, keys: &[[u8; 16]]) -> Result<(), String> {
+        for &key in keys {
+            self.approvals.push(Approval { program: peer.program.clone(), folder: peer.folder.clone(), key });
+        }
+        self.prune_approvals()
+    }
+
+    /// Drop approvals for keys that are gone, and save.
+    fn prune_approvals(&mut self) -> Result<(), String> {
+        let vault = &self.vault;
+        self.approvals.retain(|a| vault.items().iter().any(|i| i.id == a.key));
+        self.store.save_approvals(&self.approvals)
+    }
+
+    /// The values for a program. Keys kept Once are then destroyed.
+    fn release(&mut self, ids: &[[u8; 16]]) -> Result<Vec<Secret>, String> {
+        let secrets = ids
+            .iter()
+            .map(|&id| self.vault.secret(id).ok_or_else(|| "That key is no longer here.".to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let once: Vec<_> = self.vault.items().iter().filter(|i| i.keep == Keep::Once && ids.contains(&i.id)).map(|i| i.id).collect();
+        if !once.is_empty() {
+            for id in once {
+                self.vault.remove(id);
+            }
+            self.store.save_vault(&self.vault)?;
+            self.prune_approvals()?;
+        }
+        Ok(secrets)
+    }
+
     fn remember_keep(&mut self, keep: Keep) -> Result<(), String> {
         if self.settings.keep != keep {
             self.settings.keep = keep;
@@ -482,6 +610,17 @@ impl Core {
             accepted,
             asked: self.asked.as_ref().map(|p| display_name(p)),
             notice: self.notice.clone(),
+            program: self.program.as_ref().map(|a| self.program_view(a)),
+        }
+    }
+
+    fn program_view(&self, ask: &ProgramAsk) -> ProgramView {
+        let labels = ask.keys.iter().filter_map(|id| self.vault.items().iter().find(|i| i.id == *id)).map(|i| i.label.clone());
+        ProgramView {
+            name: display_name(&ask.peer.program),
+            path: ask.peer.program.to_string_lossy().into_owned(),
+            folder: ask.peer.folder.as_deref().map(home_relative),
+            keys: labels.collect(),
         }
     }
 
@@ -557,6 +696,15 @@ fn clean_text(s: &str, max: usize) -> Option<String> {
 fn file_name(prefix: &str, name: &str) -> String {
     let safe: String = name.chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
     format!("{prefix} {}.handoff", safe.trim_matches('.'))
+}
+
+/// `/home/ann/proj` as `~/proj`.
+fn home_relative(path: &Path) -> String {
+    match dirs::home_dir().and_then(|home| path.strip_prefix(home).ok().map(Path::to_path_buf)) {
+        Some(rest) if rest.as_os_str().is_empty() => "~".into(),
+        Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
+        None => path.display().to_string(),
+    }
 }
 
 fn display_name(path: &Path) -> String {
@@ -756,6 +904,137 @@ mod tests {
         for x in [a, b, c] {
             let _ = fs::remove_dir_all(x.data);
         }
+    }
+
+    fn peer(program: &str, folder: &str) -> Peer {
+        Peer { program: program.into(), folder: Some(folder.into()) }
+    }
+
+    /// Wait for a program to be asking, then answer it.
+    fn answer_when_asked(h: &Handoff, answer: Answer) -> ProgramView {
+        for _ in 0..500 {
+            if let Some(program) = h.view().program {
+                h.answer(answer).unwrap();
+                return program;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("no program asked");
+    }
+
+    #[test]
+    fn programs_get_only_the_keys_they_were_allowed_in_that_folder() {
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        {
+            let mut core = h.lock();
+            core.vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+            core.vault.add("Temp", None, None, &Secret::new(b"sk-synthetic-once".to_vec()), Keep::Once, now());
+        }
+        let script = peer("/usr/bin/python3", "/home/juno/report");
+        let ask = |p: Peer, names: &[&str]| {
+            let (h, names) = (h.clone(), names.iter().map(|n| n.to_string()).collect::<Vec<_>>());
+            std::thread::spawn(move || h.give(&p, &names).map(|s| s.iter().map(|s| s.expose().to_vec()).collect::<Vec<_>>()))
+        };
+
+        // First use asks; Always allow gives the key, and the next run is silent.
+        let first = ask(script.clone(), &["Dialpad"]);
+        let shown = answer_when_asked(&h, Answer::Always);
+        assert_eq!((shown.name.as_str(), shown.keys.as_slice()), ("python3", ["Dialpad".to_string()].as_slice()));
+        assert_eq!(first.join().unwrap().unwrap(), [KEY.to_vec()]);
+        assert_eq!(h.give(&script, &["dialpad".into()]).unwrap()[0].expose(), KEY, "allowed: no prompt");
+
+        // The same program in another folder, or another program, has to ask.
+        let elsewhere = ask(peer("/usr/bin/python3", "/tmp/evil"), &["Dialpad"]);
+        assert_eq!(answer_when_asked(&h, Answer::Deny).folder.as_deref(), Some("/tmp/evil"));
+        assert!(elsewhere.join().unwrap().is_err());
+        let other = ask(peer("/usr/bin/node", "/home/juno/report"), &["Dialpad"]);
+        answer_when_asked(&h, Answer::Deny);
+        assert!(other.join().unwrap().is_err());
+
+        // Allowing one key doesn't allow another; a key kept Once goes after use.
+        let once = ask(script.clone(), &["Dialpad", "Temp"]);
+        assert_eq!(answer_when_asked(&h, Answer::Once).keys, ["Temp"]);
+        assert_eq!(once.join().unwrap().unwrap()[1], b"sk-synthetic-once");
+        assert!(h.give(&script, &["Temp".into()]).unwrap_err().contains("No kept key is named Temp"));
+        assert!(h.view().keys.iter().all(|k| k.label != "Temp"));
+
+        assert!(!files_contain(&me.data, KEY), "approvals and vault hold no plaintext");
+        let _ = fs::remove_dir_all(me.data);
+    }
+
+    /// The issue's check, for real: a Python script whose .env holds only a
+    /// pointer gets the key over the socket after Always allow; another
+    /// process asking over the same socket gets nothing and a prompt.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn python_loader_gets_the_key_through_the_socket() {
+        use sha2::{Digest, Sha256};
+        use std::io::{BufRead, BufReader, Write};
+        use std::process::Command;
+
+        if Command::new("python3").arg("--version").output().is_err() {
+            eprintln!("skipped: no python3");
+            return;
+        }
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        h.lock().vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+
+        let project = me.data.join("project");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join(".env"), "DIALPAD_API_KEY=handoff:Dialpad\nOTHER=plain\n").unwrap();
+        fs::write(
+            project.join("check.py"),
+            "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_API_KEY'].encode()).hexdigest())\n",
+        )
+        .unwrap();
+        let loaders = Path::new(env!("CARGO_MANIFEST_DIR")).join("../loaders");
+        let run = || {
+            let out = Command::new("python3")
+                .arg("check.py")
+                .current_dir(&project)
+                .env("PYTHONPATH", &loaders)
+                .env("KEYHANDOFF_PROFILE", &profile)
+                .env_remove("DIALPAD_API_KEY")
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        let expected: String = Sha256::digest(KEY).iter().map(|b| format!("{b:02x}")).collect();
+
+        let first = std::thread::scope(|s| {
+            let script = s.spawn(run);
+            let shown = answer_when_asked(&h, Answer::Always);
+            assert!(shown.name.starts_with("python"), "{shown:?}");
+            assert_eq!(shown.folder, Some(home_relative(&project.canonicalize().unwrap())));
+            script.join().unwrap()
+        });
+        assert_eq!(first, expected);
+        assert_eq!(run(), expected, "allowed: the second run needs no prompt");
+
+        // This test binary is a different program: it gets a prompt and, denied, nothing.
+        let sock = os::runtime_dir().join(format!("handoff-{profile}-keys.sock"));
+        let reply = std::thread::scope(|s| {
+            let asking = s.spawn(|| {
+                let mut conn = std::os::unix::net::UnixStream::connect(&sock).unwrap();
+                conn.write_all(b"{\"names\":[\"Dialpad\"]}\n").unwrap();
+                let mut line = String::new();
+                BufReader::new(conn).read_line(&mut line).unwrap();
+                line
+            });
+            answer_when_asked(&h, Answer::Deny);
+            asking.join().unwrap()
+        });
+        assert!(reply.contains("\"error\"") && !reply.contains("sk-synthetic"), "{reply}");
+
+        assert!(!files_contain(&project, KEY), "the project holds no key");
+        let _ = fs::remove_file(sock);
+        let _ = fs::remove_dir_all(me.data);
     }
 
     #[test]

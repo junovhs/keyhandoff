@@ -1,17 +1,20 @@
 //! Windows backends: Safe Copy capture with Win+V history removal, the
-//! `CF_HDROP` clipboard, shell drag-out, the DPAPI-wrapped master key, and a
-//! named pipe that keeps one instance per profile.
+//! `CF_HDROP` clipboard, shell drag-out, the DPAPI-wrapped master key, a
+//! named pipe that keeps one instance per profile, and one that programs ask
+//! for kept keys over.
 
 mod capture;
 mod clipboard;
 mod drag;
 mod instance;
+mod keys;
 mod protect;
 
 pub use capture::arm_capture;
 pub use clipboard::{offer_file, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
+pub use keys::listen_for_keys;
 pub use protect::master_key;
 
 use std::fs;

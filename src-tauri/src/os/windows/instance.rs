@@ -19,7 +19,7 @@ use ::windows::Win32::System::Pipes::{
 
 const BUFFER: u32 = 4096;
 
-fn pipe(profile: &str) -> String {
+pub(super) fn pipe(profile: &str) -> String {
     let user: String = std::env::var("USERNAME").unwrap_or_default().chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     format!(r"\\.\pipe\handoff-{user}-{profile}")
 }

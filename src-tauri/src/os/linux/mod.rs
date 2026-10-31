@@ -1,14 +1,17 @@
 //! Linux backends: X11 clipboard, Secret Service master key, GTK drag-out,
-//! and a Unix socket that keeps one instance per profile.
+//! a Unix socket that keeps one instance per profile, and one that programs
+//! ask for kept keys over.
 
 mod clipboard;
 mod drag;
 mod instance;
+mod keys;
 mod protect;
 
 pub use clipboard::{arm_capture, offer_file, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
+pub use keys::listen_for_keys;
 pub use protect::master_key;
 
 use std::fs::{self, OpenOptions};

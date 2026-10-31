@@ -1,10 +1,12 @@
 //! Per-OS backends behind one small interface: the clipboard (Safe Copy
 //! capture, putting a file on the clipboard, reading a paste), the master key
-//! the OS protects for each profile, and dragging a file out of a window.
+//! the OS protects for each profile, dragging a file out of a window, and the
+//! local socket or pipe programs ask for kept keys over.
 //!
 //! Linux (X11) was built first, then Windows (clipboard history, DPAPI); each
 //! is a folder with the same functions.
 
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use keyhandoff_seal::Secret;
@@ -56,3 +58,18 @@ impl MasterKey {
         Self(key)
     }
 }
+
+/// A local program asking for kept keys, as the OS reports it: its
+/// executable and its working folder (`None` when the OS won't say).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Peer {
+    pub program: PathBuf,
+    pub folder: Option<PathBuf>,
+}
+
+/// One connection from a program asking for keys.
+pub trait KeyStream: Read + Write + Send {}
+impl<T: Read + Write + Send> KeyStream for T {}
+
+/// Handles one program's connection; runs on its own thread.
+pub type ServeKeys = std::sync::Arc<dyn Fn(Peer, Box<dyn KeyStream>) + Send + Sync>;

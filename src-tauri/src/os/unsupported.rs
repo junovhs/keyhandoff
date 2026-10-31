@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use super::{Captured, Clip, MasterKey};
+use super::{Captured, Clip, MasterKey, ServeKeys};
 
 const NOT_YET: &str = "KeyHandoff does not support this operating system yet.";
 
@@ -35,6 +35,10 @@ pub fn forward_to_running(_profile: &str, _files: &[PathBuf]) -> bool {
 }
 
 pub fn listen_for_launches(_profile: &str, _on_launch: impl Fn(Vec<PathBuf>) + Send + 'static) -> Result<(), String> {
+    Ok(())
+}
+
+pub fn listen_for_keys(_profile: &str, _serve: ServeKeys) -> Result<(), String> {
     Ok(())
 }
 

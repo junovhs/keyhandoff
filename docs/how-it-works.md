@@ -36,10 +36,16 @@ Safe Copy reads the clipboard only after you ask it to. It catches one item, the
 
 When you accept a key you can keep it **once**, for **30 days**, or until you remove it. Your last choice becomes the default.
 
+## Using a key in a program
+
+1. **Point at the key.** Your `.env` holds `DIALPAD_API_KEY=handoff:Dialpad` instead of the key. The name matches a kept key, ignoring case. Names are unique, so a pointer always means one key.
+2. **Load it.** The program calls a one-line loader, such as `keyhandoff_env.load()` for Python. It asks the running app for every pointed-to key at once, over a local socket (a named pipe on Windows).
+3. **Allow it.** KeyHandoff asks the operating system which program is asking and which folder it runs in. The first time, the window shows both, and you choose **Always allow**, **Just this once** or **Deny**. Always allow covers that program, in that folder, for those keys. The same program in another folder asks again, because allowing `python` everywhere would allow every script.
+4. **Use it.** The value goes into the program's own environment. Nothing is written to disk, and a key kept **once** is destroyed after this first use.
+
 ## In progress
 
 - **Using a key in a field:** typing a kept key into the box you click, without using the clipboard. Confirmed password boxes get it directly, and anything else warns first.
-- **Using a key in a program:** a `.env` file holds a pointer such as `DIALPAD_API_KEY=handoff:Dialpad`, and approved programs ask the running app for the value.
 
 ## Who controls what
 
@@ -52,6 +58,7 @@ When you accept a key you can keep it **once**, for **30 days**, or until you re
 - **Before the copy.** Provider pages show the key to you before you copy it. That's outside what KeyHandoff can affect.
 - **The copy moment.** A copied key is on the clipboard, unencrypted, until the wipe. Another program watching the clipboard could read it.
 - **First contact trusts the channel.** If someone can post as you in a chat, they can request a key in your name. Check the name and fingerprint before you copy a key.
+- **A program you allowed** can do anything with the key once it has it. Anything running as you could also start that program in that folder, so the prompt is your decision, not a lock.
 - **Malware running as you.** See the [README](../README.md#what-it-protects-and-what-it-doesnt).
 - **No central revocation.** Replacing the key with the provider is the real fix.
 

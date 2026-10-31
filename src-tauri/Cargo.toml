@@ -22,10 +22,16 @@ chacha20poly1305 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
 
+[dev-dependencies]
+# The pointer loader test compares a hash the script prints.
+sha2 = "0.10"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["xfixes"] }
 keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
 gtk = "0.18"
+# SO_PEERCRED: which program is asking for a key.
+libc = "0.2"
 
 # Same version Tauri already pulls in, so there is one copy of the crate.
 [target.'cfg(windows)'.dependencies]
@@ -41,6 +47,7 @@ windows = { version = "0.62.2", features = [
   "Win32_System_Com",
   "Win32_System_DataExchange",
   "Win32_System_IO",
+  "Win32_System_Kernel",
   "Win32_System_LibraryLoader",
   "Win32_System_Memory",
   "Win32_System_Ole",
@@ -48,6 +55,9 @@ windows = { version = "0.62.2", features = [
   "Win32_System_WinRT",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
+  "Wdk_System_Threading",
+  "Win32_System_Threading",
+  "Win32_System_Diagnostics_Debug",
 ] }
 
 # Small and fast to start: the performance budget in docs/keyhandoff/architecture.md.

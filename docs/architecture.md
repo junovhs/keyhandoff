@@ -8,11 +8,15 @@ crates/seal/       Standalone Rust crate: identity, requests, seal and open, one
 src/               React + TypeScript screens. Never receive a secret value.
 src-tauri/src/
   lib.rs           Window and Tauri commands (names, states and ids only)
-  core.rs          Every flow: ask, Safe Copy, seal, accept, add. Holds the secrets.
+  core.rs          Every flow: ask, Safe Copy, seal, accept, add, give keys to
+                   allowed programs. Holds the secrets.
+  pointer.rs       What programs asking for keys send and get back
   store.rs         Profile files sealed under the OS-protected master key
   vault.rs         Kept keys, keep times, expiry
   os/              Per-OS backends: clipboard capture, offer and read, master key,
-                   drag-out, one instance per profile (linux/, windows/)
+                   drag-out, one instance per profile, the key socket or pipe
+                   and who is asking (linux/, windows/)
+loaders/           One-line loaders programs use to fill handoff: pointers
 scripts/           Development helpers
 ```
 
@@ -34,7 +38,7 @@ See [sealing-format.md](sealing-format.md) for the details.
 
 ## Key storage
 
-Each profile has a 32-byte master key held by the OS. `identity.bin`, `pending.bin` and `vault.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
+Each profile has a 32-byte master key held by the OS. `identity.bin`, `pending.bin`, `vault.bin` and `approvals.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
 
 - **Windows:** the master key is wrapped with DPAPI (current user) in `master.key`.
 - **Linux:** the master key lives in the Secret Service. Without one it falls back to a `0600` file, which only stops other users.
@@ -53,6 +57,15 @@ Profile data lives in a `handoff` folder under the system's data directory. Each
 **Windows:** a message-only window with `AddClipboardFormatListener`. The first `CF_UNICODETEXT` change is read, our copy zeroed and the clipboard emptied. The matching Win+V entry is then looked for and deleted on a single-threaded WinRT thread. `ClearHistory` is the fallback only when the one entry can't be deleted, and that fallback is shown to the user. A copy made by another app can't be kept out of history up front.
 
 **Linux (X11):** XFixes reports the next clipboard owner change. The text is read once, then KeyHandoff takes the clipboard and refuses every paste until something else is copied. X11 has no shared history API, so a history manager may already have stored the copy. Wayland isn't supported.
+
+## Programs asking for keys
+
+A `.env` pointer such as `DIALPAD_API_KEY=handoff:Dialpad` names a kept key. A loader sends one line of JSON, `{"names": ["Dialpad"]}`, and gets one line back: `{"values": {"Dialpad": "…"}}` or `{"error": "…"}`.
+
+- **Linux:** a `0600` Unix socket, `handoff-<profile>-keys.sock`, in the runtime directory. `SO_PEERCRED` gives the asking process, which must be this user; `/proc` gives its executable and working folder.
+- **Windows:** a local named pipe, `\\.\pipe\handoff-<user>-<profile>-keys`, with remote clients rejected. `GetNamedPipeClientProcessId` gives the process; its image path and its working folder (from the process parameters in its PEB) identify it.
+
+An approval is a program path, a folder and a key id, kept in `approvals.bin`. A request with any key not yet allowed waits up to 60 seconds for an answer in the window, and one program at a time can wait. Forgetting a key removes its approvals, and a key kept once is destroyed after it's given out. The reply is built in a buffer sized so it never reallocates, and zeroed after it's sent.
 
 ## Transport: .handoff files
 

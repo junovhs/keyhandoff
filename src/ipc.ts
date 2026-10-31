@@ -29,6 +29,18 @@ export interface SafeView {
   message: string | null;
 }
 
+/** A program asking for kept keys, waiting for Allow. */
+export interface ProgramView {
+  /** `python3`, `node.exe`. */
+  name: string;
+  path: string;
+  /** Where it runs; null when the system won't say. */
+  folder: string | null;
+  keys: string[];
+}
+
+export type Answer = "always" | "once" | "deny";
+
 export interface View {
   name: string;
   protection: string;
@@ -39,6 +51,7 @@ export interface View {
   accepted: KeyView | null;
   asked: string | null;
   notice: string | null;
+  program: ProgramView | null;
 }
 
 export const api = {
@@ -56,6 +69,7 @@ export const api = {
   setKeep: (id: string, keep: Keep) => invoke<void>("set_keep", { id, keep }),
   forget: (id: string) => invoke<void>("forget", { id }),
   setName: (name: string) => invoke<void>("set_name", { name }),
+  answer: (answer: Answer) => invoke<void>("answer", { answer }),
   dismiss: () => invoke<void>("dismiss"),
   ready: () => invoke<void>("ready"),
 };

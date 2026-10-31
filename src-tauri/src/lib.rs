@@ -1,12 +1,14 @@
 //! KeyHandoff backend. This Rust side alone holds secret values;
 //! commands give the screens names, states and ids only.
 //!
-//! `core` holds every flow, `os` the per-OS clipboard, key protection and
-//! drag-out, `store` and `vault` the protected files. This file is the Tauri
-//! glue: commands, the one window and opening files.
+//! `core` holds every flow, `os` the per-OS clipboard, key protection,
+//! drag-out and key socket, `store` and `vault` the protected files, and
+//! `pointer` what programs asking for keys send. This file is the Tauri glue:
+//! commands, the one window and opening files.
 
 mod core;
 mod os;
+mod pointer;
 mod store;
 mod vault;
 
@@ -16,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, DragDropEvent, Emitter, LogicalSize, Manager, PhysicalSize, State, WebviewWindow, WindowEvent};
 
-use crate::core::{Clipboard, Handoff, View};
+use crate::core::{Answer, Clipboard, Handoff, View};
 use crate::store::Store;
 use crate::vault::Keep;
 
@@ -29,14 +31,20 @@ const EXPIRY_CHECK: Duration = Duration::from_secs(60);
 type H<'a> = State<'a, Arc<Handoff>>;
 
 /// Tell the screens to refresh. While Safe Copy is on, the window turns
-/// compact and stays above other apps so you can copy a key from them.
+/// compact and stays above other apps so you can copy a key from them. A
+/// program asking for a key brings the window forward.
 fn changed(app: &AppHandle) {
     let Some(handoff) = app.try_state::<Arc<Handoff>>() else { return };
-    let state = handoff.view().safe.state;
+    let view = handoff.view();
+    let state = view.safe.state;
     if let Some(win) = app.get_webview_window(MAIN) {
         set_safe_copy_mode(&win, state != "off");
-        // Naming the caught key needs the keyboard.
-        if state == "caught" {
+        if view.program.is_some() {
+            let _ = win.unminimize();
+            let _ = win.show();
+        }
+        // Naming the caught key, or answering a program, needs the keyboard.
+        if state == "caught" || view.program.is_some() {
             let _ = win.set_focus();
         }
     }
@@ -145,6 +153,11 @@ fn set_name(app: AppHandle, h: H, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn answer(app: AppHandle, h: H, answer: Answer) -> Result<(), String> {
+    done(&app, h.answer(answer))
+}
+
+#[tauri::command]
 fn dismiss(app: AppHandle, h: H) {
     h.dismiss();
     changed(&app);
@@ -231,14 +244,17 @@ pub fn run() {
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
             view, ask, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
-            forget, set_name, dismiss, ready
+            forget, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {
             let (store, settings) = Store::open(&args.profile)?;
             let outbox = os::runtime_dir().join(format!("handoff-{}", args.profile));
             let notify_handle = app.handle().clone();
             let handoff = Handoff::open(store, settings, outbox, Clipboard::system(), Box::new(move || changed(&notify_handle)))?;
-            app.manage(handoff);
+            app.manage(handoff.clone());
+            if let Err(e) = os::listen_for_keys(&args.profile, Arc::new(move |peer, stream| pointer::serve(&handoff, &peer, stream))) {
+                eprintln!("keyhandoff: programs can't ask for keys: {e}");
+            }
 
             let handle = app.handle().clone();
             open_files(&handle, &args.files, false);
