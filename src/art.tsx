@@ -1,6 +1,6 @@
-// Art for the Calm look. Pixel art appears only in icon tiles
-// at 3x or more, at whole-number scales so edges stay crisp. Small UI icons are
-// line icons: tiny pixel icons read as grainy.
+// Art for the Calm look. Pixel art appears in icon tiles and the Safe Copy
+// picture, at 3x or more and whole-number scales so edges stay crisp. Small UI
+// icons are line icons: tiny pixel icons read as grainy.
 
 import { useRef, type PointerEvent } from "react";
 
@@ -35,6 +35,26 @@ export function Tile({ name, scale = 3, size = "md" }: { name: IconName; scale?:
     <span className={`tile-ico ${size}`}>
       <Px name={name} scale={scale} />
     </span>
+  );
+}
+
+/**
+ * Safe Copy's "copy your key" picture: two pixel pages that take turns bobbing
+ * one pixel, in two frames like a sprite. The front page is backed by the
+ * ground colour, which also cuts a one-pixel gap out of the page behind it.
+ */
+export function CopyPages({ scale = 10 }: { scale?: number }) {
+  return (
+    <svg className="copy-pages" viewBox="0 -1 12 17" width={12 * scale} height={17 * scale} shapeRendering="crispEdges" aria-hidden>
+      <path className="back" fill="currentColor" d="M0 0h8v1h-8zM0 1h1v11h-1zM7 1h1v11h-1zM1 11h6v1h-6z" />
+      <g className="front">
+        <rect x="2" y="2" width="10" height="14" style={{ fill: "var(--ground)" }} />
+        <path
+          fill="currentColor"
+          d="M3 3h6v1h-6zM3 4h1v11h-1zM8 4h1v2h-1zM9 4h1v1h-1zM10 5h1v1h-1zM8 6h3v1h-3zM11 6h1v9h-1zM3 15h9v1h-9zM5 8h5v1h-5zM5 10h5v1h-5zM5 12h3v1h-3z"
+        />
+      </g>
+    </svg>
   );
 }
 

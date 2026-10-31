@@ -148,31 +148,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .safe.listening .top .dot { animation: blink 1.4s infinite; }
 .hero-text.center { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
 
-/* Listening: Ctrl + C pressing inside the countdown ring, on a 2.4s loop */
-.copy-now { position: relative; width: 172px; height: 172px; display: grid; place-items: center; align-self: center; margin-top: 4px; }
-.copy-now .ring { position: absolute; inset: 0; transform: rotate(-90deg); }
-.copy-now .track { fill: none; stroke: var(--line); stroke-width: 3; }
-.copy-now .arc { fill: none; stroke: var(--accent-ink); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .25s linear; }
-.copy-now .ripple { position: absolute; inset: 36px; border-radius: 50%; border: 1.5px solid var(--accent-ink); opacity: 0; animation: ripple calc(2.4s / var(--tempo)) var(--ease) infinite; }
-.copy-now .caps { position: relative; display: flex; gap: 8px; }
-.cap { min-width: 48px; height: 48px; padding: 0 12px; box-sizing: border-box; display: grid; place-items: center; border-radius: 10px; background: var(--raised); border: 1px solid var(--line-strong); border-bottom-width: 4px; font: 600 16px var(--font); color: var(--text); }
-.cap.mod { animation: press-mod calc(2.4s / var(--tempo)) infinite; }
-.cap.c { animation: press-c calc(2.4s / var(--tempo)) infinite; }
-@keyframes press-mod {
-  0%, 8% { transform: none; border-bottom-width: 4px; }
-  12%, 46% { transform: translateY(3px); border-bottom-width: 1px; border-color: var(--accent); color: var(--accent-ink); }
-  52%, 100% { transform: none; border-bottom-width: 4px; }
-}
-@keyframes press-c {
-  0%, 22% { transform: none; border-bottom-width: 4px; }
-  26%, 46% { transform: translateY(3px); border-bottom-width: 1px; background: var(--accent-grad); border-color: var(--accent); color: #fff; }
-  52%, 100% { transform: none; border-bottom-width: 4px; }
-}
-@keyframes ripple {
-  0%, 25% { opacity: 0; transform: scale(.7); }
-  27% { opacity: .7; transform: scale(.7); }
-  70%, 100% { opacity: 0; transform: scale(1.35); }
-}
+/* Listening: two pixel pages take turns bobbing one pixel, in two frames */
+.copy-now { display: grid; place-items: center; align-self: center; margin-top: 8px; color: var(--text); }
+.copy-pages .back { animation: bob-back calc(1.1s / var(--tempo)) steps(1, end) infinite; }
+.copy-pages .front { animation: bob-front calc(1.1s / var(--tempo)) steps(1, end) infinite; }
+@keyframes bob-front { 50% { transform: translateY(-1px); } }
+@keyframes bob-back { 0% { transform: translateY(-1px); } 50% { transform: none; } 100% { transform: translateY(-1px); } }
 .safe-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .safe-body .grow-space { flex: 1; }
 .asking { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }

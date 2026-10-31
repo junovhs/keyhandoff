@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Icon, useDragOut } from "./art";
+import { CopyPages, Icon, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, type KeyView, type SafeState, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
 
@@ -63,10 +63,7 @@ export function SafeCopy({ view }: { view: View }) {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-const LISTEN_MS = 60000;
-const COPY_MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl";
-
-/** Listening: the copy shortcut pressing inside a countdown ring says what to do. */
+/** Listening: two pixel pages bob while the seconds count down. */
 function Listening({ safe }: { safe: SafeView }) {
   const [left, setLeft] = useState(() => Math.max(0, safe.ends_at - Date.now()));
   const [info, setInfo] = useState(false);
@@ -74,21 +71,10 @@ function Listening({ safe }: { safe: SafeView }) {
     const t = window.setInterval(() => setLeft(Math.max(0, safe.ends_at - Date.now())), 250);
     return () => window.clearInterval(t);
   }, [safe.ends_at]);
-  const r = 82;
-  const c = 2 * Math.PI * r;
-  const fraction = Math.min(1, left / LISTEN_MS);
   return (
     <>
-      <div className="copy-now" aria-hidden>
-        <svg className="ring" viewBox="0 0 172 172">
-          <circle className="track" cx="86" cy="86" r={r} />
-          <circle className="arc" cx="86" cy="86" r={r} strokeDasharray={c} strokeDashoffset={c * (1 - fraction)} />
-        </svg>
-        <span className="ripple" />
-        <span className="caps">
-          <kbd className="cap mod">{COPY_MOD}</kbd>
-          <kbd className="cap c">C</kbd>
-        </span>
+      <div className="copy-now">
+        <CopyPages />
       </div>
       <div className="hero-text center">
         <h2 className="title">Copy your key</h2>
