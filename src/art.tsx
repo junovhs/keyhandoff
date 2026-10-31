@@ -49,7 +49,7 @@ const CHECK = "M55 80L65 90L94 61";
  */
 export function Pages({ caught }: { caught: boolean }) {
   return (
-    <svg className={`pages ${caught ? "caught" : ""}`} viewBox="0 -2 100 100" width="170" height="170" aria-hidden>
+    <svg className={`pages ${caught ? "caught" : ""}`} viewBox="0 -2 100 100" width="160" height="160" aria-hidden>
       <rect className="back" x="9" y="3" width="40" height="62" />
       <g className="front">
         <path className="cut" d={FRONT} />

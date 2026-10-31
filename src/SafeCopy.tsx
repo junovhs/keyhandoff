@@ -16,6 +16,7 @@ export function SafeCopy({ view }: { view: View }) {
   const body = useRef<HTMLDivElement>(null);
   const below = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState(false);
   const state = view.safe.state;
   const staged = state === "listening" || state === "caught";
 
@@ -45,8 +46,18 @@ export function SafeCopy({ view }: { view: View }) {
             <p className="sub">{state === "caught" ? "Clipboard wiped." : <Countdown endsAt={safe.ends_at} />}</p>
           </div>
           <div key={state} ref={below} className="below">
-            {state === "listening" ? <Listening safe={safe} /> : <Caught view={view} run={run} />}
+            {state === "listening" ? <Listening safe={safe} info={info} /> : <Caught view={view} run={run} />}
             {error && <p className="err">{error}</p>}
+          </div>
+          {/* Outside the part that swaps, so Cancel never moves or changes. */}
+          <div className="btn-row safe-foot">
+            {state === "listening" && (
+              <button className="link" onClick={() => setInfo(!info)} aria-expanded={info}>
+                {info ? "Hide" : "How it works"}
+              </button>
+            )}
+            <span className="grow-space" />
+            <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
           </div>
         </div>
       ) : (
@@ -82,9 +93,8 @@ function Countdown({ endsAt }: { endsAt: number }) {
   return <>From anywhere · {Math.ceil(left / 1000)}s</>;
 }
 
-/** Below the stage while listening: who is asking, clipboard apps, the info and Cancel. */
-function Listening({ safe }: { safe: SafeView }) {
-  const [info, setInfo] = useState(false);
+/** Below the stage while listening: who is asking, clipboard apps and the info. */
+function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
   return (
     <>
       {safe.for_computer && (
@@ -105,13 +115,6 @@ function Listening({ safe }: { safe: SafeView }) {
           it as you copy.
         </p>
       )}
-      <div className="btn-row">
-        <button className="link" onClick={() => setInfo(!info)} aria-expanded={info}>
-          {info ? "Hide" : "How it works"}
-        </button>
-        <span className="grow-space" />
-        <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
-      </div>
     </>
   );
 }
@@ -161,7 +164,6 @@ function Caught({ view, run }: { view: View; run: Run }) {
           ))}
         </div>
       )}
-      <button className="link center" onClick={() => void api.closeSafe()}>Cancel</button>
     </>
   );
 }
