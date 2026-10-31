@@ -49,6 +49,8 @@ The master key is stored only in `keyslots.bin`, wrapped once per way in, and an
 
 The app starts locked (`session.rs`), and the core starts only once a slot opens. It locks again on sleep, screen lock, the lock button, or after `lock_after_minutes` without use if set; locking drops the core and the master key with it. A program asking for a key while it's locked brings the window forward and waits up to two minutes for the unlock. Files opened while locked open right after. Profiles from before key slots kept the master key in DPAPI (Windows) or the Secret Service or a `0600` file (Linux), which hand it to any program running as you; on the first start the passphrase is set, the key moves into its slots and the old copy is deleted.
 
+**Remember on this computer** (opt-in, from Security in the home footer) keeps a copy of the master key with the OS again: DPAPI on Windows, the Secret Service or a `0600` file on Linux. The vault then opens at launch without asking and doesn't lock on sleep or screen lock; turning it off deletes the copy. The passphrase and recovery code keep working either way.
+
 Hardware slots are planned and add a kind each: a TPM 2.0 key behind a PIN, Windows Hello, and a FIDO2 security key. See [the research report](../reports/Hardware%20key%20protection%20everywhere.md).
 
 Profile data lives in a `handoff` folder under the system's data directory. Each profile has its own data, master key and running instance.

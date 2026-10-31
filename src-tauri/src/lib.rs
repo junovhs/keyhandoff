@@ -171,6 +171,11 @@ fn recovery_done(app: AppHandle, s: S) {
 }
 
 #[tauri::command]
+fn remember(app: AppHandle, s: S, on: bool) -> Result<(), String> {
+    done(&app, s.remember(on))
+}
+
+#[tauri::command]
 fn lock(app: AppHandle, s: S) -> Result<(), String> {
     done(&app, s.lock())
 }
@@ -397,7 +402,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {
@@ -410,6 +415,9 @@ pub fn run() {
             });
             let session = Arc::new(Session::new(store::profile_dir(&args.profile), &args.profile, start)?);
             app.manage(session.clone());
+            if let Err(e) = session.open_if_remembered(now_ms()) {
+                eprintln!("keyhandoff: {e}");
+            }
 
             // Programs can ask while locked: the window comes forward and
             // they wait for the unlock.
@@ -443,7 +451,9 @@ pub fn run() {
                     let now = now_ms();
                     let slept = now.saturating_sub(last) > SLEPT.as_millis() as u64;
                     last = now;
-                    let locked = if slept || os::screen_locked() {
+                    let locked = if session.remembered() {
+                        false
+                    } else if slept || os::screen_locked() {
                         session.current().is_some() && session.lock().is_ok()
                     } else {
                         session.lock_if_idle(now)

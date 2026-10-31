@@ -71,6 +71,7 @@ export function MainWindow() {
   const toast = view?.program ? null : (bad ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
   const [sending, setSending] = useState(false);
+  const [security, setSecurity] = useState(false);
   // The team being edited, "new" for a new one.
   const [editing, setEditing] = useState<TeamView | "new" | null>(null);
 
@@ -79,7 +80,7 @@ export function MainWindow() {
       <header className="titlebar" data-tauri-drag-region>
         <Logo />
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
-        {open && (
+        {open && view && !view.remembered && (
           <button aria-label="Lock" title="Lock KeyHandoff" onClick={() => void run(gateApi.lock())}>
             <Icon name="lock" />
           </button>
@@ -93,7 +94,7 @@ export function MainWindow() {
       </header>
       <main className="stage" ref={stage}>
         {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending(true)} />}
+        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending(true)} onSecurity={() => setSecurity(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
@@ -110,6 +111,7 @@ export function MainWindow() {
           onClose={() => setEditing(null)}
         />
       )}
+      {view && security && !safeOn && <SecuritySheet remembered={view.remembered} run={run} onClose={() => setSecurity(false)} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
@@ -123,7 +125,7 @@ export function MainWindow() {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-function Home({ view, run, onSend }: { view: View; run: Run; onSend: () => void }) {
+function Home({ view, run, onSend, onSecurity }: { view: View; run: Run; onSend: () => void; onSecurity: () => void }) {
   const n = view.keys.length;
   return (
     <>
@@ -136,7 +138,7 @@ function Home({ view, run, onSend }: { view: View; run: Run; onSend: () => void 
         <button className="btn secondary grow" onClick={onSend}>Send a key</button>
       </div>
       <Vault keys={view.keys} run={run} />
-      <Me name={view.name} run={run} />
+      <Me name={view.name} run={run} onSecurity={onSecurity} />
     </>
   );
 }
@@ -270,7 +272,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   );
 }
 
-function Me({ name, run }: { name: string; run: Run }) {
+function Me({ name, run, onSecurity }: { name: string; run: Run; onSecurity: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const save = () => {
@@ -299,6 +301,10 @@ function Me({ name, run }: { name: string; run: Run }) {
         <button onClick={() => void run(api.copyCard())} title="Copy your card to send to people who'll send you keys">
           <b>Your card</b>
         </button>
+        <span> · </span>
+        <button onClick={onSecurity} title="How KeyHandoff opens">
+          <b>Security</b>
+        </button>
       </span>
       <button className="paste" onClick={() => void run(api.paste())} title="Paste a .handoff file">
         Paste a file <kbd>Ctrl V</kbd>
@@ -314,6 +320,57 @@ const KEEP_HELP: Record<Keep, string> = {
 };
 
 /** Opening a sealed key: it unlocks itself, then one tap picks how long to keep it. */
+/** How the vault opens: the passphrase, or remembered on this computer. */
+function SecuritySheet({ remembered, run, onClose }: { remembered: boolean; run: Run; onClose: () => void }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  const [pick, setPick] = useState(remembered);
+  useEffect(() => void enter(sheet.current, "rise", 360), []);
+  const save = () => void run(gateApi.remember(pick)).then(onClose);
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="head">
+        <Glyph mark="key" />
+        <div>
+          <span className="lede">Security</span>
+          <h2 className="display md">How it opens</h2>
+        </div>
+      </div>
+      <div className="keep-buttons two">
+        <button className={pick ? "" : "pick"} onClick={() => setPick(false)}>
+          <Icon name="lock" /> Passphrase
+        </button>
+        <button className={pick ? "pick" : ""} onClick={() => setPick(true)}>
+          <Icon name="key" /> Remember here
+        </button>
+      </div>
+      {pick ? (
+        <div className="warning" role="alert">
+          <Icon name="alert" />
+          <div>
+            <b>Any program running as you could open your keys.</b>
+            <p>
+              KeyHandoff opens without asking, and stays open when the computer sleeps or the screen locks. Your
+              computer's sign-in is the only lock left. Your passphrase and recovery code still work.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="help">
+          KeyHandoff asks for your passphrase when it starts, and again after the computer sleeps or the screen locks.
+          While it's locked, no other program can open your keys.
+        </p>
+      )}
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn secondary" onClick={onClose}>Cancel</button>
+        <button className="btn primary grow" disabled={pick === remembered} onClick={save}>
+          {pick ? "Remember on this computer" : "Ask for the passphrase"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => void enter(sheet.current, "rise", 360), [item.id]);

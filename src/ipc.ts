@@ -75,6 +75,8 @@ export interface View {
   /** This computer's fingerprint, which people you ask will see. */
   computer: string;
   protection: string;
+  /** "Remember on this computer" is on: it opens without the passphrase. */
+  remembered: boolean;
   keep: Keep;
   keys: KeyView[];
   pending: number;
@@ -111,6 +113,7 @@ export const gateApi = {
   recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
   recoveryDone: () => invoke<void>("recovery_done"),
   lock: () => invoke<void>("lock"),
+  remember: (on: boolean) => invoke<void>("remember", { on }),
 };
 
 /** The gate, refreshed whenever the core reports a change. */

@@ -41,6 +41,10 @@ pub struct Settings {
     /// an OS backend for a profile from before them.
     #[serde(default)]
     pub protection: Option<String>,
+    /// "Remember on this computer": the OS backend holding a copy of the
+    /// master key, so the vault opens without the passphrase.
+    #[serde(default)]
+    pub remembered: Option<String>,
     /// Lock after this many minutes with nothing done in the window. Off by
     /// default: it locks when the computer sleeps or the screen locks.
     #[serde(default)]
@@ -77,6 +81,7 @@ pub struct Team {
 
 pub struct Store {
     dir: PathBuf,
+    profile: String,
     key: MasterKey,
 }
 
@@ -161,6 +166,19 @@ impl Locked {
         Ok((store, settings, code))
     }
 
+    /// You chose "Remember on this computer", so it can open without asking.
+    pub fn remembered(&self) -> bool {
+        self.setup.is_none() && self.settings.remembered.is_some()
+    }
+
+    /// Open with the OS-held copy, when you chose to remember.
+    pub fn open_remembered(&self) -> Result<(Store, Settings), String> {
+        let backend = self.settings.remembered.as_deref().ok_or("KeyHandoff isn't remembered on this computer.")?;
+        let key = os::remembered_master_key(&self.dir, &self.profile, backend)?
+            .ok_or("The remembered key is gone. Type your passphrase.")?;
+        self.opened(key)
+    }
+
     pub fn unlock(&self, passphrase: &str) -> Result<(Store, Settings), String> {
         let key = Slots::load(&self.dir)?.unlock(passphrase)?;
         self.opened(key)
@@ -175,7 +193,7 @@ impl Locked {
     fn opened(&self, key: MasterKey) -> Result<(Store, Settings), String> {
         let mut settings = self.settings.clone();
         settings.protection = Some(PASSPHRASE.to_string());
-        let store = Store { dir: self.dir.clone(), key };
+        let store = Store { dir: self.dir.clone(), profile: self.profile.clone(), key };
         store.save_settings(&settings)?;
         Ok((store, settings))
     }
@@ -190,7 +208,22 @@ fn fresh_key() -> MasterKey {
 impl Store {
     #[cfg(test)]
     pub fn in_dir(dir: &Path, key: MasterKey) -> Self {
-        Self { dir: dir.to_path_buf(), key }
+        Self { dir: dir.to_path_buf(), profile: "test".into(), key }
+    }
+
+    /// Turn "Remember on this computer" on (keep a copy of the master key
+    /// with the OS) or off (delete it). `prefer` picks the backend in tests.
+    pub fn remember(&self, settings: &mut Settings, on: bool, prefer: Option<&str>) -> Result<(), String> {
+        if on {
+            let backend = os::remember_master_key(&self.dir, &self.profile, &self.key, prefer)?;
+            settings.remembered = Some(backend.to_string());
+        } else if let Some(backend) = settings.remembered.take() {
+            if let Err(e) = os::forget_master_key(&self.dir, &self.profile, &backend) {
+                settings.remembered = Some(backend);
+                return Err(format!("The remembered key couldn't be deleted: {e}"));
+            }
+        }
+        self.save_settings(settings)
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<(), String> {
@@ -378,7 +411,7 @@ mod tests {
         // running as you could read.
         let (old, backend) = os::master_key(&dir, "t", Some("file")).unwrap();
         let key = old.0.clone();
-        let store = Store { dir: dir.clone(), key: old };
+        let store = Store { dir: dir.clone(), profile: "t".into(), key: old };
         let mut vault = store.vault().unwrap();
         vault.add("Dialpad", None, None, &Secret::new(secret.to_vec()), Keep::Forever, 1);
         store.save_vault(&vault).unwrap();
@@ -412,6 +445,30 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
+    #[test]
+    fn remembering_opens_without_the_passphrase_until_turned_off() {
+        let dir = temp_dir("remember");
+        let has = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
+        let (store, mut settings, _) = Locked::open_in(dir.clone(), "t").unwrap().set_up("correct horse battery staple").unwrap();
+        let key = store.key.0.clone();
+        let mut vault = store.vault().unwrap();
+        vault.add("Dialpad", None, None, &Secret::new(b"sk-synthetic-remember".to_vec()), Keep::Forever, 1);
+        store.save_vault(&vault).unwrap();
+
+        store.remember(&mut settings, true, Some("file")).unwrap();
+        let locked = Locked::open_in(dir.clone(), "t").unwrap();
+        assert!(locked.remembered());
+        assert_eq!(locked.open_remembered().unwrap().0.vault().unwrap().items().len(), 1, "opens with no passphrase");
+
+        store.remember(&mut settings, false, Some("file")).unwrap();
+        let locked = Locked::open_in(dir.clone(), "t").unwrap();
+        assert!(!locked.remembered());
+        assert!(locked.open_remembered().is_err());
+        assert!(!has(&folder_bytes(&dir), &key[..]), "turning it off leaves no copy of the master key");
+        assert!(locked.unlock("correct horse battery staple").is_ok(), "the passphrase still works");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     /// A profile whose key the Secret Service held moves behind the
     /// passphrase and leaves no keyring entry. Needs a Secret Service.
     #[cfg(target_os = "linux")]
@@ -422,7 +479,7 @@ mod tests {
         let profile = format!("test-{}", dir.file_name().unwrap().to_string_lossy().rsplit('-').next().unwrap());
         let (key, backend) = os::master_key(&dir, &profile, None).unwrap();
         assert_eq!(backend, "secret-service");
-        Store { dir: dir.clone(), key }
+        Store { dir: dir.clone(), profile: profile.clone(), key }
             .save_settings(&Settings { protection: Some(backend.into()), ..Settings::default() })
             .unwrap();
         let mut locked = Locked::open_in(dir.clone(), &profile).unwrap();

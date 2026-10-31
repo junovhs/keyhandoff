@@ -12,7 +12,7 @@ pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;
-pub use protect::{forget_master_key, master_key};
+pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};
 
 thread_local! {
     static SYSTEM_BUS: std::cell::RefCell<Option<dbus::blocking::Connection>> = const { std::cell::RefCell::new(None) };

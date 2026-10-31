@@ -34,6 +34,9 @@ pub struct Session {
     last: Mutex<u64>,
     /// Lock after this long with nothing done in the window; off unless set.
     idle: Mutex<Option<Duration>>,
+    /// "Remember on this computer": it opens without asking, so locking on
+    /// sleep or screen lock would protect nothing.
+    remembered: Mutex<bool>,
     /// Files opened before unlock, opened right after it.
     pub files: Mutex<Vec<PathBuf>>,
     /// The recovery code from setup, shown until you say it's written down.
@@ -58,6 +61,7 @@ impl Session {
             opened: Condvar::new(),
             last: Mutex::new(0),
             idle: Mutex::new(None),
+            remembered: Mutex::new(false),
             files: Mutex::new(Vec::new()),
             recovery: Mutex::new(None),
             start,
@@ -94,10 +98,34 @@ impl Session {
         }
         let (store, settings) = how(&mut locked, self)?;
         *guard(&self.idle) = settings.lock_after_minutes.map(|m| Duration::from_secs(60 * m as u64));
+        *guard(&self.remembered) = settings.remembered.is_some();
         let handoff = (self.start)(store, settings)?;
         *guard(&self.state) = State::Open(handoff);
         *guard(&self.last) = now;
         self.opened.notify_all();
+        Ok(())
+    }
+
+    /// Remembered profiles open at launch without asking.
+    pub fn open_if_remembered(&self, now: u64) -> Result<bool, String> {
+        let remembered = match &*guard(&self.state) {
+            State::Locked(l) => guard(l).remembered(),
+            State::Open(_) => false,
+        };
+        if remembered {
+            self.open(Box::new(|l, _| l.open_remembered()), now)?;
+        }
+        Ok(remembered)
+    }
+
+    pub fn remembered(&self) -> bool {
+        *guard(&self.remembered)
+    }
+
+    /// Turn "Remember on this computer" on or off while open.
+    pub fn remember(&self, on: bool) -> Result<(), String> {
+        self.current().ok_or("KeyHandoff is locked.")?.remember(on)?;
+        *guard(&self.remembered) = on;
         Ok(())
     }
 
@@ -148,6 +176,9 @@ impl Session {
     /// True if it locked.
     pub fn lock_if_idle(&self, now: u64) -> bool {
         let Some(idle) = *guard(&self.idle) else { return false };
+        if self.remembered() {
+            return false;
+        }
         let Some(handoff) = self.current() else { return false };
         let quiet = now.saturating_sub(*guard(&self.last)) >= idle.as_millis() as u64;
         quiet && !handoff.busy() && self.lock().is_ok()

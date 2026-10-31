@@ -1,7 +1,8 @@
-//! Where profiles from before key slots kept their master key: wrapped with
-//! DPAPI (current user) in `master.key`, with entropy naming the profile. Any
-//! process running as this Windows user can unwrap it, so it's read once to
-//! move it behind the passphrase (`slots`), then deleted here.
+//! A copy of the master key held by the OS: wrapped with DPAPI (current user)
+//! in `master.key`, with entropy naming the profile. Any process running as
+//! this Windows user can unwrap it. Profiles from before key slots kept it
+//! here (read once, moved behind the passphrase, then deleted); "Remember on
+//! this computer" keeps one here on purpose.
 
 use std::fs;
 use std::path::Path;
@@ -47,7 +48,28 @@ pub fn master_key(dir: &Path, profile: &str, backend: Option<&str>) -> Result<(M
     }
 }
 
-/// Delete the old copy once the key is in its slots.
+/// Keep a copy of `key` for "Remember on this computer".
+pub fn remember_master_key(dir: &Path, profile: &str, key: &MasterKey, _prefer: Option<&str>) -> Result<&'static str, String> {
+    let entropy = [ENTROPY_PREFIX, profile.as_bytes()].concat();
+    let blob = protect(&key.0[..], &entropy).ok_or("Windows could not protect KeyHandoff's key.")?;
+    super::write_private(&dir.join(FILE), &blob).map_err(|e| e.to_string())?;
+    Ok(DPAPI)
+}
+
+/// The remembered copy, if it's still there.
+pub fn remembered_master_key(dir: &Path, profile: &str, _backend: &str) -> Result<Option<MasterKey>, String> {
+    let blob = match fs::read(dir.join(FILE)) {
+        Ok(blob) => blob,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
+    let entropy = [ENTROPY_PREFIX, profile.as_bytes()].concat();
+    let plain = unprotect(&blob, &entropy).ok_or("The remembered key was changed, or comes from another Windows account.")?;
+    let arr: [u8; 32] = plain[..].try_into().map_err(|_| "The remembered key is damaged.".to_string())?;
+    Ok(Some(MasterKey(Zeroizing::new(arr))))
+}
+
+/// Delete the OS copy: after moving it into slots, or when you stop remembering.
 pub fn forget_master_key(dir: &Path, _profile: &str, _backend: &str) -> Result<(), String> {
     fs::remove_file(dir.join(FILE)).map_err(|e| e.to_string())
 }

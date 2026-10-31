@@ -219,6 +219,8 @@ pub struct View {
     /// This computer's fingerprint, which people you ask will see.
     pub computer: String,
     pub protection: String,
+    /// "Remember on this computer" is on: it opens without the passphrase.
+    pub remembered: bool,
     pub keep: Keep,
     pub keys: Vec<KeyView>,
     pub pending: usize,
@@ -616,6 +618,13 @@ impl Handoff {
         self.lock().close_safe();
     }
 
+    /// Turn "Remember on this computer" on or off.
+    pub fn remember(&self, on: bool) -> Result<(), String> {
+        let mut core = self.lock();
+        let Core { store, settings, .. } = &mut *core;
+        store.remember(settings, on, None)
+    }
+
     /// Safe Copy is on, or a program is waiting for Allow: not a moment to lock.
     pub fn busy(&self) -> bool {
         let core = self.lock();
@@ -955,6 +964,7 @@ impl Core {
             name: self.settings.name.clone(),
             computer: self.identity.public().fingerprint(),
             protection: self.settings.protection.clone().unwrap_or_default(),
+            remembered: self.settings.remembered.is_some(),
             keep: self.settings.keep,
             keys,
             pending: self.keyring.len(),

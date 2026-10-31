@@ -43,6 +43,14 @@ pub fn screen_locked() -> bool {
     false
 }
 
+pub fn remember_master_key(_dir: &Path, _profile: &str, _key: &MasterKey, _prefer: Option<&str>) -> Result<&'static str, String> {
+    Err(NOT_YET.into())
+}
+
+pub fn remembered_master_key(_dir: &Path, _profile: &str, _backend: &str) -> Result<Option<MasterKey>, String> {
+    Err(NOT_YET.into())
+}
+
 pub fn forget_master_key(_dir: &Path, _profile: &str, _backend: &str) -> Result<(), String> {
     Err(NOT_YET.into())
 }
