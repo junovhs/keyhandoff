@@ -45,7 +45,7 @@ export function SafeCopy({ view }: { view: View }) {
     <div className={`safe ${state}`}>
       <div className="top">
         <Icon name="shield" />
-        <b>Safe Copy</b>
+        <b>{state === "sealed" ? "Send a key" : "Safe Copy"}</b>
         {safe.for_name && <span>for {safe.for_name}</span>}
       </div>
       <div className="safe-body">

@@ -556,11 +556,43 @@ function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
   );
 }
 
-/** Send a key: pick a team or a person, then Safe Copy catches it for them. */
+/** Send a key: pick a person or a team, then one of your saved keys. */
 function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
-  useEffect(() => void enter(sheet.current, "rise", 360), []);
+  const [to, setTo] = useState<{ team: boolean; id: string; name: string } | null>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), [to === null]);
   const { contacts, teams } = view;
+  if (to) {
+    const send = (key: KeyView) =>
+      void run(to.team ? api.sendKeptToTeam(to.id, key.id) : api.sendKept(to.id, key.id)).then(onClose);
+    return (
+      <div className="sheet" ref={sheet}>
+        <div className="hero">
+          <h2 className="display md">Send to {to.name}</h2>
+          <p className="lede">{view.keys.length ? "Which key?" : "You have no keys to send yet."}</p>
+        </div>
+        {view.keys.length ? (
+          <div className="keys">
+            {view.keys.map((k) => (
+              <button key={k.id} className="key-row contact" onClick={() => send(k)}>
+                <span className="key-ico"><Icon name="key" /></span>
+                <span className="who">
+                  <span className="nm">{k.label}</span>
+                  <span className="meta">{describe(k)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="help">Use <b>Add a key</b> on the home screen to keep a key first. Then you can send it to anyone on your list.</p>
+        )}
+        <span className="grow-space" />
+        <div className="btn-row">
+          <button className="btn secondary grow" onClick={() => setTo(null)}>Back</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="sheet" ref={sheet}>
       <div className="hero">
@@ -572,7 +604,7 @@ function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdi
           <span className="label">Teams</span>
           {teams.map((t) => (
             <div key={t.id} className="key-row">
-              <button className="who contact" onClick={() => void run(api.sendToTeam(t.id)).then(onClose)}>
+              <button className="who contact" onClick={() => setTo({ team: true, id: t.id, name: t.name })}>
                 <span className="key-ico"><Icon name="users" /></span>
                 <span className="who">
                   <span className="nm">{t.name}</span>
@@ -588,7 +620,7 @@ function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdi
         <div className="keys">
           {teams.length > 0 && <span className="label">People</span>}
           {contacts.map((c) => (
-            <button key={c.id} className="key-row contact" onClick={() => void run(api.sendTo(c.id)).then(onClose)}>
+            <button key={c.id} className="key-row contact" onClick={() => setTo({ team: false, id: c.id, name: c.name })}>
               <span className="key-ico"><Icon name="user" /></span>
               <span className="who">
                 <span className="nm">{c.name}</span>
