@@ -16,14 +16,16 @@ const THREATS = `${GITHUB}/blob/main/docs/threats.md`;
 // "testing": built and passing on Linux, not yet checked on Windows.
 type Stage = "now" | "testing" | "building" | "next";
 const FEATURES: { id: string; stage: Stage; icon: IconName; text: string }[] = [
-  { id: "handoff", stage: "now", icon: "check", text: "Requests and sealed replies between two people" },
+  { id: "handoff", stage: "now", icon: "check", text: "Cards and sealed keys between people" },
+  { id: "teams", stage: "testing", icon: "users", text: "Teams: catch a key once, every member gets a sealed copy" },
   { id: "safecopy", stage: "now", icon: "check", text: "Safe Copy: catch one copy, wipe the clipboard" },
   { id: "vault", stage: "now", icon: "check", text: "Encrypted vault with Once, 30 days or Keep" },
   { id: "platforms", stage: "now", icon: "check", text: "Windows and Linux (X11)" },
+  { id: "lock", stage: "testing", icon: "lock", text: "Vault locked by your passphrase, or a short TPM PIN on Linux" },
   { id: "pointers", stage: "testing", icon: "file", text: "<code>.env</code> pointers for Python and Node.js, over a private pipe" },
   { id: "approvals", stage: "testing", icon: "shield", text: "Approvals tied to program and folder" },
   { id: "typing", stage: "building", icon: "type", text: "Typing a key into a field, no clipboard" },
-  { id: "hardware", stage: "next", icon: "chip", text: "Hardware-backed vault with TPM and Windows Hello" },
+  { id: "hardware", stage: "next", icon: "chip", text: "Unlock with Windows Hello: your face, fingerprint or PIN" },
 ];
 const stage = (id: string) => FEATURES.find((f) => f.id === id)!.stage;
 const statusKind = (id: string) => (stage(id) === "now" ? "now" : "building");
@@ -96,8 +98,8 @@ const WORTH: { icon: IconName; name: string; text: string }[] = [
 ];
 
 const TEAM_SCREENS = [
-  { src: "/shots/ask.png", who: "Ann", title: "Ask", text: "One click copies a request. No secret inside.", alt: "KeyHandoff showing Request copied, with a file called Key request from Ann.handoff" },
-  { src: "/shots/listening.png", who: "Ben", title: "Catch", text: "Ben copies the key. KeyHandoff catches that one copy.", alt: "KeyHandoff Safe Copy listening for a copy, showing that Ann is asking and her computer's fingerprint" },
+  { src: "/shots/card.png", who: "Ann", title: "Share your card", text: "Once. It holds no secret, just locks only Ann can open.", alt: "KeyHandoff showing Card copied, with a file called KeyHandoff card - Ann.handoff" },
+  { src: "/shots/listening.png", who: "Ben", title: "Catch", text: "Ben picks Ann and copies the key. KeyHandoff catches that one copy.", alt: "KeyHandoff Safe Copy listening for a copy, showing that Ann is asking and her computer's fingerprint" },
   { src: "/shots/sealed.png", who: "Ben", title: "Seal", text: "Only Ann's computer can open it. Ben keeps nothing.", alt: "KeyHandoff showing Sealed for Ann, with a file called Key for Ann.handoff" },
   { src: "/shots/accepted.png", who: "Ann", title: "Keep", text: "It lands in Ann's vault. The copy in the chat is dead.", alt: "KeyHandoff showing Ben sent you a key, with choices of Once, 30 days or Keep" },
 ];
@@ -108,7 +110,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
   { icon: "flame", title: "One open, then gone", text: "After one open, every copy of a sealed file is unreadable." },
   { icon: "chat", title: "Works in any chat", text: "Ordinary files, or pasted text that repairs itself when mangled." },
   { icon: "offline", title: "No servers, no accounts", text: "No sign-up, no cloud, no telemetry and no network code." },
-  { icon: "book", title: "Open to read", text: "Read every line, free at work. The sealing library is Apache 2.0." },
+  { icon: "lock", title: "Locked when you're away", text: "Your passphrase, or a short TPM PIN, opens it. It locks again when the computer sleeps." },
 ];
 ---
 <!doctype html>
@@ -306,7 +308,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
         <a class="front rv" style="--d:160ms" href="#team">
           <Tile name="send" scale={4} />
           <h3>Your team</h3>
-          <p>Send a request, get a sealed reply. The chat only carries a useless file.</p>
+          <p>Send your card once, get sealed keys back. The chat only carries a useless file.</p>
           <span class="stack"><Status kind={statusKind("handoff")} label={statusLabel("handoff")} /></span>
         </a>
       </div>
@@ -319,6 +321,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
         <ul class="feats">
           <li><span class="f-ico"><Icon name="clip" size={18} /></span><div><h3>Bring it in <Status kind={statusKind("safecopy")} label={statusLabel("safecopy")} /></h3><p>Copy the key once. Safe Copy catches it and wipes the clipboard.</p></div></li>
           <li><span class="f-ico"><Icon name="clock" size={18} /></span><div><h3>Keep it your way <Status kind={statusKind("vault")} label={statusLabel("vault")} /></h3><p>One tap: <b>Once</b>, <b>30 days</b> or <b>Keep</b>. Sealed on this device.</p></div></li>
+          <li><span class="f-ico"><Icon name="lock" size={18} /></span><div><h3>Locked when you're away <Status kind={statusKind("lock")} label={statusLabel("lock")} /></h3><p>Your passphrase opens it, or a short PIN the computer's TPM checks. It locks again on sleep and screen lock.</p></div></li>
           <li><span class="f-ico"><Icon name="type" size={18} /></span><div><h3>Have it typed out <Status kind={statusKind("typing")} label={statusLabel("typing")} /></h3><p>Click a box and KeyHandoff types the key straight into it.</p></div></li>
         </ul>
       </div>
@@ -371,7 +374,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
       <div class="head rv">
         <span class="eyebrow"><Icon name="users" />Your team <Status kind={statusKind("handoff")} label={statusLabel("handoff")} /></span>
         <h2>Need a key from someone? Stop asking them to paste it.</h2>
-        <p class="sub">The chat only ever carries a sealed file.</p>
+        <p class="sub">Send them your card once. After that, the chat only ever carries a sealed file.</p>
       </div>
       <div class="screens rv">
         {TEAM_SCREENS.map((s, i) => (
@@ -388,12 +391,13 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
       <div class="wire rv" aria-hidden="true">
         <span class="wire-end"><Icon name="user" size={18} />Ann</span>
         <span class="wire-line">
-          <span class="wire-file up"><Icon name="file" size={14} />Key request from Ann.handoff</span>
+          <span class="wire-file up"><Icon name="file" size={14} />KeyHandoff card - Ann.handoff</span>
           <span class="wire-file down"><Icon name="lock" size={14} />Key for Ann.handoff</span>
         </span>
         <span class="wire-end"><Icon name="user" size={18} />Ben</span>
       </div>
       <p class="wire-note rv"><Icon name="chat" />Slack, Teams, email, whatever you already use. No links, nothing to sign up for.</p>
+      <p class="wire-note rv"><Icon name="users" />Sharing with a team? Catch the key once, and every member gets their own sealed copy.</p>
     </section>
 
     <section class="wrap" id="built-in">
@@ -411,7 +415,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
         ))}
       </div>
       <p class="limits rv">
-        What it can't do: a program watching your clipboard can read a key at the moment you copy it, and anything running as you can reach the vault.{" "}
+        What it can't do: a program watching your clipboard can read a key at the moment you copy it, and while the vault is unlocked, anything running as you can reach it.{" "}
         <a href={THREATS}>Everything it does and doesn't protect</a>
       </p>
     </section>

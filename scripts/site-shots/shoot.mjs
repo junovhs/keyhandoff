@@ -8,7 +8,7 @@ import { withBrowser } from "./chrome.mjs";
 const WIDTH = 400;
 const HEIGHT = 600;
 const SETTLE_MS = 1500; // long enough for the screens' entrance motion to finish
-const SCENES = ["home", "ask", "listening", "sealed", "accepted"];
+const SCENES = ["home", "card", "listening", "sealed", "accepted", "locked-pin"];
 
 const out = resolve("site/public/shots");
 mkdirSync(out, { recursive: true });

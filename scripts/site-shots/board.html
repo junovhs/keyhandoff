@@ -56,6 +56,17 @@
           ["program", "You", "A script asks for a key", MAIN],
           ["home-copied", "You", "Copy .env line on a key row", MAIN],
         ]],
+        ["Lock and unlock", [
+          ["setup", "You", "First start: choose a passphrase", MAIN],
+          ["setup", "You", "Or take five suggested words", MAIN, ["Suggest five"]],
+          ["recovery", "You", "Write down the recovery code", MAIN],
+          ["locked", "You", "Locked again after sleep or screen lock", MAIN],
+          ["home", "You", "Security: how it opens", MAIN, ["Security"]],
+          ["home", "You", "Add a PIN (needs a TPM)", MAIN, ["Security", "Add a PIN"]],
+          ["locked-pin", "You", "With a PIN, it asks for that first", MAIN],
+          ["home", "You", "Remember on this computer, and its warning", MAIN, ["Security", "Remember here"]],
+          ["migrate", "You", "An older profile moves behind a passphrase", MAIN],
+        ]],
         ["When it doesn't go to plan", [
           ["listening-apps", "You", "A clipboard app is running", SAFE],
           ["listening-read-app", "You", "Something read the bait, and Ditto is running", SAFE],

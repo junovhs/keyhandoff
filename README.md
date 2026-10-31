@@ -2,7 +2,7 @@
 
 **API keys, hands off.**
 
-KeyHandoff is a small desktop app for handing someone an API key, or any other secret, without pasting it into a chat or leaving it in a plain file. There are no servers and no accounts. Requests and keys travel as ordinary files over whatever channel you already use.
+KeyHandoff is a small desktop app for handing someone an API key, or any other secret, without pasting it into a chat or leaving it in a plain file. There are no servers and no accounts. Cards and keys travel as ordinary files over whatever channel you already use.
 
 Encrypting a key at rest is the easy part. The real exposure comes from people handling it: looking at it, copying it, pasting it into a chat, saving it in a `.env` file. KeyHandoff keeps custody of the key from the provider's page onward, so people and their tools handle it as little as possible.
 
@@ -31,6 +31,19 @@ Ben can keep sending Ann keys until her card's locks run out; then he asks for a
 **Teams.** In **Send a key**, **New team** groups some of your contacts under a name. Sending to a team catches the key once and seals it to every member in one file; you keep a copy too, filed under the team. **Welcome** on a member sends them every key you hold that was shared with the team, so someone new gets them all. There's no server, so a team lives on each person's computer: anyone can set up the same team to share with it, and everyone on it needs to have sent you their card.
 
 To keep a key of your own, click **Add a key**, copy the key on the provider's page and name it. No files are involved. KeyHandoff has no way to show a key on screen.
+
+## Locking
+
+KeyHandoff starts locked. The first time, you choose a passphrase, or take five suggested words, and write down the recovery code it shows once. After that, the passphrase opens it.
+
+It locks again when the computer sleeps, when the screen locks, and from the lock button in the title bar. To also lock after a quiet spell, set `lock_after_minutes` in the profile's `settings.json`. A program that asks for a key while it's locked brings the window forward and waits up to two minutes for you.
+
+**Security**, at the bottom of the home screen, has two options:
+
+- **PIN instead of the passphrase**, where the computer has a TPM KeyHandoff can use. The key is sealed inside the TPM, which checks the PIN and stops anyone guessing it, so the PIN can be short. On Linux the TPM belongs to the `tss` group: run `sudo usermod -aG tss $USER` and sign in again. A TPM that's switched off in the firmware settings shows as none. Windows uses Windows Hello instead (coming).
+- **Remember on this computer**, which opens KeyHandoff without asking and keeps it open through sleep and screen lock. It's off unless you turn it on: any program running as you could then open your keys.
+
+The passphrase and recovery code always work. If you lose both, the keys can't be opened by anyone, you included.
 
 ## Safe Copy
 

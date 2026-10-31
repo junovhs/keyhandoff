@@ -1,6 +1,6 @@
 // Stands in for @tauri-apps/api so the real screens render in a plain browser,
 // for the website's screenshots and the screen board. All data here is sample data.
-import type { ContactView, KeyView, SafeState, TeamView, View } from "../../src/ipc";
+import type { ContactView, GateView, KeyView, SafeState, TeamView, View } from "../../src/ipc";
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 24 * 60 * 60;
@@ -33,7 +33,10 @@ function safe(state: SafeState, forName: string | null = "Ann", apps: string[] =
 const HOME: View = {
   name: "Ann",
   computer: "72ca77a8cc39c3ba",
-  protection: "dpapi",
+  protection: "passphrase",
+  remembered: false,
+  pin: false,
+  tpm: "ready",
   keep: "keep",
   keys: KEYS,
   pending: 0,
@@ -52,7 +55,6 @@ const SCENES: Record<string, Partial<View>> = {
   home: {},
   "home-empty": { keys: [] },
   card: { keys: [], asked: "KeyHandoff card - Ann.handoff" },
-  ask: { keys: [], asked: "KeyHandoff card - Ann.handoff" }, // the site's screenshot name
   added: { name: "Ben", keys: [], added: ANN },
   "send-empty": { name: "Ben", keys: [], contacts: [] },
   "listening-team": { name: "Ben", safe: { ...safe("listening", "Platform"), for_computer: null, for_team: true } },
@@ -76,9 +78,22 @@ const SCENES: Record<string, Partial<View>> = {
   timeout: { safe: safe("timeout", null) },
 };
 
+const OPEN: GateView = { state: "open", migrating: false, recovery: null, min_passphrase: 12, pin: false, min_pin: 4 };
+
+// Before the vault opens: the scenes with no view.
+const GATES: Record<string, Partial<GateView>> = {
+  setup: { state: "setup" },
+  migrate: { state: "setup", migrating: true },
+  recovery: { recovery: "7K2Q-9MXD-4RTV-HB3N-0PWE-6YJC-8FAZ-2KGS" },
+  locked: { state: "locked" },
+  "locked-pin": { state: "locked", pin: true },
+};
+
 const scene = new URLSearchParams(location.search).get("s") ?? "home";
 
 export async function invoke(cmd: string): Promise<unknown> {
+  if (cmd === "gate") return { ...OPEN, ...GATES[scene] };
+  if (cmd === "suggest") return "flashing marathon rebate handset repeater";
   return cmd === "view" ? { ...HOME, ...SCENES[scene] } : undefined;
 }
 

@@ -17,9 +17,9 @@ export const docs = defineDocs({
   title: "KeyHandoff",
   lead: "Hand off API keys without exposing them.",
   facts: defineFacts({
-    platforms: { value: "Windows and Linux (X11)", reviewed: "2026-10-30" },
-    status: { value: "pre-release and has not had a security audit", reviewed: "2026-10-30" },
-    network: { value: "no servers, accounts, telemetry or network code", reviewed: "2026-10-30" },
+    platforms: { value: "Windows and Linux (X11)", reviewed: "2026-10-31" },
+    status: { value: "pre-release and has not had a security audit", reviewed: "2026-10-31" },
+    network: { value: "no servers, accounts, telemetry or network code", reviewed: "2026-10-31" },
   }),
   sections: [
     {
@@ -28,7 +28,7 @@ export const docs = defineDocs({
       question: "What is KeyHandoff?",
       answer: "KeyHandoff is a small desktop app for handing someone an API key, or any other secret, without pasting it into a chat or leaving it in a plain file. It has {fact:network}.",
       blocks: [
-        { kind: "p", text: "Requests and keys travel as ordinary files over whatever channel you already use. The key is never displayed on screen." },
+        { kind: "p", text: "Cards and keys travel as ordinary files over whatever channel you already use. The key is never displayed on screen." },
         { kind: "callout", tone: "warn", text: "KeyHandoff is {fact:status}. Use it with test keys for now." },
       ],
     },
@@ -36,18 +36,18 @@ export const docs = defineDocs({
       id: "how-it-works",
       title: "How it works",
       question: "How does KeyHandoff hand off a key?",
-      answer: "The receiver sends a request file, the sender catches the key from the provider's page and seals it, and the receiver opens the sealed file once to keep the key in a vault.",
+      answer: "The receiver sends their card once. After that, the sender picks them in Send a key, catches the key from the provider's page and seals it, and the receiver opens the sealed file once to keep the key in their vault.",
       blocks: [
         {
           kind: "steps",
           items: [
-            { title: "Ask", text: "Click Request a key and send the request file to whoever has the key." },
-            { title: "Catch", text: "They copy the key from the provider's page. KeyHandoff catches that one copy and wipes the clipboard." },
+            { title: "Share your card", text: "Click Your card and send the file to whoever will send you keys. It holds no secret, and each copy is good for 12 keys." },
+            { title: "Catch", text: "They click Send a key, pick you, and copy the key from the provider's page. KeyHandoff catches that one copy and wipes the clipboard." },
             { title: "Seal", text: "They name the key and it's encrypted so only your computer can open it, and only once. They send you the file and keep nothing." },
             { title: "Keep", text: "You open the file. The key goes into your vault, and every copy of the sealed file becomes permanently unreadable." },
           ],
         },
-        { kind: "p", text: "You can also catch a key for yourself with Add your own, which involves no files." },
+        { kind: "p", text: "Sending to a team catches the key once and seals a copy for every member, in one file. You can also catch a key for yourself with Add a key, which involves no files." },
       ],
     },
     {
@@ -58,10 +58,21 @@ export const docs = defineDocs({
       blocks: [{ kind: "p", text: "Nothing watches the clipboard the rest of the time." }],
     },
     {
+      id: "locking",
+      title: "Locking",
+      question: "How is the vault locked?",
+      answer: "KeyHandoff starts locked, and your passphrase opens it. It locks again when the computer sleeps or the screen locks. A recovery code you write down at setup always gets you back in.",
+      blocks: [
+        { kind: "p", text: "While it's locked, a program running as you can read every KeyHandoff file and still can't open a key. A program that asks for a key while it's locked brings the window forward and waits for you." },
+        { kind: "p", text: "In Security, at the bottom of the home screen, you can unlock with a short PIN instead, where the computer has a TPM KeyHandoff can use (Linux for now). The TPM checks the PIN and stops anyone guessing it. KeyHandoff only uses hardware your computer already has." },
+        { kind: "callout", tone: "warn", text: "Remember on this computer opens KeyHandoff without asking. It's off unless you turn it on, because any program running as you could then open your keys." },
+      ],
+    },
+    {
       id: "limits",
       title: "What it protects, and what it doesn't",
       question: "What does KeyHandoff not protect against?",
-      answer: "KeyHandoff can't stop a program watching the clipboard from reading a key at the moment you copy it, or stop malware running as you from reaching the vault. A program you allow can do anything with the key it gets.",
+      answer: "KeyHandoff can't stop a program watching the clipboard from reading a key at the moment you copy it, or stop malware running as you from reaching the vault while it's unlocked. A program you allow can do anything with the key it gets.",
       blocks: [
         {
           kind: "p",
