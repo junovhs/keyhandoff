@@ -18,7 +18,7 @@ Sealing, requests and the vault can't be built until the primitives, the file fo
 1. **Primitives** (RustCrypto and dalek crates): **Ed25519** device identity for signatures, **X25519** for the one-time and ephemeral keys, **HKDF-SHA256** for key derivation, **ChaCha20-Poly1305** as the AEAD. Randomness comes from the OS (`getrandom`).
 2. **Pairing shape:** ECDH, then HKDF salted with a hash of the request context, then an AEAD with record-bound associated data. Requests travel through chat rather than an authenticated server, so they are also signed.
 3. **File format v0**, binary inside armored text (layout below). Every object starts with `HOF` + version `0` + kind.
-4. **Key protection: a passphrase** (Argon2id) wraps the profile's master key, which seals the identity, the pending one-time keys and the vault key; a recovery code is a second way in. This replaced DPAPI, which any process running as the user can unwrap. Hardware slots (TPM PIN, Windows Hello, security key) are planned.
+4. **Key protection: a passphrase** (Argon2id) wraps the profile's master key, which seals the identity, the pending one-time keys and the vault key; a recovery code is a second way in. This replaced DPAPI, which any process running as the user can unwrap. Built-in hardware adds slots: a TPM PIN now, Windows Hello planned.
 5. **Armored text:** Crockford base32 in groups of four, Reed-Solomon parity over GF(2^8) with interleaving, and an integrity check that rejects anything repaired wrongly.
 
 ## Sealing in detail
@@ -112,7 +112,7 @@ Each part is verified and opened like a sealed key; a recipient opens the parts 
 - **Honest limit:** a copy of the folder can be attacked offline by guessing the passphrase, so its strength matters; a suggested passphrase is five words from the EFF long list (about 64 bits). Once unlocked, the key is in KeyHandoff's memory until it quits.
 - **Before key slots:** DPAPI (Windows) or the Secret Service or a `0600` file (Linux) held the master key and released it to any process running as the user. Those profiles move into slots when the passphrase is first set, and the old copy is deleted.
 - **TPM PIN:** `keyslot-tpm.bin` holds `HOFT`, version 0, the PIN's Argon2id cost and 16-byte salt, then the sealed object's TPM2B private and public blobs (u16 LE length each). The TPM unseals the master key only for the PIN's hash, only on this TPM, and counts wrong tries.
-- **Planned:** more slot kinds, each wrapping the same master key: a TPM 2.0 key behind a PIN, Windows Hello signing a stored challenge, and a FIDO2 security key's hmac-secret. The rest of the format doesn't change.
+- **Planned:** more slot kinds from hardware already in the computer, each wrapping the same master key: Windows Hello signing a stored challenge, and the Mac Secure Enclave. The rest of the format doesn't change.
 
 ## Armored text
 

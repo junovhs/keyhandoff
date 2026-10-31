@@ -54,7 +54,7 @@ The app starts locked (`session.rs`), and the core starts only once a slot opens
 
 **Remember on this computer** (opt-in, from Security in the home footer) keeps a copy of the master key with the OS again: DPAPI on Windows, the Secret Service or a `0600` file on Linux. The vault then opens at launch without asking and doesn't lock on sleep or screen lock; turning it off deletes the copy. The passphrase and recovery code keep working either way.
 
-Hardware slots are planned and add a kind each: a TPM 2.0 key behind a PIN, Windows Hello, and a FIDO2 security key. See [the research report](../reports/Hardware%20key%20protection%20everywhere.md).
+More slots use hardware the computer already has, never something to buy: Windows Hello is planned, and the Mac Secure Enclave later. See [the research report](../reports/Hardware%20key%20protection%20everywhere.md).
 
 Profile data lives in a `handoff` folder under the system's data directory. Each profile has its own data, master key and running instance.
 
