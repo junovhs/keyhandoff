@@ -50,6 +50,7 @@ Profile data lives in a `handoff` folder under the system's data directory. Each
 ## Safe Copy capture
 
 - Arms only on a user action: opening a request, or Add.
+- On arming, names known clipboard managers found in the process list (`/proc/*/comm` on Linux, a Toolhelp snapshot on Windows).
 - Takes the first text clipboard change, then disarms. Times out after 60 seconds.
 - Never renders the value. It's zeroized when dropped.
 - Text dropped onto the window isn't accepted, because the webview would receive it in TypeScript.

@@ -46,6 +46,17 @@ pub enum Clip {
     Empty,
 }
 
+/// The display names of known clipboard apps among running process names,
+/// sorted and without repeats. `table` maps a process name to a display name.
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+fn known_apps(running: impl Iterator<Item = String>, table: &[(&str, &str)]) -> Vec<String> {
+    let mut found: Vec<String> =
+        running.filter_map(|n| table.iter().find(|(process, _)| *process == n).map(|(_, name)| name.to_string())).collect();
+    found.sort();
+    found.dedup();
+    found
+}
+
 /// A profile's 32-byte master key, held by the OS and zeroized on drop.
 pub struct MasterKey(pub(crate) Zeroizing<[u8; 32]>);
 

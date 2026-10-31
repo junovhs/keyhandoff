@@ -33,11 +33,13 @@ pub struct Clipboard {
     pub arm: fn(Duration, Arc<AtomicBool>, OnCaptured) -> Result<(), String>,
     pub offer: fn(&Path, String) -> Result<(), String>,
     pub read: fn() -> Result<Clip, String>,
+    /// Known clipboard apps running now, named when Safe Copy arms.
+    pub apps: fn() -> Vec<String>,
 }
 
 impl Clipboard {
     pub fn system() -> Self {
-        Self { arm: |t, c, done| os::arm_capture(t, c, done), offer: os::offer_file, read: os::read_clipboard }
+        Self { arm: |t, c, done| os::arm_capture(t, c, done), offer: os::offer_file, read: os::read_clipboard, apps: os::clipboard_apps }
     }
 }
 
@@ -65,7 +67,8 @@ impl Target {
 
 enum Safe {
     Off,
-    Listening { target: Target, ends_at: u64, cancel: Arc<AtomicBool> },
+    /// `apps`: known clipboard apps running when it armed.
+    Listening { target: Target, ends_at: u64, cancel: Arc<AtomicBool>, apps: Vec<String> },
     TimedOut { target: Target },
     Failed { target: Target, message: String },
     /// Caught and wiped from the clipboard; waiting for a name (and, for
@@ -142,6 +145,8 @@ pub struct SafeView {
     pub ends_at: u64,
     pub file_name: Option<String>,
     pub message: Option<String>,
+    /// Known clipboard apps that were running when Safe Copy armed.
+    pub apps: Vec<String>,
 }
 
 /// A program asking for kept keys, waiting for Allow.
@@ -327,7 +332,8 @@ impl Handoff {
                 }
             }),
         )?;
-        core.safe = Safe::Listening { target, ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel };
+        let apps = (self.clipboard.apps)();
+        core.safe = Safe::Listening { target, ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel, apps };
         core.accepted = None;
         Ok(())
     }
@@ -632,10 +638,13 @@ impl Core {
             ends_at: 0,
             file_name: None,
             message: None,
+            apps: Vec::new(),
         };
         match &self.safe {
-            Safe::Off => SafeView { state: "off", for_name: None, for_computer: None, ends_at: 0, file_name: None, message: None },
-            Safe::Listening { target, ends_at, .. } => SafeView { ends_at: *ends_at, ..base("listening", target) },
+            Safe::Off => {
+                SafeView { state: "off", for_name: None, for_computer: None, ends_at: 0, file_name: None, message: None, apps: Vec::new() }
+            }
+            Safe::Listening { target, ends_at, apps, .. } => SafeView { ends_at: *ends_at, apps: apps.clone(), ..base("listening", target) },
             Safe::TimedOut { target } => base("timeout", target),
             Safe::Failed { target, message } => SafeView { message: Some(message.clone()), ..base("failed", target) },
             Safe::Caught { target, note, .. } => SafeView { message: note.clone(), ..base("caught", target) },
@@ -646,6 +655,7 @@ impl Core {
                 ends_at: 0,
                 file_name: Some(display_name(file)),
                 message: None,
+                apps: Vec::new(),
             },
         }
     }
@@ -749,6 +759,7 @@ mod tests {
                 Ok(())
             },
             read: || Ok(Clip::Empty),
+            apps: || vec!["CopyQ".into()],
         }
     }
 
@@ -859,6 +870,7 @@ mod tests {
         me.handoff.add().unwrap();
         let safe = me.handoff.view().safe;
         assert_eq!((safe.state, safe.for_name), ("listening", None));
+        assert_eq!(safe.apps, ["CopyQ"], "running clipboard apps are named while listening");
         copy(KEY);
         assert!(me.handoff.seal("X").is_err(), "your own key is never sealed");
         assert!(me.handoff.keep_own("  ", Keep::Once).is_err());

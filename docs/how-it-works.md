@@ -32,6 +32,8 @@ Click **Add your own**, copy the key on the provider's page, and name it. No fil
 
 Safe Copy reads the clipboard only after you ask it to. It catches one item, then switches off, or times out after 60 seconds. Nothing watches the clipboard the rest of the time.
 
+When it turns on, it checks the running programs against a short list of known clipboard managers, such as Ditto or CopyQ, and names any it finds, since they can read the key when you copy it. Clipboard extensions built into a desktop shell don't show up as programs, so an empty list isn't a promise.
+
 ## Keep times
 
 When you accept a key you can keep it **once**, for **30 days**, or until you remove it. Your last choice becomes the default.

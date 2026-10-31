@@ -94,6 +94,11 @@ function Listening({ safe }: { safe: SafeView }) {
         <h2 className="title">Copy your key</h2>
         <p className="help">From anywhere · {Math.ceil(left / 1000)}s</p>
       </div>
+      {safe.apps.length > 0 && (
+        <p className="apps">
+          {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
+        </p>
+      )}
       {info && (
         <p className="info">
           KeyHandoff catches that one copy, wipes your clipboard and its history, then you name the key.
@@ -110,6 +115,11 @@ function Listening({ safe }: { safe: SafeView }) {
       </div>
     </>
   );
+}
+
+/** "Ditto", "Ditto and CopyQ", "Ditto, CopyQ and ClipX". */
+function andList(names: string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /** Caught and wiped. Name it, then seal it (for someone) or pick a keep-time (for you). */

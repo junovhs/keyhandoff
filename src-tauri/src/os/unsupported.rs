@@ -42,6 +42,10 @@ pub fn listen_for_keys(_profile: &str, _serve: ServeKeys) -> Result<(), String> 
     Ok(())
 }
 
+pub fn clipboard_apps() -> Vec<String> {
+    Vec::new()
+}
+
 pub fn private_dir(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)
 }

@@ -50,6 +50,46 @@ pub fn runtime_dir() -> PathBuf {
     std::env::temp_dir()
 }
 
+/// Clipboard managers that keep what you copy, by lowercase executable name.
+const CLIPBOARD_APPS: &[(&str, &str)] = &[
+    ("ditto.exe", "Ditto"),
+    ("copyq.exe", "CopyQ"),
+    ("clipclip.exe", "ClipClip"),
+    ("clipboardfusion.exe", "ClipboardFusion"),
+    ("clipangel.exe", "ClipAngel"),
+    ("arsclip.exe", "ArsClip"),
+    ("clipmate.exe", "ClipMate"),
+    ("clipdiary.exe", "Clipdiary"),
+    ("1clipboard.exe", "1Clipboard"),
+    ("clcl.exe", "CLCL"),
+    ("clipx.exe", "ClipX"),
+    ("clibor.exe", "Clibor"),
+    ("phraseexpress.exe", "PhraseExpress"),
+];
+
+/// Known clipboard managers running now, from the process list. Win+V
+/// history is Windows itself and is handled after each catch instead.
+pub fn clipboard_apps() -> Vec<String> {
+    use ::windows::Win32::Foundation::CloseHandle;
+    use ::windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+    let mut running = Vec::new();
+    // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Vec::new() };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+            running.push(String::from_utf16_lossy(&entry.szExeFile[..end]).to_lowercase());
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    super::known_apps(running.into_iter(), CLIPBOARD_APPS)
+}
+
 /// The Windows display name ("Ann Hall"), else the account name.
 pub fn user_name() -> Option<String> {
     let mut buf = [0u16; 256];

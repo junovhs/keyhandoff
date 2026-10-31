@@ -27,6 +27,8 @@ export interface SafeView {
   ends_at: number;
   file_name: string | null;
   message: string | null;
+  /** Known clipboard apps that were running when Safe Copy armed. */
+  apps: string[];
 }
 
 /** A program asking for kept keys, waiting for Allow. */

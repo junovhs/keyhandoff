@@ -58,6 +58,7 @@ windows = { version = "0.62.2", features = [
   "Wdk_System_Threading",
   "Win32_System_Threading",
   "Win32_System_Diagnostics_Debug",
+  "Win32_System_Diagnostics_ToolHelp",
 ] }
 
 # Small and fast to start: the performance budget in docs/keyhandoff/architecture.md.
