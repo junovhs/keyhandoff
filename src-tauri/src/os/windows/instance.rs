@@ -1,21 +1,10 @@
 //! One running KeyHandoff per profile. A second launch (double-clicking a
 //! `.handoff` file while the app runs) passes its file paths to the first over
-//! a local named pipe, then exits. The pipe's default security lets only this
-//! user (and admins) write to it, and remote clients are rejected.
+//! a local named pipe (`pipe.rs`), then exits.
 
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
-use std::os::windows::io::FromRawHandle;
 use std::path::PathBuf;
-use std::thread;
-
-use ::windows::core::HSTRING;
-use ::windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED};
-use ::windows::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND};
-use ::windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
-    PIPE_WAIT,
-};
 
 const BUFFER: u32 = 4096;
 
@@ -41,46 +30,11 @@ pub fn forward_to_running(profile: &str, files: &[PathBuf]) -> bool {
 /// A pipe that can't be made only costs single-instance, so it is logged,
 /// not fatal.
 pub fn listen_for_launches(profile: &str, on_launch: impl Fn(Vec<PathBuf>) + Send + 'static) -> Result<(), String> {
-    let name = HSTRING::from(pipe(profile));
-    let spawned = thread::Builder::new().name("launches".into()).spawn(move || {
-        let mut first = true;
-        loop {
-            let flags = if first { PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE } else { PIPE_ACCESS_INBOUND };
-            first = false;
-            // SAFETY: plain pipe creation; the handle is owned below.
-            let handle = unsafe {
-                CreateNamedPipeW(
-                    &name,
-                    flags,
-                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                    PIPE_UNLIMITED_INSTANCES,
-                    0,
-                    BUFFER,
-                    0,
-                    None,
-                )
-            };
-            if handle.is_invalid() {
-                eprintln!("keyhandoff: no single-instance pipe: {}", ::windows::core::Error::from_thread());
-                return;
-            }
-            // SAFETY: a client may connect between create and connect; that is ERROR_PIPE_CONNECTED.
-            let connected = match unsafe { ConnectNamedPipe(handle, None) } {
-                Ok(()) => true,
-                Err(e) => e.code() == ERROR_PIPE_CONNECTED.to_hresult(),
-            };
-            if !connected {
-                // SAFETY: we own the handle.
-                let _ = unsafe { CloseHandle(handle) };
-                continue;
-            }
-            // SAFETY: the File takes ownership of the handle and closes it.
-            let stream = unsafe { File::from_raw_handle(handle.0) };
-            let files = BufReader::new(stream).lines().map_while(Result::ok).take_while(|l| !l.is_empty()).map(PathBuf::from).collect();
-            on_launch(files);
-        }
+    let served = super::pipe::serve(&pipe(profile), false, BUFFER, "launches", move |stream| {
+        let files = BufReader::new(stream).lines().map_while(Result::ok).take_while(|l| !l.is_empty()).map(PathBuf::from).collect();
+        on_launch(files);
     });
-    if let Err(e) = spawned {
+    if let Err(e) = served {
         eprintln!("keyhandoff: no single-instance listener: {e}");
     }
     Ok(())

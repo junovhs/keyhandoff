@@ -1,22 +1,17 @@
-//! Programs ask for kept keys over a local named pipe. Windows reports the
+//! Programs ask for kept keys over a local named pipe (`pipe.rs`). Windows reports the
 //! client's process id; its executable comes from the process, and its
 //! working folder from the process parameters in its PEB.
 
 use std::ffi::c_void;
-use std::fs::File;
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use std::thread;
 
-use ::windows::core::{HSTRING, PWSTR};
+use ::windows::core::PWSTR;
 use ::windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
-use ::windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED, HANDLE};
-use ::windows::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
+use ::windows::Win32::Foundation::{CloseHandle, HANDLE};
 use ::windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
-use ::windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
-    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
-};
+use ::windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
 use ::windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
 };
@@ -31,50 +26,11 @@ pub fn pipe(profile: &str) -> String {
 
 /// Serve programs asking for keys, each connection on its own thread.
 pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
-    let name = HSTRING::from(pipe(profile));
-    thread::Builder::new()
-        .name("keys".into())
-        .spawn(move || {
-            let mut first = true;
-            loop {
-                let flags = if first { PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE } else { PIPE_ACCESS_DUPLEX };
-                first = false;
-                // SAFETY: plain pipe creation; the handle is owned below.
-                let handle = unsafe {
-                    CreateNamedPipeW(
-                        &name,
-                        flags,
-                        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                        PIPE_UNLIMITED_INSTANCES,
-                        BUFFER,
-                        BUFFER,
-                        0,
-                        None,
-                    )
-                };
-                if handle.is_invalid() {
-                    eprintln!("keyhandoff: no key pipe: {}", ::windows::core::Error::from_thread());
-                    return;
-                }
-                // SAFETY: a client may connect between create and connect; that is ERROR_PIPE_CONNECTED.
-                let connected = match unsafe { ConnectNamedPipe(handle, None) } {
-                    Ok(()) => true,
-                    Err(e) => e.code() == ERROR_PIPE_CONNECTED.to_hresult(),
-                };
-                let peer = if connected { peer(handle) } else { None };
-                let Some(peer) = peer else {
-                    // SAFETY: we own the handle.
-                    let _ = unsafe { CloseHandle(handle) };
-                    continue;
-                };
-                // SAFETY: the File takes ownership of the handle and closes it.
-                let stream = unsafe { File::from_raw_handle(handle.0) };
-                let serve = serve.clone();
-                let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
-            }
-        })
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    super::pipe::serve(&pipe(profile), true, BUFFER, "keys", move |stream| {
+        let Some(peer) = peer(HANDLE(stream.as_raw_handle())) else { return };
+        let serve = serve.clone();
+        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+    })
 }
 
 /// The process on the other end of the pipe.

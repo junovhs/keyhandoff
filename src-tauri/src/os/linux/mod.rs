@@ -17,6 +17,7 @@ pub use protect::master_key;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
 /// Create a directory only this user can enter.
@@ -54,6 +55,20 @@ mod tests {
         assert!(!clipboard_apps().contains(&"CopyQ".to_string()));
         fs::remove_dir_all(dir).unwrap();
     }
+}
+
+/// Serve a Unix socket at `path`, only this user can connect, on a thread
+/// called `thread`, handing each client to `on_client`. Launch forwarding and
+/// key requests share this. A stale socket from an earlier run is replaced.
+fn serve_socket(path: &Path, thread: &str, mut on_client: impl FnMut(UnixStream) + Send + 'static) -> Result<(), String> {
+    let _ = fs::remove_file(path);
+    let listener = UnixListener::bind(path).map_err(|e| e.to_string())?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+    std::thread::Builder::new()
+        .name(thread.into())
+        .spawn(move || listener.incoming().flatten().for_each(&mut on_client))
+        .map(drop)
+        .map_err(|e| e.to_string())
 }
 
 /// Per-login memory-backed directory (`$XDG_RUNTIME_DIR`), wiped at logout.

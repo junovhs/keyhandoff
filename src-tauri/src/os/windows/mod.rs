@@ -8,6 +8,7 @@ mod clipboard;
 mod drag;
 mod instance;
 mod keys;
+mod pipe;
 mod protect;
 
 pub use capture::arm_capture;

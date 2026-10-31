@@ -4,8 +4,7 @@
 
 use std::fs;
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::thread;
 
@@ -17,21 +16,11 @@ pub fn socket(profile: &str) -> PathBuf {
 
 /// Serve programs asking for keys, each connection on its own thread.
 pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
-    let path = socket(profile);
-    let _ = fs::remove_file(&path);
-    let listener = UnixListener::bind(&path).map_err(|e| e.to_string())?;
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
-    thread::Builder::new()
-        .name("keys".into())
-        .spawn(move || {
-            for stream in listener.incoming().flatten() {
-                let Some(peer) = peer(&stream) else { continue };
-                let serve = serve.clone();
-                let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
-            }
-        })
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    super::serve_socket(&socket(profile), "keys", move |stream| {
+        let Some(peer) = peer(&stream) else { return };
+        let serve = serve.clone();
+        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+    })
 }
 
 /// The connected process, if it runs as this user.
