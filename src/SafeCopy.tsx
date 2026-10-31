@@ -207,6 +207,7 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
             ? `Your key is filed under ${safe.for_name} too.`
             : "The file is deleted when you close this."}
       </p>
+      {safe.message && <p className="help center low">{safe.message}</p>}
     </>
   );
 }

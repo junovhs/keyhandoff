@@ -63,7 +63,8 @@ enum Safe {
     /// Caught and wiped from the clipboard; waiting for a name and a keep-time.
     Caught { secret: Secret, note: Option<String> },
     /// `team`: sealed to every member of a team rather than one person.
-    Sealed { for_name: String, team: bool, file: PathBuf, text: String },
+    /// `used_up`: whose card that send used up, to ask them for a new one.
+    Sealed { for_name: String, team: bool, file: PathBuf, text: String, used_up: Option<String> },
 }
 
 /// The answer to a program asking for kept keys.
@@ -287,7 +288,7 @@ impl Handoff {
         let t = now();
         let contact = core.contacts.iter_mut().find(|c| hex32(&c.identity) == contact_id).ok_or("That contact is no longer here.")?;
         contact.locks.retain(|l| Request::parse(l).is_ok_and(|r| !r.is_expired(t)));
-        let name = contact.name.clone();
+        let (name, contact_identity) = (contact.name.clone(), contact.identity);
         // A random lock: if one card copy reached several people, two of
         // them are unlikely to pick the same lock.
         let lock = (!contact.locks.is_empty()).then(|| contact.locks[OsRng.next_u32() as usize % contact.locks.len()].clone());
@@ -301,7 +302,8 @@ impl Handoff {
         let text = armor::sealed_text(&sealed, &name);
         let file = core.outbox.join(file_name("Key for", &name));
         os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
-        core.safe = Safe::Sealed { for_name: name, team: false, file, text };
+        let used_up = core.used_up(&[contact_identity]);
+        core.safe = Safe::Sealed { for_name: name, team: false, file, text, used_up };
         Ok(())
     }
 
@@ -316,7 +318,8 @@ impl Handoff {
         let (file, text) = core.seal_bundle(&team, &label, &secret)?;
         core.vault.set_team(parse_id(key_id)?, &team.name);
         core.store.save_vault(&core.vault)?;
-        core.safe = Safe::Sealed { for_name: team.name, team: true, file, text };
+        let used_up = core.used_up(&team.members);
+        core.safe = Safe::Sealed { for_name: team.name, team: true, file, text, used_up };
         Ok(())
     }
 
@@ -857,6 +860,18 @@ impl Core {
         Ok(())
     }
 
+    /// After a send: "Ask Ann for a new card." when it took the last lock of
+    /// any of these contacts' cards.
+    fn used_up(&self, identities: &[[u8; 32]]) -> Option<String> {
+        let names: Vec<String> =
+            self.contacts.iter().filter(|c| identities.contains(&c.identity) && c.locks.is_empty()).map(|c| c.name.clone()).collect();
+        match names.as_slice() {
+            [] => None,
+            [one] => Some(format!("That was the last key {one}'s card could take. Ask {one} for a new one.")),
+            [rest @ .., last] => Some(format!("That used up the cards of {} and {last}. Ask each of them for a new one.", rest.join(", "))),
+        }
+    }
+
     fn contact_view(&self, c: &Contact) -> ContactView {
         let computer = PublicIdentity::from_bytes(c.identity).map(|p| p.fingerprint()).unwrap_or_default();
         ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len() }
@@ -980,8 +995,9 @@ impl Core {
             Safe::TimedOut => base("timeout"),
             Safe::Failed { message } => SafeView { message: Some(message.clone()), ..base("failed") },
             Safe::Caught { note, .. } => SafeView { message: note.clone(), ..base("caught") },
-            Safe::Sealed { for_name, team, file, .. } => SafeView {
+            Safe::Sealed { for_name, team, file, used_up, .. } => SafeView {
                 for_name: Some(for_name.clone()),
+                message: used_up.clone(),
                 for_team: *team,
                 file_name: Some(display_name(file)),
                 ..base("sealed")
@@ -1331,6 +1347,33 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_file(bundle);
+    }
+
+    #[test]
+    fn the_send_that_uses_up_a_card_says_to_ask_for_a_new_one() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ben, ann, priya) = (app("Ben"), app("Ann"), app("Priya"));
+        let (ann_id, priya_id) = (give_card(&ann, &ben), give_card(&priya, &ben));
+        let team = ben.handoff.save_team(None, "Platform", &[ann_id.clone(), priya_id]).unwrap();
+        ben.handoff.lock().contacts.iter_mut().find(|c| c.name == "Ann").unwrap().locks.truncate(2);
+        let key = hold(&ben, "Dialpad", KEY);
+
+        ben.handoff.send_kept(&ann_id, &key).unwrap();
+        let safe = ben.handoff.view().safe;
+        assert_eq!(safe.message, None, "one send left: nothing to say yet");
+        ben.handoff.close_safe();
+
+        // The team send takes Ann's last lock.
+        ben.handoff.send_kept_to_team(&team, &key).unwrap();
+        let view = ben.handoff.view();
+        assert_eq!(view.contacts.iter().find(|c| c.name == "Ann").unwrap().sends_left, 0);
+        assert_eq!(view.safe.message.as_deref(), Some("That was the last key Ann's card could take. Ask Ann for a new one."));
+        ben.handoff.close_safe();
+        assert!(ben.handoff.send_kept(&ann_id, &key).unwrap_err().contains("Ask Ann for a new one"));
+
+        for a in [ben, ann, priya] {
+            let _ = fs::remove_dir_all(a.data);
+        }
     }
 
     #[test]

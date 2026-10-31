@@ -572,6 +572,11 @@ function ContactSheet({ contact, onSend }: { contact: ContactView; onSend: (c: C
   );
 }
 
+/** At this many sends left or fewer, Send a key marks the contact: time to ask for a new card. */
+const LOW_SENDS = 2;
+const runningLow = (c: ContactView) => c.sends_left <= LOW_SENDS;
+const sendsLeft = (c: ContactView) => (c.sends_left === 0 ? "card used up" : `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left`);
+
 /** Who Send a key sends to: a contact or a team. */
 type To = { team: boolean; id: string; name: string };
 
@@ -632,7 +637,12 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
                 <span className="key-ico"><Icon name="users" /></span>
                 <span className="who">
                   <span className="nm">{t.name}</span>
-                  <span className="meta">{t.members.map((m) => m.name).join(", ")}</span>
+                  <span className="meta">
+                    {t.members.map((m) => m.name).join(", ")}
+                    {t.members.filter(runningLow).map((m) => (
+                      <span key={m.id} className="low"> · {m.name}: {sendsLeft(m)}</span>
+                    ))}
+                  </span>
                 </span>
               </button>
               <button className="use always" onClick={() => onEdit(t)}>Edit</button>
@@ -650,7 +660,9 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
                 <span className="who">
                   <span className="nm">{c.name}</span>
                   <span className="meta">
-                    {c.sends_left > 0 ? `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left` : "Card used up: ask for a new one"}
+                    <span className={runningLow(c) ? "low" : ""}>
+                      {c.sends_left > 0 ? sendsLeft(c) : "Card used up: ask for a new one"}
+                    </span>
                     {" · "}
                     <span className="mono">{c.computer}</span>
                   </span>

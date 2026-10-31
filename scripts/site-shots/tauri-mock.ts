@@ -62,6 +62,11 @@ const SCENES: Record<string, Partial<View>> = {
   "home-team": { notice: "2 Platform keys from Ben are in your keys." },
   listening: { safe: safe("listening", null) },
   sealed: { name: "Ben", keys: [], safe: safe("sealed") },
+  "home-low": (() => {
+    const priya = { ...CONTACTS[1], sends_left: 2 };
+    return { name: "Ben", contacts: [ANN, priya], teams: [{ ...TEAMS[0], members: [ANN, priya] }] };
+  })(),
+  "sealed-used-up": { name: "Ben", keys: [], safe: { ...safe("sealed"), message: "That was the last key Ann's card could take. Ask Ann for a new one." } },
   accepted: { accepted: { ...KEYS[0], added_at: NOW } },
   "listening-you": { safe: safe("listening", null) },
   "caught-you": { safe: safe("caught", null) },
