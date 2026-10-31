@@ -20,7 +20,7 @@
 10. Keys move with copy-and-paste-style actions, not by dragging keys onto windows.
 11. Handoffs travel as `.handoff` files whose content is armored text. No links, and no feature that depends on a website.
 12. Accept and Add offer Once, 30 days or Keep, with the last choice preselected.
-13. One window. Safe Copy shows inside it, and only while it's on does the window go compact and stay on top.
+13. One window, one size. Safe Copy shows inside it and keeps the window's size; only while it's on does the window stay on top. Nothing jumps between screens: what stays the same keeps its place and size.
 14. Calm and plain: black ground, white type, one vibrant blue accent, ordinary buttons, quiet motion. Respect `prefers-reduced-motion`.
 
 ## Code

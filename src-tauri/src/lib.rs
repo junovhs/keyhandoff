@@ -16,23 +16,20 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, DragDropEvent, Emitter, LogicalSize, Manager, PhysicalSize, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, WebviewWindow, WindowEvent};
 
 use crate::core::{Answer, Clipboard, Handoff, View};
 use crate::store::Store;
 use crate::vault::Keep;
 
 const MAIN: &str = "main";
-/// The window's compact size while Safe Copy is on. The rest of the time the
-/// window is whatever size the person made it.
-const SAFE_SIZE: (f64, f64) = (400.0, 540.0);
 const EXPIRY_CHECK: Duration = Duration::from_secs(60);
 
 type H<'a> = State<'a, Arc<Handoff>>;
 
-/// Tell the screens to refresh. While Safe Copy is on, the window turns
-/// compact and stays above other apps so you can copy a key from them. A
-/// program asking for a key brings the window forward.
+/// Tell the screens to refresh. While Safe Copy is on, the window stays above
+/// other apps so you can copy a key from them; it keeps its size, so nothing
+/// jumps between screens. A program asking for a key brings the window forward.
 fn changed(app: &AppHandle) {
     let Some(handoff) = app.try_state::<Arc<Handoff>>() else { return };
     let view = handoff.view();
@@ -51,20 +48,14 @@ fn changed(app: &AppHandle) {
     let _ = app.emit("changed", ());
 }
 
-/// The person's window size from before Safe Copy turned on, put back after.
-static SIZE_BEFORE_SAFE_COPY: Mutex<Option<PhysicalSize<u32>>> = Mutex::new(None);
+/// Whether Safe Copy last put the window on top, so it's only changed on the switch.
+static ON_TOP: Mutex<bool> = Mutex::new(false);
 
 fn set_safe_copy_mode(win: &WebviewWindow, on: bool) {
-    let mut before = SIZE_BEFORE_SAFE_COPY.lock().unwrap_or_else(|e| e.into_inner());
-    if on && before.is_none() {
-        *before = win.inner_size().ok();
-        let _ = win.set_always_on_top(true);
-        let _ = win.set_size(LogicalSize::new(SAFE_SIZE.0, SAFE_SIZE.1));
-    } else if !on {
-        if let Some(size) = before.take() {
-            let _ = win.set_always_on_top(false);
-            let _ = win.set_size(size);
-        }
+    let mut on_top = ON_TOP.lock().unwrap_or_else(|e| e.into_inner());
+    if *on_top != on {
+        *on_top = on;
+        let _ = win.set_always_on_top(on);
     }
     if on {
         let _ = win.unminimize();
