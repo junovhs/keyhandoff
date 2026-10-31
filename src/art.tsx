@@ -1,63 +1,67 @@
-// Art for the Calm look. Pixel art appears only in icon tiles at 3x or more,
-// at whole-number scales so edges stay crisp. Small UI icons are line icons:
-// tiny pixel icons read as grainy. Safe Copy's picture is chunky line art.
+// Art for the Calm look: chunky line art for screen subjects (Safe Copy's
+// picture, panel glyphs) and thin line icons for small UI.
 
 import { useRef, type PointerEvent } from "react";
 
-const ICONS = {
-  key: [12, 8, "M1 2h3v1h-3zM0 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h7v1h-7zM0 5h1v1h-1zM4 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM1 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1z"],
-  shield: [12, 11, "M1 0h10v1h-10zM0 1h12v2h-12zM0 3h5v1h-5zM7 3h5v1h-5zM0 4h4v2h-4zM8 4h4v2h-4zM0 6h5v1h-5zM7 6h5v1h-5zM1 7h10v1h-10zM2 8h8v1h-8zM3 9h6v1h-6zM5 10h2v1h-2z"],
-  sealed: [12, 10, "M1 0h10v1h-10zM1 1h1v8h-1zM10 1h1v8h-1zM3 2h6v1h-6zM3 4h4v1h-4zM5 6h3v1h-3zM4 7h5v1h-5zM5 8h3v1h-3zM1 9h10v1h-10z"],
-  clip: [10, 10, "M3 0h4v1h-4zM1 1h2v1h-2zM4 1h2v1h-2zM7 1h2v1h-2zM1 2h1v7h-1zM8 2h1v7h-1zM3 3h4v1h-4zM3 5h3v1h-3zM3 7h4v1h-4zM1 9h8v1h-8z"],
-  send: [10, 7, "M5 0h1v1h-1zM5 1h2v1h-2zM1 2h8v1h-8zM1 3h9v1h-9zM1 4h8v1h-8zM5 5h2v1h-2zM5 6h1v1h-1z"],
-  check: [11, 7, "M9 0h2v1h-2zM8 1h2v1h-2zM7 2h2v1h-2zM0 3h2v1h-2zM6 3h2v1h-2zM1 4h2v1h-2zM5 4h2v1h-2zM2 5h4v1h-4zM3 6h2v1h-2z"],
-  file: [10, 9, "M1 0h6v1h-6zM1 1h1v7h-1zM6 1h2v1h-2zM6 2h1v1h-1zM8 2h1v1h-1zM6 3h4v1h-4zM3 4h2v2h-2zM9 4h1v4h-1zM6 5h2v2h-2zM1 8h9v1h-9z"],
-  clock: [10, 9, "M3 0h4v1h-4zM1 1h2v1h-2zM7 1h2v1h-2zM1 2h1v1h-1zM4 2h1v2h-1zM8 2h1v1h-1zM0 3h1v3h-1zM9 3h1v3h-1zM4 4h3v1h-3zM1 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM7 7h2v1h-2zM3 8h4v1h-4z"],
-  close: [7, 7, "M0 0h1v1h-1zM6 0h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM3 3h1v1h-1zM2 4h1v1h-1zM4 4h1v1h-1zM1 5h1v1h-1zM5 5h1v1h-1zM0 6h1v1h-1zM6 6h1v1h-1z"],
-  minimize: [7, 7, "M0 3h7v1h-7z"],
-} as const;
-
-export type IconName = keyof typeof ICONS;
-
-/** A pixel icon at a whole-number scale, coloured by the surrounding text colour. */
-export function Px({ name, scale = 2 }: { name: IconName; scale?: number }) {
-  const [w, h, d] = ICONS[name];
-  return (
-    <svg className="px" viewBox={`0 0 ${w} ${h}`} width={w * scale} height={h * scale} shapeRendering="crispEdges" aria-hidden>
-      <path d={d} fill="currentColor" />
-    </svg>
-  );
-}
-
-/** The subject of a screen: a black pixel icon on a white tile. */
-export function Tile({ name, scale = 3, size = "md" }: { name: IconName; scale?: number; size?: "sm" | "md" | "lg" }) {
-  return (
-    <span className={`tile-ico ${size}`}>
-      <Px name={name} scale={scale} />
-    </span>
-  );
-}
-
 const FRONT = "M24 20H49L72 43V88H24Z";
+const FRONT_LINES = "M49 20V43H72M35 54H61M35 66H61";
 const CHECK = "M55 80L65 90L94 61";
+const LOCK_SHACKLE = "M70 70V63a8 8 0 0 1 16 0V70";
 
 /**
- * Safe Copy's picture, the same in listening and caught so nothing moves when
- * a key lands: two chunky pages that float gently, and a green check that
- * draws itself on when `caught`. The front page and the check each sit on a
- * ground-coloured outline that cuts a gap out of whatever is behind them.
+ * Safe Copy's picture, the same in every Safe Copy state so nothing moves:
+ * two chunky pages that float gently, and a mark in the corner. `check` draws
+ * a green check on when the key is caught; `lock` swaps it for a green lock
+ * once sealed; `missed` dims the pages when time runs out. Marks sit on a
+ * ground-coloured outline that cuts a gap out of the page behind them.
  */
-export function Pages({ caught }: { caught: boolean }) {
+export function Pages({ mark }: { mark: "none" | "check" | "lock" | "missed" }) {
   return (
-    <svg className={`pages ${caught ? "caught" : ""}`} viewBox="0 -2 100 100" width="160" height="160" aria-hidden>
+    <svg className={`pages ${mark}`} viewBox="0 -2 100 100" width="160" height="160" aria-hidden>
       <rect className="back" x="9" y="3" width="40" height="62" />
       <g className="front">
         <path className="cut" d={FRONT} />
         <path className="page" d={FRONT} />
-        <path className="line" d="M49 20V43H72M35 54H61M35 66H61" />
+        <path className="line" d={FRONT_LINES} />
         <path className="check-cut" d={CHECK} pathLength={1} />
         <path className="check" d={CHECK} pathLength={1} />
+        <g className="lock">
+          <rect className="lock-cut" x="60" y="56" width="36" height="40" rx="4" />
+          <path className="lock-shackle" d={LOCK_SHACKLE} />
+          <rect className="lock-body" x="64" y="70" width="28" height="22" rx="2.5" />
+        </g>
       </g>
+    </svg>
+  );
+}
+
+const GLYPH_MARKS = {
+  check: { d: CHECK, tone: "ok" },
+  send: { d: "M60 78H90M79 67L90 78L79 89", tone: "accent" },
+  key: { d: "M57 79a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M71 79H93M87 79V87", tone: "accent" },
+} as const;
+
+/**
+ * The subject of a panel, in the same chunky line style as Safe Copy's picture:
+ * a page (or a program window) with a coloured mark in its corner.
+ */
+export function Glyph({ mark, base = "page", size = 64 }: { mark: keyof typeof GLYPH_MARKS; base?: "page" | "window"; size?: number }) {
+  const { d, tone } = GLYPH_MARKS[mark];
+  return (
+    <svg className="glyph" viewBox="18 14 84 84" width={size} height={size} aria-hidden>
+      {base === "page" ? (
+        <>
+          <path className="page" d={FRONT} />
+          <path className="line" d={FRONT_LINES} />
+        </>
+      ) : (
+        <>
+          <rect className="page" x="22" y="24" width="62" height="54" />
+          <path className="line" d="M34 42L43 50L34 58M49 60H62" />
+        </>
+      )}
+      <path className="mark-cut" d={d} />
+      <path className={`mark ${tone}`} d={d} />
     </svg>
   );
 }

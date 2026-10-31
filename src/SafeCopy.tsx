@@ -13,23 +13,29 @@ import { enter } from "./motion";
  * differs between the two sits below the stage.
  */
 export function SafeCopy({ view }: { view: View }) {
-  const body = useRef<HTMLDivElement>(null);
   const below = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const state = view.safe.state;
-  const staged = state === "listening" || state === "caught";
+  const safe = view.safe;
 
-  // The stage never re-enters; the part below it fades in. The sealed file
-  // zooms in, and the remaining states rise.
+  // The stage never re-enters; only the part below it fades in.
   useLayoutEffect(() => {
     setError(null);
-    if (staged) void enter(below.current, "fade", 220);
-    else void enter(body.current, state === "sealed" ? "zoom" : "rise", state === "sealed" ? 420 : 300);
-  }, [state, staged]);
+    void enter(below.current, "fade", 220);
+  }, [state]);
 
   const run = async (p: Promise<unknown>) => setError(await attempt(p));
-  const safe = view.safe;
+  const missed = state === "timeout" || state === "failed";
+  const stage = {
+    listening: { mark: "none", title: "Copy your key", sub: <Countdown endsAt={safe.ends_at} /> },
+    caught: { mark: "check", title: "Caught", sub: "Clipboard wiped." },
+    sealed: { mark: "lock", title: "Sealed", sub: `Only ${safe.for_name}'s computer can open it.` },
+    timeout: { mark: "missed", title: "Time ran out", sub: "Nothing was read." },
+    failed: { mark: "missed", title: "Stopped", sub: "Nothing was caught." },
+    off: { mark: "none", title: "", sub: "" },
+  } as const;
+  const { mark, title, sub } = stage[state];
 
   return (
     <div className={`safe ${state}`}>
@@ -38,45 +44,35 @@ export function SafeCopy({ view }: { view: View }) {
         <b>Safe Copy</b>
         {safe.for_name && <span>for {safe.for_name}</span>}
       </div>
-      {staged ? (
-        <div className="safe-body">
-          <div className="safe-stage">
-            <Pages caught={state === "caught"} />
-            <h2 className="display">{state === "caught" ? "Caught" : "Copy your key"}</h2>
-            <p className="sub">{state === "caught" ? "Clipboard wiped." : <Countdown endsAt={safe.ends_at} />}</p>
-          </div>
-          <div key={state} ref={below} className="below">
-            {state === "listening" ? <Listening safe={safe} info={info} /> : <Caught view={view} run={run} />}
-            {error && <p className="err">{error}</p>}
-          </div>
-          {/* Outside the part that swaps, so Cancel never moves or changes. */}
-          <div className="btn-row safe-foot">
-            {state === "listening" && (
-              <button className="link" onClick={() => setInfo(!info)} aria-expanded={info}>
-                {info ? "Hide" : "How it works"}
-              </button>
-            )}
-            <span className="grow-space" />
-            <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
-          </div>
+      <div className="safe-body">
+        <div className="safe-stage">
+          <Pages mark={mark} />
+          <h2 className="display">{title}</h2>
+          <p className="sub">{sub}</p>
         </div>
-      ) : (
-        <div key={state} ref={body} className="safe-body">
-          {(state === "timeout" || state === "failed") && (
+        <div key={state} ref={below} className="below">
+          {state === "listening" && <Listening safe={safe} info={info} />}
+          {state === "caught" && <Caught view={view} run={run} />}
+          {state === "sealed" && <Sealed safe={safe} run={run} />}
+          {missed && (
             <>
-              <h2 className="title">{state === "timeout" ? "Time ran out" : "Safe Copy stopped"}</h2>
-              <p className="help">{safe.message ?? "Nothing was caught. The clipboard was not read."}</p>
-              <span className="grow-space" />
-              <div className="btn-row">
-                <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
-                <button className="btn primary small grow" onClick={() => void run(api.retry())}>Try again</button>
-              </div>
+              {state === "failed" && safe.message && <p className="help center">{safe.message}</p>}
+              <button className="btn primary" onClick={() => void run(api.retry())}>Try again</button>
             </>
           )}
-          {state === "sealed" && <Sealed safe={safe} run={run} />}
           {error && <p className="err">{error}</p>}
         </div>
-      )}
+        {/* Outside the part that swaps, so this button never moves. */}
+        <div className="btn-row safe-foot">
+          {state === "listening" && (
+            <button className="link" onClick={() => setInfo(!info)} aria-expanded={info}>
+              {info ? "Hide" : "How it works"}
+            </button>
+          )}
+          <span className="grow-space" />
+          <button className="btn secondary small" onClick={() => void api.closeSafe()}>{state === "sealed" ? "Done" : "Cancel"}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -183,20 +179,16 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
   const drag = useDragOut(() => void run(api.dragOut("sealed")));
   return (
     <>
-      <div className="hero">
-        <h2 className="title">Sealed for {safe.for_name}.</h2>
-        <p className="help">Only {safe.for_name}'s computer can open it. This computer keeps nothing.</p>
+      <div className="file-row">
+        <div className="chip grab" {...drag}>
+          <Icon name="file" />
+          <span className="mono">{safe.file_name}</span>
+        </div>
+        <button className="btn primary" onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
+          {copied ? "Copied" : "Copy"}
+        </button>
       </div>
-      <div className="chip grab" {...drag}>
-        <Icon name="file" />
-        <span className="mono">{safe.file_name}</span>
-      </div>
-      <button className="btn primary" onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
-        {copied ? "Copied" : "Copy sealed file"}
-      </button>
-      <p className="help">{copied ? `Paste it into your chat with ${safe.for_name}.` : `Then paste it into your chat with ${safe.for_name}.`}</p>
-      <span className="grow-space" />
-      <button className="btn secondary small" onClick={() => void api.closeSafe()}>Done</button>
+      <p className="help center">{copied ? "Now paste it into your chat." : "This computer keeps nothing."}</p>
     </>
   );
 }

@@ -56,17 +56,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .err { margin: 0; font-size: 13px; color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; }
 
 /* tiles: the subject of a screen, a black pixel icon on white */
-.tile-ico { display: grid; place-items: center; background: var(--accent-grad); color: #fff; flex-shrink: 0; }
-.tile-ico.sm { width: 36px; height: 36px; border-radius: 9px; }
-.tile-ico.md { width: 48px; height: 48px; border-radius: 11px; }
-.tile-ico.lg { width: 56px; height: 56px; border-radius: 12px; }
 
 /* frameless window chrome: the title area drags the window */
 .app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr; }
 /* The window is frameless and black, so a faint hairline keeps its edge
    visible against dark backgrounds. Drawn on top so sheets and Safe Copy,
    which cover the window's sides, never hide it. */
-.app::after { content: ""; position: absolute; inset: 0; z-index: 10; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+.app::after { content: ""; position: absolute; inset: 0; z-index: 10; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
 .titlebar { display: flex; align-items: center; height: 48px; padding: 0 8px 0 20px; gap: 10px; }
 .titlebar .name { flex: 1; font-size: 15px; font-weight: 600; }
 .titlebar button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); }
@@ -118,7 +114,7 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .foot input { font: inherit; color: var(--text); background: var(--ground); border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px 8px; width: 140px; user-select: text; }
 
 /* toast */
-.toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; background: var(--raised); color: var(--text); border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; padding: 11px 16px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .6); animation: up calc(.3s / var(--tempo)) var(--ease); z-index: 3; text-align: left; }
+.toast { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; background: var(--raised); color: var(--text); border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; padding: 11px 16px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .6); animation: up calc(.3s / var(--tempo)) var(--ease); z-index: 3; text-align: left; }
 .toast .icon { color: var(--accent-ink); }
 .toast.bad { border-color: var(--text-3); }
 @keyframes up { from { opacity: 0; transform: translate(-50%, 12px); } }
@@ -158,9 +154,13 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .safe-stage .sub { margin: 0; font-size: 18px; color: var(--text-2); }
 .below { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .help.center { align-self: center; text-align: center; }
+.file-row { display: flex; gap: 8px; }
+.file-row .chip { flex: 1; min-width: 0; }
+.file-row .btn { flex-shrink: 0; min-width: 96px; }
 .safe-foot { min-height: 36px; flex-shrink: 0; }
+.safe-foot .btn { min-width: 84px; justify-content: center; }
 
-/* The pages float gently, the back one half a beat behind. The check draws on
+/* While listening, the pages float gently, the back one half a beat behind. The check draws on
    when the key is caught, on a cut that separates it from the page. */
 .pages { overflow: visible; }
 .pages .back, .pages .page, .pages .line { fill: none; stroke: var(--text); stroke-width: 5.5; stroke-linejoin: miter; }
@@ -169,10 +169,30 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .pages .check, .pages .check-cut { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
 .pages .check { stroke: var(--ok); stroke-width: 9; filter: drop-shadow(0 0 5px rgba(47, 213, 103, .6)); }
 .pages .check-cut { stroke: var(--ground); stroke-width: 17; }
-.pages.caught .check, .pages.caught .check-cut { stroke-dashoffset: 0; transition: stroke-dashoffset calc(.36s / var(--tempo)) cubic-bezier(.3, .7, .2, 1); }
+.pages .check, .pages .check-cut { transition: stroke-dashoffset calc(.36s / var(--tempo)) cubic-bezier(.3, .7, .2, 1); }
+.pages.check .check, .pages.check .check-cut { stroke-dashoffset: 0; }
+.pages .lock { opacity: 0; transition: opacity calc(.3s / var(--tempo)) ease-out; }
+.pages.lock .lock { opacity: 1; }
+.pages .lock-cut { fill: var(--ground); }
+.pages .lock-shackle { fill: none; stroke: var(--ok); stroke-width: 6; }
+.pages .lock-body { fill: var(--ok); filter: drop-shadow(0 0 5px rgba(47, 213, 103, .6)); }
+.pages .back, .pages .front { transition: opacity calc(.3s / var(--tempo)) ease-out; }
+.pages.missed .back, .pages.missed .front { opacity: .35; }
+
+/* Panel subjects: a page or window with a coloured mark, in the same line style. */
+.glyph { flex-shrink: 0; overflow: visible; }
+.glyph .page, .glyph .line { fill: none; stroke: var(--text); stroke-width: 6; stroke-linejoin: miter; }
+.glyph .mark, .glyph .mark-cut { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.glyph .mark-cut { stroke: var(--ground); stroke-width: 18; }
+.glyph .mark { stroke-width: 9; }
+.glyph .mark.ok { stroke: var(--ok); filter: drop-shadow(0 0 4px rgba(47, 213, 103, .6)); }
+.glyph .mark.accent { stroke: var(--accent-ink); filter: drop-shadow(0 0 4px rgba(107, 149, 255, .6)); }
 .pages .back { animation: float calc(2.8s / var(--tempo)) ease-in-out calc(-1.4s / var(--tempo)) infinite alternate; }
 .pages .front { animation: float calc(2.8s / var(--tempo)) ease-in-out infinite alternate; }
 @keyframes float { to { transform: translateY(-2px); } }
+/* Once there's a mark, the pages hold still where they are (pausing, not
+   stopping, so they don't jump back). */
+.pages:not(.none) .back, .pages:not(.none) .front { animation-play-state: paused; }
 .safe-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .safe-body .grow-space { flex: 1; }
 .asking { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }

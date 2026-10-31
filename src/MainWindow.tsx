@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Icon, Logo, Tile, useDragOut } from "./art";
+import { Glyph, Icon, Logo, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, useView, type Keep, type KeyView, type ProgramView, type View } from "./ipc";
 import { enter, stagger } from "./motion";
 import { SafeCopy } from "./SafeCopy";
@@ -267,15 +267,14 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
   return (
     <div className="sheet" ref={sheet}>
       <div className="head">
-        <Tile name="sealed" size="lg" />
+        <Glyph mark="check" />
         <div>
           <span className="lede">{item.from ? `${item.from} sent you a key` : "Your key"}</span>
           <h2 className="display md">{item.label}</h2>
         </div>
       </div>
       <div className="keep-block">
-        <span className="label">Keep it for</span>
-        <div className="segmented">
+        <div className="keep-buttons" role="group" aria-label="How long to keep it">
           {KEEP_CHOICES.map((c) => (
             <button
               key={c.keep}
@@ -283,6 +282,7 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
               aria-pressed={item.keep === c.keep}
               onClick={() => void run(api.setKeep(item.id, c.keep).then(api.dismiss))}
             >
+              <Icon name={c.icon} />
               {c.label}
             </button>
           ))}
@@ -304,7 +304,7 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
   return (
     <div className="sheet" ref={sheet}>
       <div className="head">
-        <Tile name="key" size="lg" />
+        <Glyph base="window" mark="key" />
         <div>
           <span className="lede">A program wants {one ? "a key" : `${program.keys.length} keys`}</span>
           <h2 className="display md">{program.name}</h2>
@@ -342,7 +342,7 @@ function AskSheet({ fileName, computer, run }: { fileName: string; computer: str
   useEffect(() => void enter(sheet.current, "rise", 360), [fileName]);
   return (
     <div className="sheet" ref={sheet}>
-      <Tile name="send" size="lg" />
+      <Glyph mark="send" />
       <div className="hero">
         <h2 className="display md">Request copied.</h2>
         <p className="lede">Paste it into a chat with the person who has the key. It holds no secret, so any chat is fine.</p>
