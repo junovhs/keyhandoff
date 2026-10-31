@@ -81,6 +81,15 @@ export function MainWindow() {
       <header className="titlebar" data-tauri-drag-region>
         <Logo />
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
+        {gate?.update && (
+          <button
+            className="update"
+            title={`KeyHandoff ${gate.update.version} is downloaded and verified.${gate.update.asks_password ? " Installing asks for your password." : ""} Restarting locks KeyHandoff.`}
+            onClick={() => void run(gateApi.updateNow())}
+          >
+            Restart to update
+          </button>
+        )}
         {open && view && !view.remembered && (
           <button aria-label="Lock" title="Lock KeyHandoff" onClick={() => void run(gateApi.lock())}>
             <Icon name="lock" />

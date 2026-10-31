@@ -1,0 +1,42 @@
+name: refresh-site
+# Called after a release is published; run it by hand to repair a missed refresh.
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        required: true
+    secrets:
+      CLOUDFLARE_SITE_DEPLOY_HOOK:
+        required: true
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Latest stable release tag (leave blank to discover it)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-site
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Trigger Cloudflare and verify fresh live release downloads
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CLOUDFLARE_SITE_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_HOOK }}
+        run: node scripts/refresh-site.mjs

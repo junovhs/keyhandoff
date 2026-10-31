@@ -108,6 +108,8 @@ export interface GateView {
   /** A TPM PIN unlocks it, so the lock screen asks for that first. */
   pin: boolean;
   min_pin: number;
+  /** A signed update, downloaded and waiting for a restart. */
+  update: { version: string; asks_password: boolean } | null;
 }
 
 // The passphrase and recovery code are the one thing typed or shown here
@@ -124,6 +126,8 @@ export const gateApi = {
   recoveryDone: () => invoke<void>("recovery_done"),
   lock: () => invoke<void>("lock"),
   remember: (on: boolean) => invoke<void>("remember", { on }),
+  /** Install the waiting update and restart into it. */
+  updateNow: () => invoke<void>("update_now"),
   setLockAfter: (minutes: number | null) => invoke<void>("set_lock_after", { minutes }),
 };
 

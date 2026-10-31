@@ -68,6 +68,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .titlebar .name { flex: 1; font-size: 15px; font-weight: 600; }
 .titlebar button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); }
 .titlebar button:hover { background: var(--raised); color: var(--text); }
+.titlebar button.update { width: auto; padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); }
 
 /* home */
 .stage { position: relative; display: flex; flex-direction: column; gap: 16px; padding: 12px 20px 16px; min-height: 0; overflow: hidden; }

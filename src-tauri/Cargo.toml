@@ -22,6 +22,7 @@ chacha20poly1305 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
 argon2 = "0.5"
+tauri-plugin-updater = "2"
 
 [dev-dependencies]
 # The pointer loader test compares a hash the script prints.

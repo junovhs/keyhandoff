@@ -13,6 +13,7 @@ mod session;
 mod slots;
 mod store;
 mod tpm;
+mod update;
 mod vault;
 
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ use zeroize::Zeroizing;
 
 use crate::core::{Answer, Clipboard, Handoff, View};
 use crate::session::Session;
+use crate::update::{UpdateView, Updates};
 use crate::vault::Keep;
 
 const MAIN: &str = "main";
@@ -125,10 +127,12 @@ struct GateView {
     /// A TPM PIN unlocks it, so the lock screen asks for that first.
     pin: bool,
     min_pin: usize,
+    /// A signed update, downloaded and waiting for a restart.
+    update: Option<UpdateView>,
 }
 
 #[tauri::command]
-fn gate(s: S) -> GateView {
+fn gate(s: S, updates: State<'_, Arc<Updates>>) -> GateView {
     let (state, migrating) = s.state();
     GateView {
         state,
@@ -137,7 +141,14 @@ fn gate(s: S) -> GateView {
         min_passphrase: slots::MIN_PASSPHRASE,
         pin: s.has_pin(),
         min_pin: slots::MIN_PIN,
+        update: updates.view(),
     }
+}
+
+/// Restart to update: install the waiting update now.
+#[tauri::command]
+fn update_now(app: AppHandle, updates: State<'_, Arc<Updates>>) -> Result<(), String> {
+    updates.install(&app)
 }
 
 /// Five random words to use as the passphrase.
@@ -429,11 +440,14 @@ pub fn run() {
     if os::forward_to_running(&args.profile, &args.files) {
         return;
     }
+    let updates = Arc::new(Updates::default());
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Started(started))
+        .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
             gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
-            forget, copy_pointer, set_name, answer, dismiss, ready
+            forget, copy_pointer, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -464,6 +478,15 @@ pub fn run() {
             });
             if let Err(e) = os::listen_for_keys(&args.profile, serve) {
                 eprintln!("keyhandoff: programs can't ask for keys: {e}");
+            }
+
+            update::watch(handle.clone(), updates, session.clone(), changed);
+
+            // Linux panels draw the window's own icon. Without this the window has
+            // none and the panel scales up a small fallback, which looks blurry.
+            // It's the first PNG in bundle.icon, the 256px one.
+            if let (Some(main), Some(icon)) = (handle.get_webview_window(MAIN), app.default_window_icon()) {
+                let _ = main.set_icon(icon.clone());
             }
 
             open_files(&handle, &args.files, false);

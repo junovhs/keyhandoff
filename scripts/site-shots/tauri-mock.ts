@@ -81,7 +81,7 @@ const SCENES: Record<string, Partial<View>> = {
   timeout: { safe: safe("timeout", null) },
 };
 
-const OPEN: GateView = { state: "open", migrating: false, recovery: null, min_passphrase: 12, pin: false, min_pin: 4 };
+const OPEN: GateView = { state: "open", migrating: false, recovery: null, min_passphrase: 12, pin: false, min_pin: 4, update: null };
 
 // Before the vault opens: the scenes with no view.
 const GATES: Record<string, Partial<GateView>> = {
@@ -90,6 +90,7 @@ const GATES: Record<string, Partial<GateView>> = {
   recovery: { recovery: "7K2Q-9MXD-4RTV-HB3N-0PWE-6YJC-8FAZ-2KGS" },
   locked: { state: "locked" },
   "locked-pin": { state: "locked", pin: true },
+  "home-update": { update: { version: "0.1.1", asks_password: false } },
 };
 
 const scene = new URLSearchParams(location.search).get("s") ?? "home";

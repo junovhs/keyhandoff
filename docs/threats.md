@@ -22,7 +22,9 @@ KeyHandoff is pre-release and has not had a security audit. This page lists what
 - **Each kept key is bound to its entry.** Moving one key's ciphertext onto another entry makes it fail to open. Test: [`swapped_ciphertext_does_not_open`](../src-tauri/src/vault.rs).
 - **Keys aren't shown.** The screens get names, states and ids only, never a value, and there's no way to reveal a key in normal use. Test: [`a_card_lets_ben_send_ann_saved_keys_each_opening_once`](../src-tauri/src/core.rs) checks that no value reaches the screens. Rules 6 and 8.
 - **Secret values aren't printed in logs.** Debug output of a payload never includes the secret. Test: [`debug_never_prints_the_secret`](../crates/seal/tests/seal.rs).
-- **No servers, accounts, telemetry or network code.** Rule 6.
+- **No servers, accounts or telemetry.** The only network traffic is the update check below. Rule 6.
+- **Updates are signed, and nothing else installs.** An installed copy asks GitHub for the latest release's `latest.json` at launch and every six hours, and downloads a newer package. The updater installs it only if its signature checks out against the release key's public half, built into the app; a changed byte fails. Packages are signed in CI with a key kept as a GitHub Actions secret. Code: [`update.rs`](../src-tauri/src/update.rs). Rule 6.
+- **The update check shows GitHub that you run KeyHandoff.** GitHub sees your IP address and fetches the same file for everyone; nothing about you, your keys or your contacts is sent. Whoever holds the release key, and the GitHub account that publishes with it, can ship code to every installed copy: that's the price of fixing a flaw everywhere quickly. Copies built from source never check.
 
 ### When a program uses a key
 

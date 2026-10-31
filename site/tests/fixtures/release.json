@@ -1,0 +1,35 @@
+{
+  "release": {
+    "tag_name": "v0.1.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-10-31T22:00:00Z",
+    "assets": [
+      {
+        "name": "keyhandoff-0.1.0-windows-x64-setup.exe",
+        "state": "uploaded",
+        "size": 3100000,
+        "browser_download_url": "https://github.com/junovhs/keyhandoff/releases/download/v0.1.0/keyhandoff-0.1.0-windows-x64-setup.exe"
+      },
+      {
+        "name": "keyhandoff-0.1.0-linux-amd64.deb",
+        "state": "uploaded",
+        "size": 2950000,
+        "browser_download_url": "https://github.com/junovhs/keyhandoff/releases/download/v0.1.0/keyhandoff-0.1.0-linux-amd64.deb"
+      },
+      {
+        "name": "keyhandoff-0.1.0-linux-x86_64.AppImage",
+        "state": "uploaded",
+        "size": 83200000,
+        "browser_download_url": "https://github.com/junovhs/keyhandoff/releases/download/v0.1.0/keyhandoff-0.1.0-linux-x86_64.AppImage"
+      },
+      {
+        "name": "SHA256SUMS",
+        "state": "uploaded",
+        "size": 300,
+        "browser_download_url": "https://github.com/junovhs/keyhandoff/releases/download/v0.1.0/SHA256SUMS"
+      }
+    ]
+  },
+  "checksums": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  keyhandoff-0.1.0-windows-x64-setup.exe\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  keyhandoff-0.1.0-linux-amd64.deb\ncccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  keyhandoff-0.1.0-linux-x86_64.AppImage\n"
+}

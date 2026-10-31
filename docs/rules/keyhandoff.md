@@ -10,7 +10,7 @@
 ## Security
 
 5. Every key travels sealed to a one-time lock, from a request or a card. Each lock is destroyed when its key is opened, or when it runs out, so a sealed file opens once.
-6. No way to reveal a key on screen in normal use. Sending leaves nothing new on the sender's computer: you send keys you hold, and the sealed file is deleted when you close it. No servers, accounts or telemetry.
+6. No way to reveal a key on screen in normal use. Sending leaves nothing new on the sender's computer: you send keys you hold, and the sealed file is deleted when you close it. No servers, accounts or telemetry. The one network request is the update check: an installed copy asks GitHub for the latest release, and installs only packages signed with the release key.
 7. Safe Copy listens only when armed, catches one item, times out, and wipes the clipboard and its history.
 8. Secret values live only in Rust. The screens get names, states and ids. The one exception is what opens the vault: the passphrase you type and the recovery code shown once at setup pass through the screens and are never stored there.
 9. No browser extension. A key copied from a page is on the clipboard for the moment before the wipe, and we say so plainly. Never claim "never on the clipboard" or "you're safe".

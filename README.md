@@ -71,7 +71,7 @@ Typing a key into a field, without the clipboard, is still being built.
 
 ## What it protects, and what it doesn't
 
-Chat and email only ever carry a sealed file. Sending leaves nothing new on the sender's computer, a sealed file opens once, keys are encrypted on disk and never shown, and there are no servers, accounts, telemetry or network code.
+Chat and email only ever carry a sealed file. Sending leaves nothing new on the sender's computer, a sealed file opens once, keys are encrypted on disk and never shown, and there are no servers, accounts or telemetry. The only network request is the check for a signed update.
 
 It can't stop a program that's watching the clipboard from reading a key at the moment you copy it, or stop anything running as you from reaching the vault while it is unlocked. While it is locked, only your passphrase or recovery code opens it. A program you allow can do anything with the key it gets. **[docs/threats.md](docs/threats.md)** has the full list, with the test or design rule behind each claim.
 
@@ -80,6 +80,14 @@ The sender can't control what the receiver does with a key afterwards, and KeyHa
 ## Platforms
 
 Windows and Linux (X11). macOS and Wayland aren't supported.
+
+## Install
+
+Download it from **[keyhandoff.dev](https://keyhandoff.dev/#download)** or [GitHub releases](https://github.com/junovhs/keyhandoff/releases): a Windows installer, or a `.deb` or AppImage for Linux (X11). Installed copies check GitHub for a signed update at launch and every six hours. While KeyHandoff is locked, a Windows or AppImage update installs and restarts on its own; otherwise **Restart to update** shows in the title bar. A `.deb` update always waits for that click, because installing it asks for your password.
+
+## Release
+
+Set `version` in `src-tauri/Cargo.toml` and add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md). Once both are on `main`, [the release workflow](.github/workflows/release.yml) builds and signs the Windows installer, `.deb` and AppImage, publishes them on GitHub with `SHA256SUMS` and the updater's `latest.json`, and rebuilds keyhandoff.dev so its download links follow. It needs these repository secrets: `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the updater key; keep an offline copy, because without it installed copies can't be updated) and `CLOUDFLARE_SITE_DEPLOY_HOOK`.
 
 ## Build
 
