@@ -21,6 +21,8 @@ Typing a key into a field is still being built.
 
 ## What it protects, and what it doesn't
 
+The full list, with the test or design rule behind each claim, is in [docs/threats.md](docs/threats.md).
+
 **It removes the places a key normally lingers:**
 
 - Chat and email only ever carry a sealed file, which is useless to anyone else.

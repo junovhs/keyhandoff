@@ -59,7 +59,7 @@ When you accept a key you can keep it **once**, for **30 days**, or until you re
 - **The copy moment.** A copied key is on the clipboard, unencrypted, until the wipe. Another program watching the clipboard could read it.
 - **First contact trusts the channel.** If someone can post as you in a chat, they can request a key in your name. Check the name and fingerprint before you copy a key.
 - **A program you allowed** can do anything with the key once it has it. Anything running as you could also start that program in that folder, so the prompt is your decision, not a lock.
-- **Malware running as you.** See the [README](../README.md#what-it-protects-and-what-it-doesnt).
+- **Malware running as you.** See [threats.md](threats.md).
 - **No central revocation.** Replacing the key with the provider is the real fix.
 
 ## Not goals
