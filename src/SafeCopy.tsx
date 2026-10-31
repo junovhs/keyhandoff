@@ -89,13 +89,13 @@ function Countdown({ endsAt }: { endsAt: number }) {
   return <>From anywhere · {Math.ceil(left / 1000)}s</>;
 }
 
-/** Below the stage while listening: who is asking, clipboard apps and the info. */
+/** Below the stage while listening: who it's for, clipboard apps and the info. */
 function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
   return (
     <>
       {safe.for_computer && (
         <div className="asking">
-          <span>{safe.for_name} is asking</span>
+          <span>Sending to {safe.for_name}</span>
           <span className="mono">computer {safe.for_computer}</span>
         </div>
       )}

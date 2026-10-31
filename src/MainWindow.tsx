@@ -51,7 +51,8 @@ export function MainWindow() {
   const run = async (p: Promise<unknown>) => setError(await attempt(p));
   const win = getCurrentWindow();
   // A program waiting for Allow keeps its buttons clear.
-  const toast = view?.program ? null : (error ?? view?.notice ?? null);
+  const bad = error ?? view?.problem ?? null;
+  const toast = view?.program ? null : (bad ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
   const [sending, setSending] = useState(false);
 
@@ -79,8 +80,8 @@ export function MainWindow() {
       )}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
-        <button className={`toast ${error ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
-          {!error && <Icon name="check" />}
+        <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
+          {!bad && <Icon name="check" />}
           {toast}
         </button>
       )}

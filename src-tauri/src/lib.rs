@@ -185,7 +185,7 @@ fn open_files(app: &AppHandle, files: &[PathBuf], raise: bool) {
     let Some(handoff) = app.try_state::<Arc<Handoff>>() else { return };
     for file in files {
         if let Err(e) = handoff.open_path(file) {
-            handoff.notice(e);
+            handoff.problem(e);
         }
     }
     if !raise {

@@ -119,6 +119,8 @@ struct Core {
     /// The file you last shared (your card, or a one-off request).
     asked: Option<PathBuf>,
     notice: Option<String>,
+    /// Something went wrong outside a command, such as opening a file.
+    problem: Option<String>,
     /// People whose cards you opened.
     contacts: Vec<Contact>,
     /// The contact whose card was just opened, for the sheet that says so.
@@ -204,6 +206,7 @@ pub struct View {
     pub accepted: Option<KeyView>,
     pub asked: Option<String>,
     pub notice: Option<String>,
+    pub problem: Option<String>,
     pub program: Option<ProgramView>,
     pub contacts: Vec<ContactView>,
     /// Whose card was just opened.
@@ -231,6 +234,7 @@ impl Handoff {
             accepted: None,
             asked: None,
             notice: None,
+            problem: None,
             contacts,
             added: None,
             approvals,
@@ -550,10 +554,13 @@ impl Handoff {
         core.asked = None;
         core.added = None;
         core.notice = None;
+        core.problem = None;
     }
 
-    pub fn notice(&self, text: String) {
-        self.lock().notice = Some(text);
+    /// Report a problem the screens didn't ask about, such as a file that
+    /// couldn't be opened.
+    pub fn problem(&self, text: String) {
+        self.lock().problem = Some(text);
     }
 
     /// A program asks for kept keys by name (`handoff:Name` pointers). Keys
@@ -757,6 +764,7 @@ impl Core {
             accepted,
             asked: self.asked.as_ref().map(|p| display_name(p)),
             notice: self.notice.clone(),
+            problem: self.problem.clone(),
             program: self.program.as_ref().map(|a| self.program_view(a)),
             contacts: self.contacts.iter().map(|c| self.contact_view(c)).collect(),
             added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),

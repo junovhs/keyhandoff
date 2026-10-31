@@ -69,6 +69,8 @@ export interface View {
   accepted: KeyView | null;
   asked: string | null;
   notice: string | null;
+  /** Something went wrong outside a command, such as opening a file. */
+  problem: string | null;
   program: ProgramView | null;
   contacts: ContactView[];
   /** Whose card was just opened. */

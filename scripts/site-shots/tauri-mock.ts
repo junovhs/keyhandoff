@@ -38,6 +38,7 @@ const HOME: View = {
   accepted: null,
   asked: null,
   notice: null,
+  problem: null,
   program: null,
   contacts: CONTACTS,
   added: null,
