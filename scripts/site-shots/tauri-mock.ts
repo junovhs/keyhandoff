@@ -35,6 +35,7 @@ const HOME: View = {
   computer: "72ca77a8cc39c3ba",
   protection: "passphrase",
   remembered: false,
+  lock_after: 15,
   pin: false,
   tpm: "ready",
   keep: "keep",

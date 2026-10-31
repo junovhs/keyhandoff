@@ -137,6 +137,14 @@ impl Session {
         Ok(())
     }
 
+    /// Lock after `minutes` without activity from now on, or never; saved
+    /// for next time too.
+    pub fn set_lock_after(&self, minutes: Option<u32>, now: u64) -> Result<(), String> {
+        self.touch(now)?.set_lock_after(minutes)?;
+        *guard(&self.idle) = minutes.map(|m| Duration::from_secs(60 * m as u64));
+        Ok(())
+    }
+
     /// The open core, for something you did in the window: it counts as
     /// activity, so the idle lock waits.
     pub fn touch(&self, now: u64) -> Result<Arc<Handoff>, String> {
@@ -254,6 +262,29 @@ mod tests {
         assert!(session.wait_open(Duration::from_millis(20)).is_none());
         unlock(&session, 120_000);
         assert!(session.touch(120_001).is_ok());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn lock_after_set_in_the_window_applies_now_and_never_stops_it() {
+        let (session, dir) = session();
+        session.open(Box::new(|l, _| l.unlock(PASS)), 0).unwrap();
+        const MIN: u64 = 60_000;
+        assert!(!session.lock_if_idle(24 * 60 * MIN), "off by default");
+
+        session.set_lock_after(Some(15), 24 * 60 * MIN).unwrap();
+        let t = 24 * 60 * MIN;
+        assert!(!session.lock_if_idle(t + 14 * MIN));
+        assert!(session.lock_if_idle(t + 15 * MIN), "locks after 15 quiet minutes");
+
+        session.open(Box::new(|l, _| l.unlock(PASS)), t).unwrap();
+        assert!(session.current().is_some());
+        assert_eq!(session.current().unwrap().view().lock_after, Some(15), "saved: the next unlock keeps it");
+        assert!(session.lock_if_idle(t + 15 * MIN), "and applies it");
+
+        session.open(Box::new(|l, _| l.unlock(PASS)), t).unwrap();
+        session.set_lock_after(None, t).unwrap();
+        assert!(!session.lock_if_idle(t + 1000 * MIN), "Never stops it");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

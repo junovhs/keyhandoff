@@ -39,7 +39,7 @@ To keep a key of your own, click **Add a key**, copy the key on the provider's p
 
 KeyHandoff starts locked. The first time, you choose a passphrase, or take five suggested words, and write down the recovery code it shows once. After that, the passphrase opens it.
 
-It locks again when the computer sleeps, when the screen locks, and from the lock button in the title bar. To also lock after a quiet spell, set `lock_after_minutes` in the profile's `settings.json`. A program that asks for a key while it's locked brings the window forward and waits up to two minutes for you.
+It locks again when the computer sleeps, when the screen locks, and from the lock button in the title bar. To also lock after a quiet spell, pick **Lock after** (15 minutes or 1 hour) under Security. A program that asks for a key while it's locked brings the window forward and waits up to two minutes for you.
 
 **Security**, at the bottom of the home screen, has two options:
 

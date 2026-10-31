@@ -77,6 +77,8 @@ export interface View {
   protection: string;
   /** "Remember on this computer" is on: it opens without the passphrase. */
   remembered: boolean;
+  /** Minutes without use before it locks; null for never. */
+  lock_after: number | null;
   /** A TPM PIN unlocks it. */
   pin: boolean;
   /** This computer's TPM: ready, no-access (not in the tss group) or missing. */
@@ -124,6 +126,7 @@ export const gateApi = {
   recoveryDone: () => invoke<void>("recovery_done"),
   lock: () => invoke<void>("lock"),
   remember: (on: boolean) => invoke<void>("remember", { on }),
+  setLockAfter: (minutes: number | null) => invoke<void>("set_lock_after", { minutes }),
 };
 
 /** The gate, refreshed whenever the core reports a change. */

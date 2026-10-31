@@ -201,6 +201,11 @@ fn remember(app: AppHandle, s: S, on: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_lock_after(app: AppHandle, s: S, minutes: Option<u32>) -> Result<(), String> {
+    done(&app, s.set_lock_after(minutes, now_ms()))
+}
+
+#[tauri::command]
 fn lock(app: AppHandle, s: S) -> Result<(), String> {
     done(&app, s.lock())
 }
@@ -437,7 +442,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {

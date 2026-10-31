@@ -338,7 +338,7 @@ export const docs = defineDocs({
                   items: [
                     "**Lock now:** the lock icon in the title bar.",
                     "**Automatically:** when the computer sleeps or the screen locks.",
-                    "**After a quiet spell:** off by default. Set `lock_after_minutes` in the profile's `settings.json` to turn it on.",
+                    "**After a quiet spell:** off by default. Under Security, pick **Lock after**: 15 minutes or 1 hour. It applies straight away.",
                     "**Programs while locked:** a program asking for a key brings the window forward and waits up to {fact:unlockWait}.",
                   ],
                 },

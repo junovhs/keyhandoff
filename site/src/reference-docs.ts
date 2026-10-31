@@ -278,7 +278,7 @@ export const reference: DocReference = {
               { name: "keep", type: "\"once\" | \"days30\" | \"keep\"", description: "The keep time last chosen; the next default." },
               { name: "protection", type: "string", description: "`passphrase` once the profile has key slots." },
               { name: "remembered", type: "string | null", description: "The OS backend holding a copy of the master key, when Remember on this computer is on." },
-              { name: "lock_after_minutes", type: "number | null", default: "null", description: "Lock after this many minutes without use. Off by default." },
+              { name: "lock_after_minutes", type: "number | null", default: "null", description: "Lock after this many minutes without use. Off by default; set from Lock after under Security." },
             ] },
           ],
           code: [

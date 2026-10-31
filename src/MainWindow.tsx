@@ -320,7 +320,9 @@ const KEEP_HELP: Record<Keep, string> = {
 };
 
 /** Opening a sealed key: it unlocks itself, then one tap picks how long to keep it. */
-/** How the vault opens: the passphrase, or remembered on this computer. */
+/** The Lock after choices, in minutes; null is Never. */
+const LOCK_AFTER: [number | null, string][] = [[null, "Never"], [15, "15 minutes"], [60, "1 hour"]];
+
 /** How the vault opens: a TPM PIN, the passphrase, or remembered here. */
 function SecuritySheet({ view, run, onClose }: { view: View; run: Run; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
@@ -373,6 +375,17 @@ function SecuritySheet({ view, run, onClose }: { view: View; run: Run; onClose: 
             KeyHandoff asks when it starts, and again after the computer sleeps or the screen locks. While it's
             locked, no other program can open your keys.
           </p>
+          <div className="pin-block">
+            <span className="label">Lock after</span>
+            <div className="keep-buttons" role="group" aria-label="Lock after">
+              {LOCK_AFTER.map(([minutes, label]) => (
+                <button key={label} className={view.lock_after === minutes ? "pick" : ""} onClick={() => void run(gateApi.setLockAfter(minutes))}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="help">How long KeyHandoff stays open while you're not using it.</p>
+          </div>
           <div className="pin-block">
             <span className="label">PIN instead of the passphrase</span>
             {view.tpm === "missing" && (

@@ -221,6 +221,8 @@ pub struct View {
     pub protection: String,
     /// "Remember on this computer" is on: it opens without the passphrase.
     pub remembered: bool,
+    /// Minutes without use before it locks; none for never.
+    pub lock_after: Option<u32>,
     /// A TPM PIN unlocks it.
     pub pin: bool,
     /// The TPM: ready, no-access (not in the tss group) or missing.
@@ -683,6 +685,16 @@ impl Handoff {
         store.remember(settings, on, None)
     }
 
+    /// Lock after this many minutes with nothing done in the window, or never.
+    pub fn set_lock_after(&self, minutes: Option<u32>) -> Result<(), String> {
+        if minutes == Some(0) {
+            return Err("Pick a time, or Never.".into());
+        }
+        let mut core = self.lock();
+        core.settings.lock_after_minutes = minutes;
+        core.store.save_settings(&core.settings)
+    }
+
     /// Safe Copy is on, or a program is waiting for Allow: not a moment to lock.
     pub fn busy(&self) -> bool {
         let core = self.lock();
@@ -1039,6 +1051,7 @@ impl Core {
             computer: self.identity.public().fingerprint(),
             protection: self.settings.protection.clone().unwrap_or_default(),
             remembered: self.settings.remembered.is_some(),
+            lock_after: self.settings.lock_after_minutes,
             pin: self.store.has_pin(),
             tpm: match crate::tpm::available() {
                 crate::tpm::Status::Ready => "ready",
