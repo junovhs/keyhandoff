@@ -199,8 +199,8 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
               <span className="nm">{k.label}</span>
               <span className="meta">{k.from ? `From ${k.from}` : "Yours"} · {lifetime(k)}</span>
             </span>
-            <button className="use" onClick={() => void run(api.copyPointer(k.id))} title={`Copy handoff:${k.label} for a .env file`}>
-              Copy pointer
+            <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
+              Copy .env line
             </button>
             <button
               className={`forget ${armed === k.id ? "sure" : ""}`}

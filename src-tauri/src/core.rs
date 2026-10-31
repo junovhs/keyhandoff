@@ -441,16 +441,18 @@ impl Handoff {
         Ok(())
     }
 
-    /// Put a key's `handoff:Name` pointer on the clipboard. It names the key
-    /// without holding it, so it's fine in `.env` and on the clipboard.
+    /// Put a ready `.env` line for a key on the clipboard, such as
+    /// `DIALPAD_API_KEY=handoff:Dialpad`. It names the key without holding it,
+    /// so it's fine in `.env` and on the clipboard.
     pub fn copy_pointer(&self, id: &str) -> Result<(), String> {
         let id = parse_id(id)?;
         let label = {
             let core = self.lock();
             core.vault.items().iter().find(|i| i.id == id).map(|i| i.label.clone()).ok_or("That key is no longer here.")?
         };
-        (self.clipboard.text)(format!("handoff:{label}"))?;
-        self.lock().notice = Some(format!("Copied handoff:{label}"));
+        let line = env_line(&label);
+        (self.clipboard.text)(line.clone())?;
+        self.lock().notice = Some(format!("Copied {line}"));
         Ok(())
     }
 
@@ -729,6 +731,27 @@ fn file_name(prefix: &str, name: &str) -> String {
     format!("{prefix} {}.handoff", safe.trim_matches('.'))
 }
 
+/// A `.env` line pointing at a kept key: `Dialpad` gives
+/// `DIALPAD_API_KEY=handoff:Dialpad`. The value is quoted when the name has
+/// spaces or other characters a `.env` reader might split on.
+fn env_line(label: &str) -> String {
+    let words: Vec<String> =
+        label.split(|c: char| !c.is_ascii_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_ascii_uppercase).collect();
+    let mut var = words.join("_");
+    if !["KEY", "TOKEN", "SECRET", "PASSWORD"].iter().any(|end| var.ends_with(end)) {
+        var = if var.is_empty() { "API_KEY".into() } else { format!("{var}_API_KEY") };
+    }
+    if var.starts_with(|c: char| c.is_ascii_digit()) {
+        var = format!("KEY_{var}");
+    }
+    let pointer = format!("handoff:{label}");
+    if pointer.chars().all(|c| c.is_ascii_alphanumeric() || "_-.:".contains(c)) {
+        format!("{var}={pointer}")
+    } else {
+        format!("{var}=\"{}\"", pointer.replace('"', ""))
+    }
+}
+
 /// `/home/ann/proj` as `~/proj`.
 fn home_relative(path: &Path) -> String {
     match dirs::home_dir().and_then(|home| path.strip_prefix(home).ok().map(Path::to_path_buf)) {
@@ -907,7 +930,7 @@ mod tests {
         assert_eq!(view.keep, Keep::Once);
         assert!(!files_contain(&me.data, KEY));
         me.handoff.copy_pointer(&view.keys[0].id).unwrap();
-        assert_eq!(offered().1, "handoff:Anthropic", "the pointer, never the key, goes on the clipboard");
+        assert_eq!(offered().1, "ANTHROPIC_API_KEY=handoff:Anthropic", "a .env line, never the key, goes on the clipboard");
 
         // A timeout offers Try again for the same target.
         me.handoff.add().unwrap();
@@ -1020,14 +1043,17 @@ mod tests {
         }
         let me = app("Juno");
         let h = me.handoff.clone();
-        h.lock().vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+        h.lock().vault.add("Dialpad live", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
         let profile = format!("test-{}", OsRng.next_u32());
         let served = h.clone();
         os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
 
         let project = me.data.join("project");
         fs::create_dir_all(&project).unwrap();
-        fs::write(project.join(".env"), "DIALPAD_API_KEY=handoff:Dialpad\nOTHER=plain\n").unwrap();
+        // The project's .env holds exactly the line Copy pointer gives.
+        let line = env_line("Dialpad live");
+        assert_eq!(line, "DIALPAD_LIVE_API_KEY=\"handoff:Dialpad live\"");
+        fs::write(project.join(".env"), format!("{line}\nOTHER=plain\n")).unwrap();
         fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("../loaders").join(loader), project.join(loader)).unwrap();
         fs::write(project.join(script.0), script.1).unwrap();
         let run = || {
@@ -1035,7 +1061,7 @@ mod tests {
                 .arg(script.0)
                 .current_dir(&project)
                 .env("KEYHANDOFF_PROFILE", &profile)
-                .env_remove("DIALPAD_API_KEY")
+                .env_remove("DIALPAD_LIVE_API_KEY")
                 .output()
                 .unwrap();
             assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
@@ -1059,7 +1085,7 @@ mod tests {
         let reply = std::thread::scope(|s| {
             let asking = s.spawn(|| {
                 let mut conn = std::os::unix::net::UnixStream::connect(&sock).unwrap();
-                conn.write_all(b"{\"names\":[\"Dialpad\"]}\n").unwrap();
+                conn.write_all(b"{\"names\":[\"Dialpad live\"]}\n").unwrap();
                 let mut line = String::new();
                 BufReader::new(conn).read_line(&mut line).unwrap();
                 line
@@ -1077,14 +1103,14 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn python_loader_gets_the_key_through_the_socket() {
-        let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_API_KEY'].encode()).hexdigest())\n";
+        let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_LIVE_API_KEY'].encode()).hexdigest())\n";
         loader_gets_the_key_through_the_socket("python3", "keyhandoff_env.py", ("check.py", script));
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn node_loader_gets_the_key_through_the_socket() {
-        let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_API_KEY).digest(\"hex\"));\n";
+        let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\n";
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
     }
 
@@ -1094,6 +1120,10 @@ mod tests {
         assert_eq!(parse_id(&hex(&[7; 16])).unwrap(), [7; 16]);
         assert!(parse_id("zz").is_err());
         assert_eq!(clean_text("  Dialpad ", 64).as_deref(), Some("Dialpad"));
+        assert_eq!(env_line("Dialpad"), "DIALPAD_API_KEY=handoff:Dialpad");
+        assert_eq!(env_line("GitHub token"), "GITHUB_TOKEN=\"handoff:GitHub token\"");
+        assert_eq!(env_line("API key"), "API_KEY=\"handoff:API key\"");
+        assert_eq!(env_line("1Password"), "KEY_1PASSWORD=handoff:1Password");
         assert!(clean_text("a\nb", 64).is_none());
     }
 }
