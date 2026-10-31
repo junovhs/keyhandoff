@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon, useDragOut } from "./art";
-import { api, attempt, KEEP_CHOICES, type SafeState, type SafeView, type View } from "./ipc";
+import { api, attempt, KEEP_CHOICES, type KeyView, type SafeState, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
 
 const STATUS: Record<SafeState, string> = {
@@ -114,9 +114,11 @@ function Listening({ safe }: { safe: SafeView }) {
 
 /** Caught and wiped. Name it, then seal it (for someone) or pick a keep-time (for you). */
 function Caught({ view, run }: { view: View; run: Run }) {
-  const [label, setLabel] = useState("API key");
-  const input = useRef<HTMLInputElement>(null);
   const forSomeone = view.safe.for_name !== null;
+  // A key for you lands in your own vault, where names are unique.
+  const [label, setLabel] = useState(() => (forSomeone ? "API key" : freeName("API key", view.keys)));
+  const input = useRef<HTMLInputElement>(null);
+  const savedAs = forSomeone ? label : freeName(label, view.keys);
   useEffect(() => {
     input.current?.focus();
     input.current?.select();
@@ -143,6 +145,7 @@ function Caught({ view, run }: { view: View; run: Run }) {
           }}
         />
       </label>
+      {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
       {forSomeone ? (
         <button className="btn primary" onClick={() => void run(api.seal(label))}>
           Seal for {view.safe.for_name}
@@ -168,6 +171,16 @@ function Caught({ view, run }: { view: View; run: Run }) {
       <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
     </>
   );
+}
+
+/** Mirrors Vault::free_name: `label`, or `label 2`, `label 3`… when taken. */
+function freeName(label: string, keys: KeyView[]): string {
+  const base = label.trim();
+  const taken = (name: string) => keys.some((k) => k.label.trim().toLowerCase() === name.toLowerCase());
+  if (!taken(base)) return base;
+  let n = 2;
+  while (taken(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
 
 function Sealed({ safe, run }: { safe: SafeView; run: Run }) {

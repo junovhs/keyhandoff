@@ -335,6 +335,7 @@ impl Handoff {
             return Err("There is no caught key to keep.".into());
         };
         let secret = Secret::new(secret.expose().to_vec());
+        let label = core.vault.free_name(&label);
         core.vault.add(&label, None, None, &secret, keep, now());
         core.store.save_vault(&core.vault)?;
         core.remember_keep(keep)?;

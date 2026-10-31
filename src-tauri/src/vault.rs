@@ -75,19 +75,39 @@ impl Vault {
         &self.items
     }
 
-    /// Seal and store a secret. Returns the new item's id.
+    /// `label`, or `label 2`, `label 3`… when a kept key already has that
+    /// name. Names compare case-insensitively after trimming, so a
+    /// `handoff:Name` pointer always names exactly one key.
+    pub fn free_name(&self, label: &str) -> String {
+        let base = label.trim();
+        let taken = |name: &str| self.items.iter().any(|i| same_name(&i.label, name));
+        if !taken(base) {
+            return base.to_string();
+        }
+        (2..).map(|n| format!("{base} {n}")).find(|name| !taken(name)).expect("some numbered name is free")
+    }
+
+    /// The kept key a `handoff:Name` pointer names. Nothing resolves
+    /// pointers yet: that arrives with the pointer loader.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn find(&self, name: &str) -> Option<[u8; 16]> {
+        self.items.iter().find(|i| same_name(&i.label, name)).map(|i| i.id)
+    }
+
+    /// Seal and store a secret under a free name. Returns the new item's id.
     pub fn add(&mut self, label: &str, from: Option<String>, sender: Option<String>, secret: &Secret, keep: Keep, now: u64) -> [u8; 16] {
         let mut id = [0u8; 16];
         OsRng.fill_bytes(&mut id);
         let mut nonce = [0u8; 12];
         OsRng.fill_bytes(&mut nonce);
+        let label = self.free_name(label);
         let sealed = self
             .cipher()
             .encrypt(Nonce::from_slice(&nonce), Payload { msg: secret.expose(), aad: &id })
             .expect("ChaCha20-Poly1305 encryption cannot fail for in-memory data");
         self.items.push(Item {
             id,
-            label: label.to_string(),
+            label,
             from,
             sender,
             added_at: now,
@@ -161,8 +181,18 @@ impl Vault {
         }
         let key: [u8; 32] = bytes[..32].try_into().expect("checked length");
         let items: Items = serde_json::from_slice(&bytes[32..]).map_err(|_| "The vault file is damaged.".to_string())?;
-        Ok(Self { key: Zeroizing::new(key), items: items.items, opened: items.opened })
+        let mut vault = Self { key: Zeroizing::new(key), items: Vec::new(), opened: items.opened };
+        // Vaults saved before names were unique can hold duplicates.
+        for mut item in items.items {
+            item.label = vault.free_name(&item.label);
+            vault.items.push(item);
+        }
+        Ok(vault)
     }
+}
+
+fn same_name(a: &str, b: &str) -> bool {
+    a.trim().to_lowercase() == b.trim().to_lowercase()
 }
 
 #[cfg(test)]
@@ -194,6 +224,25 @@ mod tests {
         assert_eq!(back.items().len(), 1000);
         assert_eq!(back.items()[999].label, "Key 999");
         assert_eq!(back.secret(ids[999]).unwrap().expose(), b"sk-test-synthetic-0001");
+    }
+
+    #[test]
+    fn names_are_unique_so_each_pointer_finds_its_own_key() {
+        let mut v = Vault::new();
+        let a = v.add("Stripe live", None, None, &secret(), Keep::Forever, NOW);
+        let b = v.add("Stripe live", None, None, &Secret::new(b"sk-test-synthetic-0002".to_vec()), Keep::Forever, NOW);
+        let c = v.add(" stripe LIVE ", None, None, &Secret::new(b"sk-test-synthetic-0003".to_vec()), Keep::Forever, NOW);
+        let names: Vec<_> = v.items().iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(names, ["Stripe live", "Stripe live 2", "stripe LIVE 3"]);
+        for (name, id, value) in [("Stripe live", a, "0001"), ("stripe live 2", b, "0002"), ("Stripe live 3", c, "0003")] {
+            assert_eq!(v.find(name), Some(id));
+            assert_eq!(v.secret(id).unwrap().expose(), format!("sk-test-synthetic-{value}").as_bytes());
+        }
+
+        // A vault saved with duplicates loads with distinct names.
+        v.items[1].label = "Stripe live".into();
+        let back = Vault::from_bytes(&v.to_bytes()).unwrap();
+        assert_eq!(back.find("Stripe live 2"), Some(b));
     }
 
     #[test]
