@@ -362,6 +362,55 @@ mod tests {
         assert!(clipboard_has_text(), "still listening after the first catch");
     }
 
+    /// How often an independent program reading the clipboard as fast as it
+    /// can sees a fake key before Safe Copy empties it. A measurement, not a
+    /// pass/fail check: results go in docs/capture-tests.md.
+    /// `CLIPBOARD_RACE_COPIES` sets the count (default 1000).
+    #[test]
+    #[ignore = "measurement: uses the real clipboard"]
+    fn fast_reader_race() {
+        use std::collections::HashSet;
+        use std::io::{BufRead, BufReader};
+        use std::sync::Mutex;
+
+        let copies: usize = std::env::var("CLIPBOARD_RACE_COPIES").ok().and_then(|n| n.parse().ok()).unwrap_or(1000);
+        // cargo test builds examples next to the test binary's deps folder.
+        let exe = std::env::current_exe().unwrap();
+        let reader_path = exe.parent().unwrap().parent().unwrap().join("examples/clipboard_reader.exe");
+        let mut reader = std::process::Command::new(&reader_path)
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| panic!("{}: {e} (cargo build --example clipboard_reader)", reader_path.display()));
+        let mut lines = BufReader::new(reader.stdout.take().unwrap()).lines();
+        assert_eq!(lines.next().unwrap().unwrap(), "ready");
+        let seen = Arc::new(Mutex::new(HashSet::new()));
+        let collect = seen.clone();
+        thread::spawn(move || {
+            lines.map_while(Result::ok).for_each(|l| {
+                collect.lock().unwrap().insert(l);
+            })
+        });
+
+        let mut caught = 0;
+        for i in 0..copies {
+            let key = format!("sk-synthetic-race-{i:04}");
+            let (tx, rx) = mpsc::channel();
+            arm_capture(Duration::from_secs(10), Arc::new(AtomicBool::new(false)), move |c| {
+                let _ = tx.send(c);
+            })
+            .unwrap();
+            set_clipboard_text(&key).unwrap();
+            if let Ok(Captured::Caught(secret, _)) = rx.recv_timeout(Duration::from_secs(10)) {
+                caught += usize::from(secret.expose() == key.as_bytes());
+            }
+        }
+        thread::sleep(Duration::from_secs(1));
+        let _ = reader.kill();
+        let seen = seen.lock().unwrap().len();
+        eprintln!("race: {copies} copies, Safe Copy caught {caught}, fast reader saw {seen}");
+        assert_eq!(caught, copies, "Safe Copy missed copies; the race numbers would mean nothing");
+    }
+
     #[test]
     #[ignore = "uses the real clipboard"]
     fn times_out_and_cancels() {

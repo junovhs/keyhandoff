@@ -32,7 +32,7 @@ The full list, with the test or design rule behind each claim, is in [docs/threa
 
 **What it can't do:**
 
-- **The copy moment.** A key copied from a web page is on the system clipboard, unencrypted, for the moment before KeyHandoff wipes it. Another program watching the clipboard could read it in that moment. If you suspect your computer is compromised, replace the key.
+- **The copy moment.** A key copied from a web page is on the system clipboard, unencrypted, for the moment before KeyHandoff wipes it. Another program watching the clipboard could read it in that moment; on Linux (X11), one that watches will, every time ([measured](docs/capture-tests.md)). If you suspect your computer is compromised, replace the key.
 - **Malware running as you.** On Windows the vault is protected with DPAPI, and on Linux with the Secret Service, or a private file if there is none. Other programs running under your account can ask those to unlock it. Hardware-backed protection is planned.
 - **A program you allowed.** Once a program has a key, it can do anything with it, including print it or save it. The prompt names the program and folder so you can decide, but anything running as you could start that same program in that folder.
 - **A compromised computer.** No app can fully protect a secret on a machine an attacker controls.

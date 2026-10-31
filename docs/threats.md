@@ -36,7 +36,8 @@ KeyHandoff is pre-release and has not had a security audit. This page lists what
 
 Provider pages show you a key, and you copy it. From that copy until KeyHandoff wipes it, the key is on the system clipboard, unencrypted. Any program watching the clipboard can read it in that moment. Rule 9.
 
-- **How long the moment lasts hasn't been measured yet** against an independent program reading the clipboard as fast as it can. Until it has been, treat the moment as long enough for a watching program to win.
+- **On Linux (X11), a program watching the clipboard sees every key you copy.** In 1,000 copies, an independent fast reader saw all 1,000 before Safe Copy took them. X11 hands the copied text to every program that asks, so this isn't a race Safe Copy can win. See [capture-tests.md](capture-tests.md).
+- **On Windows this hasn't been measured yet.** Until it has been, treat the moment as long enough for a watching program to win.
 - **Safe Copy listens only when you arm it,** takes one copy, then stops, or stops after 60 seconds. Tests: [`x11_capture_takes_one_copy_and_clears_it`](../src-tauri/src/os/linux/clipboard.rs#L375), [`x11_capture_times_out_and_cancels`](../src-tauri/src/os/linux/clipboard.rs#L397), [`catches_one_copy_and_wipes_clipboard_and_history`](../src-tauri/src/os/windows/capture.rs#L338), [`times_out_and_cancels`](../src-tauri/src/os/windows/capture.rs#L367). These use the real clipboard, so they run on request rather than by default. Rule 7.
 
 ### Clipboard history

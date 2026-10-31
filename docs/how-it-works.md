@@ -56,7 +56,7 @@ When you accept a key you can keep it **once**, for **30 days**, or until you re
 ## Limits
 
 - **Before the copy.** Provider pages show the key to you before you copy it. That's outside what KeyHandoff can affect.
-- **The copy moment.** A copied key is on the clipboard, unencrypted, until the wipe. Another program watching the clipboard could read it.
+- **The copy moment.** A copied key is on the clipboard, unencrypted, until the wipe. Another program watching the clipboard could read it, and on Linux (X11) one that watches always does ([capture tests](capture-tests.md)).
 - **First contact trusts the channel.** If someone can post as you in a chat, they can request a key in your name. Check the name and fingerprint before you copy a key.
 - **A program you allowed** can do anything with the key once it has it. Anything running as you could also start that program in that folder, so the prompt is your decision, not a lock.
 - **Malware running as you.** See [threats.md](threats.md).
