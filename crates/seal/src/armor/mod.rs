@@ -21,7 +21,7 @@ mod rs;
 
 use sha2::{Digest, Sha256};
 
-use crate::{Error, Kind, Request, Sealed, wire};
+use crate::{Card, Error, Kind, Request, Sealed, wire};
 
 const ARMOR_VERSION: u8 = 0;
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -41,6 +41,7 @@ fn marker(kind: Kind) -> &'static str {
     match kind {
         Kind::Request => "HANDOFF REQUEST",
         Kind::Sealed => "HANDOFF SEALED KEY",
+        Kind::Card => "HANDOFF CARD",
     }
 }
 
@@ -48,6 +49,12 @@ fn marker(kind: Kind) -> &'static str {
 pub fn request_text(request: &Request) -> String {
     let line = format!("{} is asking for a key. Open this with KeyHandoff. It holds no secret.", request.name());
     encode(request.to_bytes(), &line).expect("a parsed request is a valid object")
+}
+
+/// Armored text for a contact card, with the standard plain-language line.
+pub fn card_text(card: &Card) -> String {
+    let line = format!("{}'s KeyHandoff card. Open it in KeyHandoff to send {} keys. It holds no secret.", card.name(), card.name());
+    encode(card.to_bytes(), &line).expect("a parsed card is a valid object")
 }
 
 /// Armored text for a sealed key addressed to `recipient_name`.
@@ -123,7 +130,7 @@ pub fn decode(text: &str) -> Result<Vec<u8>, Error> {
     // whitespace, so markers are found however a chat app mangled them.
     let upper: String = text.to_uppercase().chars().filter(|c| !IGNORED.contains(c)).collect();
     let upper = upper.split_whitespace().collect::<Vec<_>>().join(" ");
-    let (kind, body_start) = [Kind::Request, Kind::Sealed]
+    let (kind, body_start) = [Kind::Request, Kind::Sealed, Kind::Card]
         .into_iter()
         .filter_map(|k| upper.find(&format!("BEGIN {}", marker(k))).map(|at| (k, at + 6 + marker(k).len())))
         .min_by_key(|&(_, at)| at)

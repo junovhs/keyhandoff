@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Glyph, Icon, Logo, useDragOut } from "./art";
-import { api, attempt, KEEP_CHOICES, useView, type Keep, type KeyView, type ProgramView, type View } from "./ipc";
+import { api, attempt, KEEP_CHOICES, useView, type ContactView, type Keep, type KeyView, type ProgramView, type View } from "./ipc";
 import { enter, stagger } from "./motion";
 import { SafeCopy } from "./SafeCopy";
 
@@ -53,6 +53,7 @@ export function MainWindow() {
   // A program waiting for Allow keeps its buttons clear.
   const toast = view?.program ? null : (error ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
+  const [sending, setSending] = useState(false);
 
   return (
     <div className="app">
@@ -67,11 +68,15 @@ export function MainWindow() {
         </button>
       </header>
       <main className="stage" ref={stage}>
-        {view && !safeOn && <Home view={view} run={run} />}
+        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
-      {view?.asked && !view.accepted && <AskSheet fileName={view.asked} computer={view.computer} run={run} />}
+      {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
+      {view?.added && <ContactSheet contact={view.added} run={run} />}
+      {view && sending && !safeOn && (
+        <SendSheet contacts={view.contacts} run={run} onClose={() => setSending(false)} />
+      )}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${error ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
@@ -85,25 +90,34 @@ export function MainWindow() {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-function Home({ view, run }: { view: View; run: Run }) {
+function Home({ view, run, onSend }: { view: View; run: Run; onSend: () => void }) {
   const n = view.keys.length;
-  const long = n >= TOOLS_FROM;
   return (
     <>
       <div className="hero">
-        <h1 className={`display ${long ? "sm" : ""}`}>{n === 0 ? "No keys yet." : <><span className="count">{n}</span> {n === 1 ? "key" : "keys"}, sealed.</>}</h1>
-        {n === 0 && <p className="lede">Ask for a key, or add one of your own.</p>}
+        <h1 className="display sm">{n === 0 ? "No keys yet." : "Your keys"}</h1>
+        <p className="lede">{n === 0 ? "Add a key, or send one to someone." : summary(view.keys)}</p>
       </div>
       <div className="btn-row">
-        <button className="btn primary grow" onClick={() => void run(api.ask())}>
-          Request a key
-        </button>
-        <button className="btn secondary" onClick={() => void run(api.add())}>Add your own</button>
+        <button className="btn primary grow" onClick={() => void run(api.add())}>Add a key</button>
+        <button className="btn secondary grow" onClick={onSend}>Send a key</button>
       </div>
       <Vault keys={view.keys} run={run} />
-      <Me name={view.name} pending={view.pending} run={run} />
+      <Me name={view.name} run={run} />
     </>
   );
+}
+
+/** "3 keys · 1 expires this week": the count, and the one thing that needs you, if any. */
+function summary(keys: KeyView[]): string {
+  const now = Date.now() / 1000;
+  const soon = keys.filter((k) => k.expires_at !== null && k.expires_at - now < 7 * 24 * 60 * 60).length;
+  const once = keys.filter((k) => k.keep === "once").length;
+  const parts = [`${keys.length} ${keys.length === 1 ? "key" : "keys"}`];
+  if (soon > 0) parts.push(`${soon} ${soon === 1 ? "expires" : "expire"} this week`);
+  else if (once > 0) parts.push(`${once} ${once === 1 ? "opens" : "open"} once`);
+  else parts.push("all sealed on this computer");
+  return parts.join(" · ");
 }
 
 const SEARCH_ID = "key-search";
@@ -142,9 +156,9 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   if (keys.length === 0) {
     return (
       <ol className="steps">
-        <li><span className="n">1</span><span><b>Request a key</b> and paste the request into a chat with whoever has it.</span></li>
-        <li><span className="n">2</span><span>They send back a sealed file. Only this computer can open it.</span></li>
-        <li><span className="n">3</span><span>Paste it here. The key goes into your vault and is never shown.</span></li>
+        <li><span className="n">1</span><span><b>Add a key</b>: copy it from any page, and it's sealed here. It's never shown.</span></li>
+        <li><span className="n">2</span><span><b>Get keys from people</b>: send them <b>Your card</b>, at the bottom. They only need it once.</span></li>
+        <li><span className="n">3</span><span><b>Send a key</b>: open someone's card once, then send them keys any time.</span></li>
       </ol>
     );
   }
@@ -220,7 +234,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   );
 }
 
-function Me({ name, pending, run }: { name: string; pending: number; run: Run }) {
+function Me({ name, run }: { name: string; run: Run }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const save = () => {
@@ -241,11 +255,14 @@ function Me({ name, pending, run }: { name: string; pending: number; run: Run })
             aria-label="Your name"
           />
         ) : (
-          <button onClick={() => { setDraft(name); setEditing(true); }} title="Shown on your requests">
+          <button onClick={() => { setDraft(name); setEditing(true); }} title="Shown on your card">
             You are <b>{name}</b>
           </button>
         )}
-        {pending > 0 && <span> · {pending} waiting</span>}
+        <span> · </span>
+        <button onClick={() => void run(api.copyCard())} title="Copy your card to send to people who'll send you keys">
+          <b>Your card</b>
+        </button>
       </span>
       <button className="paste" onClick={() => void run(api.paste())} title="Paste a .handoff file">
         Paste a file <kbd>Ctrl V</kbd>
@@ -335,8 +352,8 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
   );
 }
 
-/** After Ask: the request file is on the clipboard; it can also be dragged out. */
-function AskSheet({ fileName, computer, run }: { fileName: string; computer: string; run: Run }) {
+/** Your card is on the clipboard; it can also be dragged out. */
+function CardSheet({ fileName, computer, run }: { fileName: string; computer: string; run: Run }) {
   const sheet = useRef<HTMLDivElement>(null);
   const drag = useDragOut(() => void run(api.dragOut("request")));
   useEffect(() => void enter(sheet.current, "rise", 360), [fileName]);
@@ -344,22 +361,88 @@ function AskSheet({ fileName, computer, run }: { fileName: string; computer: str
     <div className="sheet" ref={sheet}>
       <Glyph mark="send" />
       <div className="hero">
-        <h2 className="display md">Request copied.</h2>
-        <p className="lede">Paste it into a chat with the person who has the key. It holds no secret, so any chat is fine.</p>
+        <h2 className="display md">Card copied.</h2>
+        <p className="lede">Send it to anyone who'll send you keys, by chat or email. It holds no secret, and they only need it once.</p>
       </div>
       <div className="chip grab" {...drag}>
         <Icon name="file" />
         <span className="mono">{fileName}</span>
       </div>
       <p className="help">
-        Whoever opens it sees your computer as <span className="mono">{computer}</span>. Read it to them if they want to
-        check it's really you. When the sealed reply comes back, paste it here.
+        It's good for 12 keys. They'll see your computer as <span className="mono">{computer}</span>; read it to them if they
+        want to check it's really you.
       </p>
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void run(api.copyRequest())}>Copy again</button>
         <button className="btn primary grow" onClick={() => void api.dismiss()}>Done</button>
       </div>
+    </div>
+  );
+}
+
+/** Someone's card was just opened: they're a contact now. */
+function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), [contact.id]);
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="head">
+        <Glyph mark="check" />
+        <div>
+          <span className="lede">Card added</span>
+          <h2 className="display md">{contact.name}</h2>
+        </div>
+      </div>
+      <p className="lede">You can send {contact.name} up to {contact.sends_left} keys with this card, any time.</p>
+      <p className="help">
+        {contact.name}'s computer is <span className="mono">{contact.computer}</span>. If it matters, check it with them.
+      </p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn secondary" onClick={() => void api.dismiss()}>Done</button>
+        <button className="btn primary grow" onClick={() => void run(api.dismiss().then(() => api.sendTo(contact.id)))}>
+          Send {contact.name} a key
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Send a key: pick who it's for, then Safe Copy catches it for them. */
+function SendSheet({ contacts, run, onClose }: { contacts: ContactView[]; run: Run; onClose: () => void }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), []);
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="hero">
+        <h2 className="display md">Send a key</h2>
+        <p className="lede">{contacts.length ? "Who's it for?" : "Nobody to send to yet."}</p>
+      </div>
+      {contacts.length ? (
+        <div className="keys">
+          {contacts.map((c) => (
+            <button key={c.id} className="key-row contact" onClick={() => void run(api.sendTo(c.id)).then(onClose)}>
+              <span className="key-ico"><Icon name="user" /></span>
+              <span className="who">
+                <span className="nm">{c.name}</span>
+                <span className="meta">
+                  {c.sends_left > 0 ? `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left` : "Card used up: ask for a new one"}
+                  {" · "}
+                  <span className="mono">{c.computer}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="help">
+          Ask the person for their KeyHandoff card, then open it here: double-click it, drop it on this window, or paste it with
+          Ctrl V.
+        </p>
+      )}
+      <span className="grow-space" />
+      <button className="btn secondary" onClick={onClose}>Close</button>
     </div>
   );
 }

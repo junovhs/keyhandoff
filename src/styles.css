@@ -93,6 +93,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .key-row .nm { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .key-row .key-ico { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--accent-ink); flex-shrink: 0; }
 .key-row .meta { font-size: 12.5px; color: var(--text-2); }
+.key-row.contact { width: 100%; text-align: left; }
+.key-row.contact:hover .nm { color: var(--accent-ink); }
 .key-row .forget { height: 30px; min-width: 30px; padding: 0 8px; border-radius: 7px; display: grid; place-items: center; color: var(--text-3); font-size: 12px; font-weight: 500; opacity: 0; transition: opacity calc(.15s / var(--tempo)); }
 .key-row:hover .forget, .key-row .forget:focus-visible, .key-row .forget.sure { opacity: 1; }
 .key-row .forget:hover { background: var(--raised); color: var(--text); }

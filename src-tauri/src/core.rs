@@ -1,6 +1,6 @@
-//! Every KeyHandoff flow, without Tauri: ask, Safe Copy,
+//! Every KeyHandoff flow, without Tauri: your card and contacts, Safe Copy,
 //! seal, accept and vault, add for yourself, and giving kept keys to the
-//! programs you allow.
+//! programs you allow. A request is the one-off form of a card: one lock.
 //!
 //! Secret values live here and in `os`; [`View`] is what the screens get:
 //! names, states and ids only.
@@ -11,17 +11,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use keyhandoff_seal::{armor, Identity, Keyring, Object, Payload, Request, Secret, DEFAULT_REQUEST_TTL, MAX_LABEL_BYTES, MAX_NAME_BYTES};
+use keyhandoff_seal::{
+    armor, Card, Identity, Keyring, Object, Payload, PublicIdentity, Request, Secret, DEFAULT_CARD_TTL,
+    MAX_LABEL_BYTES, MAX_NAME_BYTES,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::os::{self, Captured, Clip, Peer};
-use crate::store::{Approval, Settings, Store};
+use crate::store::{Approval, Contact, Settings, Store};
 use crate::vault::{Item, Keep, Vault};
 
 /// Safe Copy disarms itself after this long.
 pub const ARM_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_FILE_BYTES: u64 = 64 * 1024;
 const ALREADY_ACCEPTED: &str = "This key was already accepted and can't be opened.";
+/// How many keys someone can send you with one copy of your card.
+pub const CARD_LOCKS: usize = 12;
 /// A program waiting for Allow is refused after this long.
 pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -111,8 +116,13 @@ struct Core {
     /// Bumped on every arm so a late capture result is ignored.
     generation: u64,
     accepted: Option<[u8; 16]>,
+    /// The file you last shared (your card, or a one-off request).
     asked: Option<PathBuf>,
     notice: Option<String>,
+    /// People whose cards you opened.
+    contacts: Vec<Contact>,
+    /// The contact whose card was just opened, for the sheet that says so.
+    added: Option<[u8; 32]>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -170,6 +180,17 @@ pub struct ProgramView {
     pub keys: Vec<String>,
 }
 
+/// Someone you can send keys to.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ContactView {
+    pub id: String,
+    pub name: String,
+    /// Their computer's fingerprint, to check with them.
+    pub computer: String,
+    /// Keys you can still send with the card you have.
+    pub sends_left: usize,
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct View {
     pub name: String,
@@ -184,6 +205,9 @@ pub struct View {
     pub asked: Option<String>,
     pub notice: Option<String>,
     pub program: Option<ProgramView>,
+    pub contacts: Vec<ContactView>,
+    /// Whose card was just opened.
+    pub added: Option<ContactView>,
 }
 
 impl Handoff {
@@ -192,6 +216,7 @@ impl Handoff {
         let keyring = store.keyring()?;
         let vault = store.vault()?;
         let approvals = store.approvals()?;
+        let contacts = store.contacts()?;
         os::private_dir(&outbox).map_err(|e| e.to_string())?;
         clear_outbox(&outbox);
         let core = Core {
@@ -206,6 +231,8 @@ impl Handoff {
             accepted: None,
             asked: None,
             notice: None,
+            contacts,
+            added: None,
             approvals,
             program: None,
             asks: 0,
@@ -225,11 +252,12 @@ impl Handoff {
         core.view()
     }
 
-    /// Ask: make a request, write `Key request from <you>.handoff` and put it
-    /// on the clipboard.
+    /// A one-off request: one lock instead of a card's batch. The app shares
+    /// cards now; this stays for the tests of the request-and-seal core.
+    #[cfg(test)]
     pub fn ask(&self) -> Result<(), String> {
         let mut core = self.lock();
-        let (request, pending) = keyhandoff_seal::create_request(&core.identity, &core.settings.name, now(), DEFAULT_REQUEST_TTL)
+        let (request, pending) = keyhandoff_seal::create_request(&core.identity, &core.settings.name, now(), keyhandoff_seal::DEFAULT_REQUEST_TTL)
             .map_err(|e| e.to_string())?;
         core.keyring.insert(pending);
         core.store.save_keyring(&core.keyring)?;
@@ -240,6 +268,40 @@ impl Handoff {
         core.asked = Some(file);
         core.accepted = None;
         Ok(())
+    }
+
+    /// Your card: a batch of one-time locks, each good for one key sent to you.
+    /// Writes `KeyHandoff card - <you>.handoff` and puts it on the clipboard.
+    pub fn copy_card(&self) -> Result<(), String> {
+        let mut core = self.lock();
+        let (card, pending) = keyhandoff_seal::create_card(&core.identity, &core.settings.name, now(), DEFAULT_CARD_TTL, CARD_LOCKS)
+            .map_err(|e| e.to_string())?;
+        pending.into_iter().for_each(|p| core.keyring.insert(p));
+        core.store.save_keyring(&core.keyring)?;
+        let text = armor::card_text(&card);
+        let file = core.outbox.join(file_name("KeyHandoff card -", card.name()));
+        os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
+        (self.clipboard.offer)(&file, text)?;
+        core.asked = Some(file);
+        core.accepted = None;
+        Ok(())
+    }
+
+    /// Send a key to a contact: Safe Copy against one of their card's locks.
+    /// The lock is used up only once the key is sealed.
+    pub fn send_to(&self, id: &str) -> Result<(), String> {
+        let request = {
+            let mut core = self.lock();
+            let t = now();
+            let contact = core.contacts.iter_mut().find(|c| hex32(&c.identity) == id).ok_or("That contact is no longer here.")?;
+            contact.locks.retain(|l| Request::parse(l).is_ok_and(|r| !r.is_expired(t)));
+            let name = contact.name.clone();
+            let lock = contact.locks.first().cloned();
+            core.store.save_contacts(&core.contacts)?;
+            let lock = lock.ok_or_else(|| format!("You've used up {name}'s card. Ask {name} for a new one."))?;
+            Request::parse(&lock).map_err(|e| e.to_string())?
+        };
+        self.arm(Target::Request(request))
     }
 
     /// The request or sealed file to drag out, with its text.
@@ -324,6 +386,7 @@ impl Handoff {
                 self.arm(Target::Request(request))
             }
             Object::Sealed(sealed) => self.lock().accept(&sealed),
+            Object::Card(card) => self.lock().add_contact(&card),
         }
     }
 
@@ -388,6 +451,8 @@ impl Handoff {
         let sealed = keyhandoff_seal::seal(&core.identity, request, &payload, now()).map_err(|e| e.to_string())?;
         drop(payload);
         let for_name = request.name().to_string();
+        let used = request.id();
+        core.use_lock(used)?;
         let text = armor::sealed_text(&sealed, &for_name);
         let file = core.outbox.join(file_name("Key for", &for_name));
         os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
@@ -478,11 +543,12 @@ impl Handoff {
         core.store.save_settings(&core.settings)
     }
 
-    /// Dismiss the accept sheet, the request sheet and any notice.
+    /// Dismiss the accept, card and contact sheets and any notice.
     pub fn dismiss(&self) {
         let mut core = self.lock();
         core.accepted = None;
         core.asked = None;
+        core.added = None;
         core.notice = None;
     }
 
@@ -581,6 +647,44 @@ impl Core {
         Ok(())
     }
 
+    /// Open someone's card: they become a contact (replacing an older card of
+    /// theirs) with its unexpired locks.
+    fn add_contact(&mut self, card: &Card) -> Result<(), String> {
+        if card.holder() == self.identity.public() {
+            return Err("This is your own card. Send it to people who'll send you keys.".into());
+        }
+        let t = now();
+        let locks: Vec<Vec<u8>> = card.locks().iter().filter(|l| !l.is_expired(t)).map(|l| l.to_bytes().to_vec()).collect();
+        if locks.is_empty() {
+            return Err("This card ran out. Ask them for a new one.".into());
+        }
+        let identity = *card.holder().as_bytes();
+        self.contacts.retain(|c| c.identity != identity);
+        self.contacts.push(Contact { name: card.name().to_string(), identity, locks });
+        self.store.save_contacts(&self.contacts)?;
+        self.added = Some(identity);
+        self.accepted = None;
+        self.asked = None;
+        Ok(())
+    }
+
+    /// A key was sealed to this lock: if it came from a contact's card, it's spent.
+    fn use_lock(&mut self, used: [u8; 16]) -> Result<(), String> {
+        let before: usize = self.contacts.iter().map(|c| c.locks.len()).sum();
+        for c in &mut self.contacts {
+            c.locks.retain(|l| Request::parse(l).map_or(true, |r| r.id() != used));
+        }
+        if self.contacts.iter().map(|c| c.locks.len()).sum::<usize>() != before {
+            self.store.save_contacts(&self.contacts)?;
+        }
+        Ok(())
+    }
+
+    fn contact_view(&self, c: &Contact) -> ContactView {
+        let computer = PublicIdentity::from_bytes(c.identity).map(|p| p.fingerprint()).unwrap_or_default();
+        ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len() }
+    }
+
     fn allowed(&self, peer: &Peer, key: [u8; 16]) -> bool {
         self.approvals.iter().any(|a| a.key == key && a.program == peer.program && a.folder == peer.folder)
     }
@@ -654,6 +758,8 @@ impl Core {
             asked: self.asked.as_ref().map(|p| display_name(p)),
             notice: self.notice.clone(),
             program: self.program.as_ref().map(|a| self.program_view(a)),
+            contacts: self.contacts.iter().map(|c| self.contact_view(c)).collect(),
+            added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),
         }
     }
 
@@ -723,6 +829,10 @@ fn now_ms() -> u64 {
 }
 
 fn hex(id: &[u8; 16]) -> String {
+    id.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn hex32(id: &[u8; 32]) -> String {
     id.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -929,6 +1039,61 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_file(sealed_copy);
+    }
+
+    #[test]
+    fn a_card_lets_ben_send_ann_keys_each_opening_once() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let ann = app("Ann");
+        let ben = app("Ben");
+
+        // Ann copies her card once; it carries a batch of locks.
+        ann.handoff.copy_card().unwrap();
+        let (card_file, card_text) = offered();
+        assert_eq!(card_file.file_name().unwrap(), "KeyHandoff card - Ann.handoff");
+        assert!(card_text.contains("Ann's KeyHandoff card"));
+        assert!(ann.handoff.open_path(&card_file).unwrap_err().contains("your own card"));
+
+        // Ben opens it: Ann is a contact, with Ann's fingerprint to check.
+        ben.handoff.open_path(&card_file).unwrap();
+        let view = ben.handoff.view();
+        let contact = view.added.clone().unwrap();
+        assert_eq!((contact.name.as_str(), contact.sends_left), ("Ann", CARD_LOCKS));
+        assert_eq!(contact.computer, ann.handoff.view().computer);
+
+        // Send a key: Safe Copy for Ann. Cancelling doesn't spend a lock.
+        ben.handoff.send_to(&contact.id).unwrap();
+        assert_eq!(ben.handoff.view().safe.for_name.as_deref(), Some("Ann"));
+        ben.handoff.close_safe();
+        assert_eq!(ben.handoff.view().contacts[0].sends_left, CARD_LOCKS);
+
+        // Two keys, two locks; each sealed file opens once on Ann's computer.
+        let mut sealed_files = Vec::new();
+        for (i, key) in [b"sk-synthetic-card-0001".as_slice(), b"sk-synthetic-card-0002"].into_iter().enumerate() {
+            ben.handoff.send_to(&contact.id).unwrap();
+            copy(key);
+            ben.handoff.seal(&format!("Key {i}")).unwrap();
+            ben.handoff.copy_sealed().unwrap();
+            let (file, _) = offered();
+            let kept = temp(&format!("card-sealed-{i}.handoff"));
+            fs::copy(&file, &kept).unwrap();
+            ben.handoff.close_safe();
+            sealed_files.push(kept);
+        }
+        assert_eq!(ben.handoff.view().contacts[0].sends_left, CARD_LOCKS - 2, "a lock is spent per key sealed");
+        assert!(!files_contain(&ben.data, b"sk-synthetic-card"), "Ben keeps nothing");
+
+        for (i, file) in sealed_files.iter().enumerate() {
+            ann.handoff.open_path(file).unwrap();
+            assert_eq!(ann.handoff.view().accepted.unwrap().label, format!("Key {i}"));
+            assert_eq!(ann.handoff.open_path(file).unwrap_err(), ALREADY_ACCEPTED, "opens once");
+        }
+        assert!(!files_contain(&ann.data, b"sk-synthetic-card"), "Ann's vault holds no plaintext");
+
+        for a in [ann, ben] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        sealed_files.iter().for_each(|f| drop(fs::remove_file(f)));
     }
 
     #[test]

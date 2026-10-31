@@ -23,20 +23,24 @@
     <p class="lead">Every screen with sample data, in the order people meet them. All screens share one window size.</p>
     <main id="board"></main>
     <script type="module">
-      // [scene, who, what, window height]
+      // [scene, who, what, window height, button to press once loaded]
       const MAIN = 600, SAFE = 600;
       const FLOWS = [
-        ["Ask someone for a key", [
+        ["Share your card (once)", [
           ["home-empty", "Ann", "Starts with no keys", MAIN],
-          ["ask", "Ann", "Requests a key", MAIN],
-          ["listening", "Ben", "Opens the request", SAFE],
-          ["caught-ann", "Ben", "Copies the key", SAFE],
-          ["sealed", "Ben", "Sends back the sealed file", SAFE],
-          ["accepted", "Ann", "Opens the sealed file", MAIN],
+          ["card", "Ann", "Your card, copied to send", MAIN],
+          ["added", "Ben", "Opens Ann's card", MAIN],
+        ]],
+        ["Send a key", [
+          ["home", "Ben", "Send a key: picks Ann", MAIN, "Send a key"],
+          ["listening", "Ben", "Copies the key", SAFE],
+          ["caught-ann", "Ben", "Caught", SAFE],
+          ["sealed", "Ben", "Sends the sealed file", SAFE],
+          ["accepted", "Ann", "Opens it", MAIN],
           ["home", "Ann", "Has the key", MAIN],
         ]],
-        ["Add your own key", [
-          ["listening-you", "You", "Clicks Add your own", SAFE],
+        ["Add a key", [
+          ["listening-you", "You", "Clicks Add a key", SAFE],
           ["caught-you", "You", "Copies the key", SAFE],
           ["home-added", "You", "Has the key", MAIN],
         ]],
@@ -58,13 +62,23 @@
         flow.className = "flow";
         flow.innerHTML = `<h2>${title}</h2><div class="row"></div>`;
         const row = flow.querySelector(".row");
-        steps.forEach(([scene, who, what, height], i) => {
+        steps.forEach(([scene, who, what, height, press], i) => {
           if (i > 0) row.insertAdjacentHTML("beforeend", `<span class="arrow">→</span>`);
           n += 1;
           row.insertAdjacentHTML(
             "beforeend",
             `<figure class="step"><figcaption><b>${n}. ${who}</b> · ${what}</figcaption><iframe src="./index.html?s=${scene}" style="height:${height}px" title="${what}"></iframe></figure>`,
           );
+          if (press) {
+            const frame = row.lastElementChild.querySelector("iframe");
+            frame.addEventListener("load", () => {
+              const click = () => {
+                const button = [...frame.contentDocument.querySelectorAll("button")].find((b) => b.textContent.trim() === press);
+                button ? button.click() : setTimeout(click, 100);
+              };
+              click();
+            });
+          }
         });
         board.append(flow);
       }

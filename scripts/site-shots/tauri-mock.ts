@@ -1,6 +1,6 @@
 // Stands in for @tauri-apps/api so the real screens render in a plain browser,
 // for the website's screenshots and the screen board. All data here is sample data.
-import type { KeyView, SafeState, View } from "../../src/ipc";
+import type { ContactView, KeyView, SafeState, View } from "../../src/ipc";
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 24 * 60 * 60;
@@ -10,6 +10,9 @@ const KEYS: KeyView[] = [
   { id: "2", label: "Stripe (billing)", from: "Priya", added_at: NOW - 3 * DAY, expires_at: NOW + 27 * DAY, keep: "days30" },
   { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep" },
 ];
+
+const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", sends_left: 12 };
+const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b09d2a77f3c10", sends_left: 9 }];
 
 function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = [], read = false): View["safe"] {
   return {
@@ -36,12 +39,17 @@ const HOME: View = {
   asked: null,
   notice: null,
   program: null,
+  contacts: CONTACTS,
+  added: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
   home: {},
   "home-empty": { keys: [] },
-  ask: { keys: [], pending: 1, asked: "Key request from Ann.handoff" },
+  card: { keys: [], asked: "KeyHandoff card - Ann.handoff" },
+  ask: { keys: [], asked: "KeyHandoff card - Ann.handoff" }, // the site's screenshot name
+  added: { name: "Ben", keys: [], added: ANN },
+  "send-empty": { name: "Ben", keys: [], contacts: [] },
   listening: { name: "Ben", keys: [], safe: safe("listening") },
   "caught-ann": { name: "Ben", keys: [], safe: safe("caught") },
   sealed: { name: "Ben", keys: [], safe: safe("sealed") },

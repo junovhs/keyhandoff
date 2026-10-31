@@ -1,12 +1,14 @@
 //! Handoff sealing core: device identity, key requests with one-time keys,
-//! sealing a secret to a request, opening it exactly once, and the armored
-//! text that carries both through chat and email.
+//! contact cards that carry a batch of them, sealing a secret to a request,
+//! opening it exactly once, and the armored text that carries them through
+//! chat and email.
 //!
 //! Design: `docs/sealing-format.md`. This crate has no UI, OS
 //! keychain or network code so it can be reviewed on its own.
 //! Callers pass the current time in Unix seconds; the crate never reads a clock.
 
 pub mod armor;
+mod card;
 mod identity;
 mod keyring;
 mod request;
@@ -15,6 +17,7 @@ mod wire;
 
 use std::fmt;
 
+pub use card::{Card, MAX_CARD_LOCKS, create_card};
 pub use identity::{Identity, PublicIdentity};
 pub use keyring::{Keyring, Opened, PendingRequest};
 pub use request::{Request, create_request};
@@ -24,6 +27,8 @@ pub use sealed::{Payload, Sealed, Secret, seal};
 pub const FORMAT_VERSION: u8 = 0;
 /// Default request lifetime: 7 days.
 pub const DEFAULT_REQUEST_TTL: u64 = 7 * 24 * 60 * 60;
+/// Default contact card lifetime: 180 days.
+pub const DEFAULT_CARD_TTL: u64 = 180 * 24 * 60 * 60;
 pub const MAX_NAME_BYTES: usize = 64;
 pub const MAX_LABEL_BYTES: usize = 64;
 pub const MAX_NOTE_BYTES: usize = 200;
@@ -36,6 +41,7 @@ const MAGIC: &[u8; 3] = b"HOF";
 pub enum Kind {
     Request = 1,
     Sealed = 2,
+    Card = 3,
 }
 
 impl Kind {
@@ -43,16 +49,18 @@ impl Kind {
         match b {
             1 => Some(Kind::Request),
             2 => Some(Kind::Sealed),
+            3 => Some(Kind::Card),
             _ => None,
         }
     }
 }
 
-/// A parsed `.handoff` object of either kind.
+/// A parsed `.handoff` object of any kind.
 #[derive(Debug)]
 pub enum Object {
     Request(Request),
     Sealed(Sealed),
+    Card(Card),
 }
 
 /// Parse and verify any `.handoff` object from its binary form.
@@ -60,6 +68,7 @@ pub fn parse_object(bytes: &[u8]) -> Result<Object, Error> {
     match wire::header(bytes)? {
         Kind::Request => Request::parse(bytes).map(Object::Request),
         Kind::Sealed => Sealed::parse(bytes).map(Object::Sealed),
+        Kind::Card => Card::parse(bytes).map(Object::Card),
     }
 }
 

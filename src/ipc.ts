@@ -47,6 +47,16 @@ export interface ProgramView {
 
 export type Answer = "always" | "once" | "deny";
 
+/** Someone whose card you opened. */
+export interface ContactView {
+  id: string;
+  name: string;
+  /** Their computer's fingerprint, to check with them. */
+  computer: string;
+  /** Keys you can still send with the card you have. */
+  sends_left: number;
+}
+
 export interface View {
   name: string;
   /** This computer's fingerprint, which people you ask will see. */
@@ -60,11 +70,15 @@ export interface View {
   asked: string | null;
   notice: string | null;
   program: ProgramView | null;
+  contacts: ContactView[];
+  /** Whose card was just opened. */
+  added: ContactView | null;
 }
 
 export const api = {
   view: () => invoke<View>("view"),
-  ask: () => invoke<void>("ask"),
+  copyCard: () => invoke<void>("copy_card"),
+  sendTo: (id: string) => invoke<void>("send_to", { id }),
   add: () => invoke<void>("add"),
   retry: () => invoke<void>("retry"),
   paste: () => invoke<void>("paste"),

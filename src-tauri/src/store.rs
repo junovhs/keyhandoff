@@ -1,5 +1,5 @@
 //! A profile's files in the app data folder. The identity, the pending
-//! one-time keys, the vault and the programs you allowed are sealed under the OS-protected master key
+//! one-time keys, the vault, the programs you allowed and your contacts are sealed under the OS-protected master key
 //! (sealing-adr.md: DPAPI on Windows; the Secret Service on Linux for now).
 //! `settings.json` holds no secret.
 //!
@@ -25,6 +25,7 @@ const IDENTITY: &str = "identity.bin";
 const PENDING: &str = "pending.bin";
 const VAULT: &str = "vault.bin";
 const APPROVALS: &str = "approvals.bin";
+const CONTACTS: &str = "contacts.bin";
 const SETTINGS: &str = "settings.json";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -45,6 +46,16 @@ pub struct Approval {
     pub program: PathBuf,
     pub folder: Option<PathBuf>,
     pub key: [u8; 16],
+}
+
+/// Someone whose card you opened: their computer and the locks you can still
+/// seal a key to, each used once.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Contact {
+    pub name: String,
+    pub identity: [u8; 32],
+    /// Requests from their card, as sent.
+    pub locks: Vec<Vec<u8>>,
 }
 
 pub struct Store {
@@ -133,6 +144,18 @@ impl Store {
     pub fn save_approvals(&self, approvals: &[Approval]) -> Result<(), String> {
         let json = serde_json::to_vec(approvals).map_err(|e| e.to_string())?;
         self.write(APPROVALS, &json)
+    }
+
+    pub fn contacts(&self) -> Result<Vec<Contact>, String> {
+        match self.read(CONTACTS)? {
+            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The contacts file is damaged.".to_string()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_contacts(&self, contacts: &[Contact]) -> Result<(), String> {
+        let json = serde_json::to_vec(contacts).map_err(|e| e.to_string())?;
+        self.write(CONTACTS, &json)
     }
 
     fn cipher(&self) -> ChaCha20Poly1305 {
