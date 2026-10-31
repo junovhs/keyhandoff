@@ -12,13 +12,14 @@ use std::sync::{mpsc, Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use keyhandoff_seal::{
-    armor, Card, Identity, Keyring, Object, Payload, PublicIdentity, Request, Secret, DEFAULT_CARD_TTL,
+    armor, Bundle, Card, Identity, Keyring, Object, Payload, PublicIdentity, Request, Secret, DEFAULT_CARD_TTL,
     MAX_LABEL_BYTES, MAX_NAME_BYTES,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::os::{self, Captured, Clip, Peer};
-use crate::store::{Approval, Contact, Settings, Store};
+use crate::store::{Approval, Contact, Settings, Store, Team};
+use rand_core::{OsRng, RngCore};
 use crate::vault::{Item, Keep, Vault};
 
 /// Safe Copy disarms itself after this long.
@@ -56,6 +57,8 @@ impl Clipboard {
 enum Target {
     You,
     Request(Request),
+    /// A team, by id and name: sealed to every member at once.
+    Team([u8; 16], String),
 }
 
 impl Target {
@@ -63,13 +66,14 @@ impl Target {
         match self {
             Target::You => None,
             Target::Request(r) => Some(r.name().to_string()),
+            Target::Team(_, name) => Some(name.clone()),
         }
     }
 
     fn for_computer(&self) -> Option<String> {
         match self {
-            Target::You => None,
             Target::Request(r) => Some(r.requester().fingerprint()),
+            Target::You | Target::Team(..) => None,
         }
     }
 }
@@ -84,7 +88,8 @@ enum Safe {
     /// Caught and wiped from the clipboard; waiting for a name (and, for
     /// yourself, a keep-time).
     Caught { target: Target, secret: Secret, note: Option<String> },
-    Sealed { for_name: String, file: PathBuf, text: String },
+    /// `team`: sealed to every member of a team rather than one person.
+    Sealed { for_name: String, team: bool, file: PathBuf, text: String },
 }
 
 /// The answer to a program asking for kept keys.
@@ -125,6 +130,7 @@ struct Core {
     contacts: Vec<Contact>,
     /// The contact whose card was just opened, for the sheet that says so.
     added: Option<[u8; 32]>,
+    teams: Vec<Team>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -148,6 +154,8 @@ pub struct KeyView {
     pub added_at: u64,
     pub expires_at: Option<u64>,
     pub keep: Keep,
+    /// The team it was shared with, if any.
+    pub team: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -158,6 +166,8 @@ pub struct SafeView {
     pub for_name: Option<String>,
     /// The requester's computer fingerprint, to check who is asking.
     pub for_computer: Option<String>,
+    /// It's for a team: every member gets their own copy.
+    pub for_team: bool,
     /// When listening stops, in Unix milliseconds.
     pub ends_at: u64,
     pub file_name: Option<String>,
@@ -193,6 +203,16 @@ pub struct ContactView {
     pub sends_left: usize,
 }
 
+/// A team on this computer.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct TeamView {
+    pub id: String,
+    pub name: String,
+    pub members: Vec<ContactView>,
+    /// Keys you hold that were shared with this team.
+    pub keys: usize,
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct View {
     pub name: String,
@@ -211,6 +231,7 @@ pub struct View {
     pub contacts: Vec<ContactView>,
     /// Whose card was just opened.
     pub added: Option<ContactView>,
+    pub teams: Vec<TeamView>,
 }
 
 impl Handoff {
@@ -220,6 +241,7 @@ impl Handoff {
         let vault = store.vault()?;
         let approvals = store.approvals()?;
         let contacts = store.contacts()?;
+        let teams = store.teams()?;
         os::private_dir(&outbox).map_err(|e| e.to_string())?;
         clear_outbox(&outbox);
         let core = Core {
@@ -237,6 +259,7 @@ impl Handoff {
             problem: None,
             contacts,
             added: None,
+            teams,
             approvals,
             program: None,
             asks: 0,
@@ -300,12 +323,99 @@ impl Handoff {
             let contact = core.contacts.iter_mut().find(|c| hex32(&c.identity) == id).ok_or("That contact is no longer here.")?;
             contact.locks.retain(|l| Request::parse(l).is_ok_and(|r| !r.is_expired(t)));
             let name = contact.name.clone();
-            let lock = contact.locks.first().cloned();
+            // A random lock: if one card copy reached several people, two of
+            // them are unlikely to pick the same lock.
+            let lock = (!contact.locks.is_empty()).then(|| contact.locks[OsRng.next_u32() as usize % contact.locks.len()].clone());
             core.store.save_contacts(&core.contacts)?;
             let lock = lock.ok_or_else(|| format!("You've used up {name}'s card. Ask {name} for a new one."))?;
             Request::parse(&lock).map_err(|e| e.to_string())?
         };
         self.arm(Target::Request(request))
+    }
+
+    /// Make or change a team of your contacts. Returns its id.
+    pub fn save_team(&self, id: Option<&str>, name: &str, members: &[String]) -> Result<String, String> {
+        let name = clean_text(name, MAX_NAME_BYTES).ok_or("Give the team a short name.")?;
+        let mut core = self.lock();
+        let members: Vec<[u8; 32]> = core.contacts.iter().filter(|c| members.contains(&hex32(&c.identity))).map(|c| c.identity).collect();
+        if members.is_empty() {
+            return Err("Pick at least one person for the team.".into());
+        }
+        let team_id = match id {
+            Some(id) => {
+                let team = core.teams.iter_mut().find(|t| hex(&t.id) == id).ok_or("That team is no longer here.")?;
+                team.name = name;
+                team.members = members;
+                team.id
+            }
+            None => {
+                let mut team_id = [0u8; 16];
+                OsRng.fill_bytes(&mut team_id);
+                core.teams.push(Team { id: team_id, name, members });
+                team_id
+            }
+        };
+        core.store.save_teams(&core.teams)?;
+        Ok(hex(&team_id))
+    }
+
+    pub fn delete_team(&self, id: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        core.teams.retain(|t| hex(&t.id) != id);
+        core.store.save_teams(&core.teams)
+    }
+
+    /// Share a key with a team: Safe Copy catches it once, then it's sealed to
+    /// every member. Everyone needs a card with a lock left.
+    pub fn send_to_team(&self, id: &str) -> Result<(), String> {
+        let target = {
+            let core = self.lock();
+            let team = core.teams.iter().find(|t| hex(&t.id) == id).ok_or("That team is no longer here.")?;
+            let short: Vec<String> = core.team_members(team).into_iter().filter(|c| c.locks.is_empty()).map(|c| c.name.clone()).collect();
+            if !short.is_empty() {
+                return Err(format!("Ask {} for a new card first.", short.join(", ")));
+            }
+            Target::Team(team.id, team.name.clone())
+        };
+        self.arm(target)
+    }
+
+    /// Welcome someone to a team: every key you hold that was shared with the
+    /// team, sealed to them in one file on the clipboard.
+    pub fn welcome(&self, team_id: &str, member: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let team = core.teams.iter().find(|t| hex(&t.id) == team_id).ok_or("That team is no longer here.")?.clone();
+        let items: Vec<Item> = core.vault.items().iter().filter(|i| i.team.as_deref() == Some(team.name.as_str())).cloned().collect();
+        if items.is_empty() {
+            return Err(format!("You hold no keys shared with {} yet.", team.name));
+        }
+        let contact = core.contacts.iter().find(|c| hex32(&c.identity) == member).ok_or("That contact is no longer here.")?.clone();
+        if contact.locks.len() < items.len() {
+            return Err(format!(
+                "{}'s card has {} sends left and {} has {} keys. Ask {} for a new card.",
+                contact.name,
+                contact.locks.len(),
+                team.name,
+                items.len(),
+                contact.name
+            ));
+        }
+        let mut parts = Vec::with_capacity(items.len());
+        for (item, lock) in items.iter().zip(&contact.locks) {
+            let secret = core.vault.secret(item.id).ok_or("A team key couldn't be opened.")?;
+            let request = Request::parse(lock).map_err(|e| e.to_string())?;
+            let payload = Payload { label: item.label.clone(), note: core.settings.name.clone(), secret };
+            parts.push(keyhandoff_seal::seal(&core.identity, &request, &payload, now()).map_err(|e| e.to_string())?);
+            core.use_lock(request.id())?;
+        }
+        let bundle = Bundle::new(&team.name, &parts).map_err(|e| e.to_string())?;
+        let line = format!("{}'s {} keys for {}. Only {}'s computer can open them, once each.", team.name, items.len(), contact.name, contact.name);
+        let text = armor::bundle_text(&bundle, &line).map_err(|_| "That's too many keys for one file.".to_string())?;
+        let file = core.outbox.join(file_name(&format!("{} keys for", team.name), &contact.name));
+        os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
+        (self.clipboard.offer)(&file, text)?;
+        core.notice = Some(format!("Copied {}'s welcome: {} {} keys. Send it to {}.", contact.name, items.len(), team.name, contact.name));
+        Ok(())
     }
 
     /// The request or sealed file to drag out, with its text.
@@ -391,6 +501,7 @@ impl Handoff {
             }
             Object::Sealed(sealed) => self.lock().accept(&sealed),
             Object::Card(card) => self.lock().add_contact(&card),
+            Object::Bundle(bundle) => self.lock().accept_bundle(&bundle),
         }
     }
 
@@ -448,6 +559,9 @@ impl Handoff {
     pub fn seal(&self, label: &str) -> Result<(), String> {
         let label = clean_text(label, MAX_LABEL_BYTES).ok_or("Give the key a short name.")?;
         let mut core = self.lock();
+        if let Safe::Caught { target: Target::Team(..), .. } = &core.safe {
+            return core.seal_team(label);
+        }
         let Safe::Caught { target: Target::Request(request), secret, .. } = &core.safe else {
             return Err("There is no caught key to seal.".into());
         };
@@ -461,7 +575,7 @@ impl Handoff {
         let file = core.outbox.join(file_name("Key for", &for_name));
         os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
         // Dropping the Caught state zeroizes the plaintext.
-        core.safe = Safe::Sealed { for_name, file, text };
+        core.safe = Safe::Sealed { for_name, team: false, file, text };
         Ok(())
     }
 
@@ -654,6 +768,84 @@ impl Core {
         Ok(())
     }
 
+    fn team_members(&self, team: &Team) -> Vec<&Contact> {
+        team.members.iter().filter_map(|m| self.contacts.iter().find(|c| c.identity == *m)).collect()
+    }
+
+    /// Seal the caught key to every member of the team, one random lock each,
+    /// into one bundle. You're on the team too, so you keep it, filed under it.
+    fn seal_team(&mut self, label: String) -> Result<(), String> {
+        let Safe::Caught { target: Target::Team(team_id, team_name), secret, .. } = &self.safe else {
+            return Err("There is no caught key to seal.".into());
+        };
+        let (team_id, team_name) = (*team_id, team_name.clone());
+        let secret = Secret::new(secret.expose().to_vec());
+        let team = self.teams.iter().find(|t| t.id == team_id).ok_or("That team is no longer here.")?.clone();
+        let mut parts = Vec::new();
+        let mut used = Vec::new();
+        for member in self.team_members(&team) {
+            if member.locks.is_empty() {
+                return Err(format!("Ask {} for a new card first.", member.name));
+            }
+            let request = Request::parse(&member.locks[OsRng.next_u32() as usize % member.locks.len()]).map_err(|e| e.to_string())?;
+            let payload = Payload { label: label.clone(), note: self.settings.name.clone(), secret: Secret::new(secret.expose().to_vec()) };
+            parts.push(keyhandoff_seal::seal(&self.identity, &request, &payload, now()).map_err(|e| e.to_string())?);
+            used.push(request.id());
+        }
+        let bundle = Bundle::new(&team_name, &parts).map_err(|e| e.to_string())?;
+        let line = format!("A key for the {team_name} team. Each member's KeyHandoff opens its own, once.");
+        let text = armor::bundle_text(&bundle, &line).map_err(|_| "That team is too big for one file.".to_string())?;
+        let file = self.outbox.join(file_name("Key for", &team_name));
+        os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
+        for id in used {
+            self.use_lock(id)?;
+        }
+        let label = self.vault.free_name(&label);
+        let id = self.vault.add(&label, None, None, &secret, self.settings.keep, now());
+        self.vault.set_team(id, &team_name);
+        self.store.save_vault(&self.vault)?;
+        // Dropping the Caught state zeroizes the plaintext.
+        self.safe = Safe::Sealed { for_name: team_name, team: true, file, text };
+        Ok(())
+    }
+
+    /// Open a bundle: keep every key in it sealed to this computer, filed under
+    /// its team. Parts sealed to other members are skipped.
+    fn accept_bundle(&mut self, bundle: &Bundle) -> Result<(), String> {
+        let t = now();
+        let mut kept = Vec::new();
+        let mut seen_before = false;
+        let mut from = None;
+        for part in bundle.parts() {
+            let opened = match self.keyring.open(part, t) {
+                Ok(opened) => opened,
+                Err(_) => {
+                    seen_before |= self.vault.was_opened(part.request_id());
+                    continue;
+                }
+            };
+            from = Some(opened.payload.note.clone()).filter(|n| !n.is_empty());
+            let id = self.vault.add(&opened.payload.label, from.clone(), Some(opened.sender.fingerprint()), &opened.payload.secret, self.settings.keep, t);
+            self.vault.set_team(id, bundle.team());
+            self.vault.mark_opened(part.request_id());
+            kept.push(id);
+        }
+        self.store.save_keyring(&self.keyring)?;
+        if kept.is_empty() {
+            return Err(if seen_before { ALREADY_ACCEPTED.into() } else { "Nothing in this file is for this computer.".into() });
+        }
+        self.store.save_vault(&self.vault)?;
+        self.asked = None;
+        if kept.len() == 1 {
+            self.accepted = kept.pop();
+        } else {
+            self.accepted = None;
+            let from = from.map(|f| format!(" from {f}")).unwrap_or_default();
+            self.notice = Some(format!("{} {} keys{from} are in your keys.", kept.len(), bundle.team()));
+        }
+        Ok(())
+    }
+
     /// Open someone's card: they become a contact (replacing an older card of
     /// theirs) with its unexpired locks.
     fn add_contact(&mut self, card: &Card) -> Result<(), String> {
@@ -768,6 +960,16 @@ impl Core {
             program: self.program.as_ref().map(|a| self.program_view(a)),
             contacts: self.contacts.iter().map(|c| self.contact_view(c)).collect(),
             added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),
+            teams: self.teams.iter().map(|t| self.team_view(t)).collect(),
+        }
+    }
+
+    fn team_view(&self, team: &Team) -> TeamView {
+        TeamView {
+            id: hex(&team.id),
+            name: team.name.clone(),
+            members: self.team_members(team).into_iter().map(|c| self.contact_view(c)).collect(),
+            keys: self.vault.items().iter().filter(|i| i.team.as_deref() == Some(team.name.as_str())).count(),
         }
     }
 
@@ -787,6 +989,7 @@ impl Core {
             state,
             for_name: target.for_name(),
             for_computer: target.for_computer(),
+            for_team: matches!(target, Target::Team(..)),
             ends_at: 0,
             file_name: None,
             message: None,
@@ -795,7 +998,7 @@ impl Core {
         };
         match &self.safe {
             Safe::Off => {
-                SafeView { state: "off", for_name: None, for_computer: None, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false }
+                SafeView { state: "off", for_name: None, for_computer: None, for_team: false, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false }
             }
             Safe::Listening { target, ends_at, apps, read, .. } => {
                 SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), ..base("listening", target) }
@@ -803,10 +1006,11 @@ impl Core {
             Safe::TimedOut { target } => base("timeout", target),
             Safe::Failed { target, message } => SafeView { message: Some(message.clone()), ..base("failed", target) },
             Safe::Caught { target, note, .. } => SafeView { message: note.clone(), ..base("caught", target) },
-            Safe::Sealed { for_name, file, .. } => SafeView {
+            Safe::Sealed { for_name, team, file, .. } => SafeView {
                 state: "sealed",
                 for_name: Some(for_name.clone()),
                 for_computer: None,
+                for_team: *team,
                 ends_at: 0,
                 file_name: Some(display_name(file)),
                 message: None,
@@ -825,6 +1029,7 @@ fn key_view(item: &Item) -> KeyView {
         added_at: item.added_at,
         expires_at: item.expires_at,
         keep: item.keep,
+        team: item.team.clone(),
     }
 }
 
@@ -919,7 +1124,6 @@ mod tests {
 
     use super::*;
     use crate::os::MasterKey;
-    use rand_core::{OsRng, RngCore};
     use std::sync::Mutex as StdMutex;
 
     const KEY: &[u8] = b"sk-synthetic-handoff-flow-0001";
@@ -1102,6 +1306,71 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         sealed_files.iter().for_each(|f| drop(fs::remove_file(f)));
+    }
+
+    #[test]
+    fn a_team_gets_each_key_once_and_a_newcomer_gets_them_all() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ben, ann, priya, cat) = (app("Ben"), app("Ann"), app("Priya"), app("Cat"));
+        let card_of = |a: &App| {
+            a.handoff.copy_card().unwrap();
+            let (file, _) = offered();
+            let kept = temp("card.handoff");
+            fs::copy(&file, &kept).unwrap();
+            a.handoff.dismiss();
+            kept
+        };
+        // Ben has Ann's, Priya's and Cat's cards; each copy has fresh locks.
+        for member in [&ann, &priya, &cat] {
+            ben.handoff.open_path(&card_of(member)).unwrap();
+            ben.handoff.dismiss();
+        }
+        let id_of = |name: &str| ben.handoff.view().contacts.iter().find(|c| c.name == name).unwrap().id.clone();
+        let team = ben.handoff.save_team(None, "Platform", &[id_of("Ann"), id_of("Priya")]).unwrap();
+
+        // Two keys shared with the team: one file each, every member opens their part once.
+        let mut bundles = Vec::new();
+        for (i, key) in [b"sk-synthetic-team-0001".as_slice(), b"sk-synthetic-team-0002"].into_iter().enumerate() {
+            ben.handoff.send_to_team(&team).unwrap();
+            assert_eq!(ben.handoff.view().safe.for_name.as_deref(), Some("Platform"));
+            copy(key);
+            ben.handoff.seal(&format!("Team key {i}")).unwrap();
+            ben.handoff.copy_sealed().unwrap();
+            let (file, _) = offered();
+            let kept = temp("team.handoff");
+            fs::copy(&file, &kept).unwrap();
+            ben.handoff.close_safe();
+            bundles.push(kept);
+        }
+        for member in [&ann, &priya] {
+            for (i, bundle) in bundles.iter().enumerate() {
+                member.handoff.open_path(bundle).unwrap();
+                let accepted = member.handoff.view().accepted.unwrap();
+                assert_eq!((accepted.label, accepted.team.as_deref()), (format!("Team key {i}"), Some("Platform")));
+                assert_eq!(member.handoff.open_path(bundle).unwrap_err(), ALREADY_ACCEPTED, "opens once");
+            }
+        }
+        assert!(cat.handoff.open_path(&bundles[0]).unwrap_err().contains("Nothing in this file"), "Cat isn't on the team yet");
+
+        // Ben, who's on the team too, kept both; Cat joins and gets them all in one file.
+        assert_eq!(ben.handoff.view().teams[0].keys, 2);
+        ben.handoff.save_team(Some(&team), "Platform", &[id_of("Ann"), id_of("Priya"), id_of("Cat")]).unwrap();
+        ben.handoff.welcome(&team, &id_of("Cat")).unwrap();
+        let (welcome, _) = offered();
+        cat.handoff.open_path(&welcome).unwrap();
+        let mut got: Vec<_> = cat.handoff.view().keys.iter().map(|k| (k.label.clone(), k.team.clone())).collect();
+        got.sort();
+        assert_eq!(got, [("Team key 0".to_string(), Some("Platform".to_string())), ("Team key 1".to_string(), Some("Platform".to_string()))]);
+        let cat_id = parse_id(&cat.handoff.view().keys[0].id).unwrap();
+        assert!(cat.handoff.lock().vault.secret(cat_id).unwrap().expose().starts_with(b"sk-synthetic-team-"));
+
+        for a in [&ben, &ann, &priya, &cat] {
+            assert!(!files_contain(&a.data, b"sk-synthetic-team"), "no plaintext on disk");
+        }
+        for a in [ben, ann, priya, cat] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        bundles.iter().for_each(|f| drop(fs::remove_file(f)));
     }
 
     #[test]

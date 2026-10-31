@@ -1,24 +1,27 @@
 // Stands in for @tauri-apps/api so the real screens render in a plain browser,
 // for the website's screenshots and the screen board. All data here is sample data.
-import type { ContactView, KeyView, SafeState, View } from "../../src/ipc";
+import type { ContactView, KeyView, SafeState, TeamView, View } from "../../src/ipc";
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 24 * 60 * 60;
 
 const KEYS: KeyView[] = [
-  { id: "1", label: "Dialpad", from: "Ben", added_at: NOW - DAY, expires_at: null, keep: "keep" },
-  { id: "2", label: "Stripe (billing)", from: "Priya", added_at: NOW - 3 * DAY, expires_at: NOW + 27 * DAY, keep: "days30" },
-  { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep" },
+  { id: "1", label: "Dialpad", from: "Ben", added_at: NOW - DAY, expires_at: null, keep: "keep", team: null },
+  { id: "2", label: "Stripe (billing)", from: "Priya", added_at: NOW - 3 * DAY, expires_at: NOW + 27 * DAY, keep: "days30", team: "Platform" },
+  { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep", team: null },
 ];
 
 const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", sends_left: 12 };
 const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b09d2a77f3c10", sends_left: 9 }];
+
+const TEAMS: TeamView[] = [{ id: "t", name: "Platform", members: CONTACTS, keys: 2 }];
 
 function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = [], read = false): View["safe"] {
   return {
     state,
     for_name: forName,
     for_computer: forName && "72ca77a8cc39c3ba",
+    for_team: false,
     ends_at: Date.now() + 42000,
     file_name: state === "sealed" ? "Key for Ann.handoff" : null,
     message: null,
@@ -42,6 +45,7 @@ const HOME: View = {
   program: null,
   contacts: CONTACTS,
   added: null,
+  teams: TEAMS,
 };
 
 const SCENES: Record<string, Partial<View>> = {
@@ -51,6 +55,10 @@ const SCENES: Record<string, Partial<View>> = {
   ask: { keys: [], asked: "KeyHandoff card - Ann.handoff" }, // the site's screenshot name
   added: { name: "Ben", keys: [], added: ANN },
   "send-empty": { name: "Ben", keys: [], contacts: [] },
+  "listening-team": { name: "Ben", safe: { ...safe("listening", "Platform"), for_computer: null, for_team: true } },
+  "caught-team": { name: "Ben", safe: { ...safe("caught", "Platform"), for_computer: null, for_team: true } },
+  "sealed-team": { name: "Ben", safe: { ...safe("sealed", "Platform"), for_computer: null, for_team: true, file_name: "Key for Platform.handoff" } },
+  "home-team": { notice: "2 Platform keys from Ben are in your keys." },
   listening: { name: "Ben", keys: [], safe: safe("listening") },
   "caught-ann": { name: "Ben", keys: [], safe: safe("caught") },
   sealed: { name: "Ben", keys: [], safe: safe("sealed") },

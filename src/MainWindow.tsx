@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Glyph, Icon, Logo, useDragOut } from "./art";
-import { api, attempt, KEEP_CHOICES, useView, type ContactView, type Keep, type KeyView, type ProgramView, type View } from "./ipc";
+import {
+  api,
+  attempt,
+  KEEP_CHOICES,
+  useView,
+  type ContactView,
+  type Keep,
+  type KeyView,
+  type ProgramView,
+  type TeamView,
+  type View,
+} from "./ipc";
 import { enter, stagger } from "./motion";
 import { SafeCopy } from "./SafeCopy";
 
@@ -55,6 +66,8 @@ export function MainWindow() {
   const toast = view?.program ? null : (bad ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
   const [sending, setSending] = useState(false);
+  // The team being edited, "new" for a new one.
+  const [editing, setEditing] = useState<TeamView | "new" | null>(null);
 
   return (
     <div className="app">
@@ -75,8 +88,16 @@ export function MainWindow() {
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
       {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
       {view?.added && <ContactSheet contact={view.added} run={run} />}
-      {view && sending && !safeOn && (
-        <SendSheet contacts={view.contacts} run={run} onClose={() => setSending(false)} />
+      {view && sending && !safeOn && !editing && (
+        <SendSheet view={view} run={run} onEdit={setEditing} onClose={() => setSending(false)} />
+      )}
+      {view && editing && !safeOn && (
+        <TeamSheet
+          team={editing === "new" ? null : (view.teams.find((t) => t.id === editing.id) ?? null)}
+          contacts={view.contacts}
+          run={run}
+          onClose={() => setEditing(null)}
+        />
       )}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
@@ -212,7 +233,10 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
             <span className="key-ico"><Icon name="key" /></span>
             <span className="who">
               <span className="nm">{k.label}</span>
-              <span className="meta">{k.from ? `From ${k.from}` : "Yours"} · {lifetime(k)}</span>
+              <span className="meta">
+                {k.from ? `From ${k.from}` : "Yours"}
+                {k.team ? ` · ${k.team}` : ""} · {lifetime(k)}
+              </span>
             </span>
             <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
               Copy .env line
@@ -287,7 +311,10 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
       <div className="head">
         <Glyph mark="check" />
         <div>
-          <span className="lede">{item.from ? `${item.from} sent you a key` : "Your key"}</span>
+          <span className="lede">
+            {item.from ? `${item.from} sent you a key` : "Your key"}
+            {item.team ? ` for ${item.team}` : ""}
+          </span>
           <h2 className="display md">{item.label}</h2>
         </div>
       </div>
@@ -370,12 +397,12 @@ function CardSheet({ fileName, computer, run }: { fileName: string; computer: st
         <span className="mono">{fileName}</span>
       </div>
       <p className="help">
-        It's good for 12 keys. They'll see your computer as <span className="mono">{computer}</span>; read it to them if they
-        want to check it's really you.
+        Each copy is for one person and good for 12 keys; copy it again for the next person. They'll see your computer as{" "}
+        <span className="mono">{computer}</span>; read it to them if they want to check it's really you.
       </p>
       <span className="grow-space" />
       <div className="btn-row">
-        <button className="btn secondary" onClick={() => void run(api.copyRequest())}>Copy again</button>
+        <button className="btn secondary" onClick={() => void run(api.copyCard())}>Copy again</button>
         <button className="btn primary grow" onClick={() => void api.dismiss()}>Done</button>
       </div>
     </div>
@@ -410,18 +437,37 @@ function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
   );
 }
 
-/** Send a key: pick who it's for, then Safe Copy catches it for them. */
-function SendSheet({ contacts, run, onClose }: { contacts: ContactView[]; run: Run; onClose: () => void }) {
+/** Send a key: pick a team or a person, then Safe Copy catches it for them. */
+function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => void enter(sheet.current, "rise", 360), []);
+  const { contacts, teams } = view;
   return (
     <div className="sheet" ref={sheet}>
       <div className="hero">
         <h2 className="display md">Send a key</h2>
         <p className="lede">{contacts.length ? "Who's it for?" : "Nobody to send to yet."}</p>
       </div>
+      {teams.length > 0 && (
+        <div className="keys">
+          <span className="label">Teams</span>
+          {teams.map((t) => (
+            <div key={t.id} className="key-row">
+              <button className="who contact" onClick={() => void run(api.sendToTeam(t.id)).then(onClose)}>
+                <span className="key-ico"><Icon name="users" /></span>
+                <span className="who">
+                  <span className="nm">{t.name}</span>
+                  <span className="meta">{t.members.map((m) => m.name).join(", ")}</span>
+                </span>
+              </button>
+              <button className="use always" onClick={() => onEdit(t)}>Edit</button>
+            </div>
+          ))}
+        </div>
+      )}
       {contacts.length ? (
         <div className="keys">
+          {teams.length > 0 && <span className="label">People</span>}
           {contacts.map((c) => (
             <button key={c.id} className="key-row contact" onClick={() => void run(api.sendTo(c.id)).then(onClose)}>
               <span className="key-ico"><Icon name="user" /></span>
@@ -443,7 +489,68 @@ function SendSheet({ contacts, run, onClose }: { contacts: ContactView[]; run: R
         </p>
       )}
       <span className="grow-space" />
-      <button className="btn secondary" onClick={onClose}>Close</button>
+      <div className="btn-row">
+        <button className="btn secondary grow" onClick={onClose}>Close</button>
+        {contacts.length > 0 && (
+          <button className="btn secondary grow" onClick={() => onEdit("new")}>
+            <Icon name="users" /> New team
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Make or change a team: a name and some of your contacts. Welcome sends a
+ * member every key you hold that was shared with the team.
+ */
+function TeamSheet({ team, contacts, run, onClose }: { team: TeamView | null; contacts: ContactView[]; run: Run; onClose: () => void }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  const [name, setName] = useState(team?.name ?? "");
+  const [picked, setPicked] = useState<string[]>(team?.members.map((m) => m.id) ?? []);
+  useEffect(() => void enter(sheet.current, "rise", 360), []);
+  const saved = new Set(team?.members.map((m) => m.id) ?? []);
+  const toggle = (id: string) => setPicked(picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id]);
+  const save = () => void run(api.saveTeam(team?.id ?? null, name, picked).then(onClose));
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="hero">
+        <h2 className="display md">{team ? team.name : "New team"}</h2>
+        <p className="lede">
+          {team ? `You hold ${team.keys} ${team.keys === 1 ? "key" : "keys"} shared with this team.` : "Share a key with everyone on it at once."}
+        </p>
+      </div>
+      <input className="name-in" value={name} maxLength={64} placeholder="Team name" aria-label="Team name" onChange={(e) => setName(e.target.value)} />
+      <div className="keys">
+        {contacts.map((c) => (
+          <div key={c.id} className="key-row">
+            <button className="who contact" onClick={() => toggle(c.id)} aria-pressed={picked.includes(c.id)}>
+              <span className={`key-ico ${picked.includes(c.id) ? "on" : ""}`}>
+                <Icon name={picked.includes(c.id) ? "check" : "user"} />
+              </span>
+              <span className="who">
+                <span className="nm">{c.name}</span>
+                <span className="meta">{c.sends_left} sends left</span>
+              </span>
+            </button>
+            {team && saved.has(c.id) && team.keys > 0 && (
+              <button className="use always" onClick={() => void run(api.welcome(team.id, c.id))} title={`Send ${c.name} every team key you hold`}>
+                Welcome
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="help">Everyone on the team needs to have sent you their card. Anyone can set up the same team on their computer to share too.</p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        {team && (
+          <button className="btn secondary" onClick={() => void run(api.deleteTeam(team.id).then(onClose))}>Delete</button>
+        )}
+        <button className="btn secondary" onClick={onClose}>Cancel</button>
+        <button className="btn primary grow" onClick={save}>Save</button>
+      </div>
     </div>
   );
 }

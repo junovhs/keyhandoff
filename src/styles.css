@@ -95,6 +95,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .key-row .meta { font-size: 12.5px; color: var(--text-2); }
 .key-row.contact { width: 100%; text-align: left; }
 .key-row.contact:hover .nm { color: var(--accent-ink); }
+.key-row .who.contact { display: flex; flex-direction: row; align-items: center; gap: 14px; flex: 1; min-width: 0; text-align: left; min-height: 56px; }
+.key-row .who.contact > .who { display: flex; flex-direction: column; min-width: 0; }
+.key-row .who.contact:hover .nm { color: var(--accent-ink); }
+.key-row .use.always { opacity: 1; }
+.key-ico.on { background: var(--accent-grad); border-color: transparent; color: #fff; }
+.keys .label { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 2px; }
 .key-row .forget { height: 30px; min-width: 30px; padding: 0 8px; border-radius: 7px; display: grid; place-items: center; color: var(--text-3); font-size: 12px; font-weight: 500; opacity: 0; transition: opacity calc(.15s / var(--tempo)); }
 .key-row:hover .forget, .key-row .forget:focus-visible, .key-row .forget.sure { opacity: 1; }
 .key-row .forget:hover { background: var(--raised); color: var(--text); }

@@ -38,7 +38,7 @@ See [sealing-format.md](sealing-format.md) for the details.
 
 ## Key storage
 
-Each profile has a 32-byte master key held by the OS. `identity.bin`, `pending.bin`, `vault.bin` and `approvals.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
+Each profile has a 32-byte master key held by the OS. `identity.bin`, `pending.bin`, `vault.bin`, `approvals.bin`, `contacts.bin` and `teams.bin` are sealed under it with ChaCha20-Poly1305, with the file name as associated data. Inside `vault.bin`, each kept secret is sealed again under the vault key with its item id as associated data, so a loaded vault holds ciphertext until a key is used.
 
 - **Windows:** the master key is wrapped with DPAPI (current user) in `master.key`.
 - **Linux:** the master key lives in the Secret Service. Without one it falls back to a `0600` file, which only stops other users.

@@ -30,7 +30,11 @@ export function SafeCopy({ view }: { view: View }) {
   const stage = {
     listening: { mark: "none", title: "Copy your key", sub: <Countdown endsAt={safe.ends_at} /> },
     caught: { mark: "check", title: "Caught", sub: "Clipboard wiped." },
-    sealed: { mark: "lock", title: "Sealed", sub: `Only ${safe.for_name}'s computer can open it.` },
+    sealed: {
+      mark: "lock",
+      title: "Sealed",
+      sub: safe.for_team ? "Each member opens their own copy." : `Only ${safe.for_name}'s computer can open it.`,
+    },
     timeout: { mark: "missed", title: "Time ran out", sub: "Nothing was read." },
     failed: { mark: "missed", title: "Stopped", sub: "Nothing was caught." },
     off: { mark: "none", title: "", sub: "" },
@@ -209,7 +213,13 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <p className="help center">{copied ? "Now paste it into your chat." : "This computer keeps nothing."}</p>
+      <p className="help center">
+        {copied
+          ? "Now paste it into your chat."
+          : safe.for_team
+            ? `You keep a copy too, filed under ${safe.for_name}.`
+            : "This computer keeps nothing."}
+      </p>
     </>
   );
 }

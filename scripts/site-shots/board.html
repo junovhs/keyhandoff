@@ -23,7 +23,7 @@
     <p class="lead">Every screen with sample data, in the order people meet them. All screens share one window size.</p>
     <main id="board"></main>
     <script type="module">
-      // [scene, who, what, window height, button to press once loaded]
+      // [scene, who, what, window height, buttons to press once loaded, in order]
       const MAIN = 600, SAFE = 600;
       const FLOWS = [
         ["Share your card (once)", [
@@ -32,12 +32,20 @@
           ["added", "Ben", "Opens Ann's card", MAIN],
         ]],
         ["Send a key", [
-          ["home", "Ben", "Send a key: picks Ann", MAIN, "Send a key"],
+          ["home", "Ben", "Send a key: picks Ann", MAIN, ["Send a key"]],
           ["listening", "Ben", "Copies the key", SAFE],
           ["caught-ann", "Ben", "Caught", SAFE],
           ["sealed", "Ben", "Sends the sealed file", SAFE],
           ["accepted", "Ann", "Opens it", MAIN],
           ["home", "Ann", "Has the key", MAIN],
+        ]],
+        ["Share with a team", [
+          ["home", "Ben", "Send a key: picks a team", MAIN, ["Send a key"]],
+          ["home", "Ben", "New team or Edit: name, people, Welcome", MAIN, ["Send a key", "Edit"]],
+          ["listening-team", "Ben", "Copies the key once", SAFE],
+          ["caught-team", "Ben", "Caught", SAFE],
+          ["sealed-team", "Ben", "One file for the whole team", SAFE],
+          ["home-team", "Cat", "Welcomed: every team key", MAIN],
         ]],
         ["Add a key", [
           ["listening-you", "You", "Clicks Add a key", SAFE],
@@ -72,9 +80,15 @@
           if (press) {
             const frame = row.lastElementChild.querySelector("iframe");
             frame.addEventListener("load", () => {
+              const queue = [...press];
               const click = () => {
-                const button = [...frame.contentDocument.querySelectorAll("button")].find((b) => b.textContent.trim() === press);
-                button ? button.click() : setTimeout(click, 100);
+                if (!queue.length) return;
+                const button = [...frame.contentDocument.querySelectorAll("button")].find((b) => b.textContent.trim() === queue[0]);
+                if (button) {
+                  button.click();
+                  queue.shift();
+                }
+                setTimeout(click, 150);
               };
               click();
             });

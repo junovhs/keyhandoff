@@ -80,6 +80,28 @@ fn copy_card(app: AppHandle, h: H) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_team(app: AppHandle, h: H, id: Option<String>, name: String, members: Vec<String>) -> Result<String, String> {
+    let result = h.save_team(id.as_deref(), &name, &members);
+    changed(&app);
+    result
+}
+
+#[tauri::command]
+fn delete_team(app: AppHandle, h: H, id: String) -> Result<(), String> {
+    done(&app, h.delete_team(&id))
+}
+
+#[tauri::command]
+fn send_to_team(app: AppHandle, h: H, id: String) -> Result<(), String> {
+    done(&app, h.send_to_team(&id))
+}
+
+#[tauri::command]
+fn welcome(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
+    done(&app, h.welcome(&team, &member))
+}
+
+#[tauri::command]
 fn send_to(app: AppHandle, h: H, id: String) -> Result<(), String> {
     done(&app, h.send_to(&id))
 }
@@ -244,7 +266,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            view, copy_card, send_to, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            view, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {

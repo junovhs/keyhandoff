@@ -58,6 +58,13 @@ Provider pages show you a key, and you copy it. From that copy until KeyHandoff 
 - **Memory isn't locked yet.** A key being used is decrypted in KeyHandoff's memory, which could reach the page file or a crash dump.
 - **An administrator, or malware running as one, can do everything above and more:** read KeyHandoff's memory while a key is in use, record the keyboard and screen, watch the clipboard, and replace KeyHandoff itself. No app can protect a secret on a computer an attacker controls.
 
+### Cards and teams
+
+- **Each lock opens one key, once.** A card is a batch of one-time locks; every key sent with it uses one, and opening it destroys that lock. Tests: [`every_lock_seals_one_key_that_opens_once`](../crates/seal/tests/card.rs), [`a_card_lets_ben_send_ann_keys_each_opening_once`](../src-tauri/src/core.rs).
+- **A card copy is for one person.** If one copy reaches several people, two of them could use the same lock, and the second key wouldn't open. Each copy gets fresh locks, and senders pick a lock at random to make a clash rare, but it's not impossible. Rule 4.
+- **Teams live on each computer.** A team is a list of your contacts, and the team name inside a file isn't signed by anyone. Sending to a team seals a separate copy for each member, and you keep one too. Test: [`a_team_gets_each_key_once_and_a_newcomer_gets_them_all`](../src-tauri/src/core.rs). Rule 6.
+- **No one can be removed after the fact.** Taking someone off your team stops you sending them new keys, but the keys they already have stay with them. When someone leaves, replace the keys with the provider.
+
 ### People and channels
 
 - **First contact trusts the channel.** If someone can post as you in a chat, they can send a request in your name. Check the name and the computer fingerprint KeyHandoff shows before you copy a key.

@@ -1,5 +1,5 @@
 //! A profile's files in the app data folder. The identity, the pending
-//! one-time keys, the vault, the programs you allowed and your contacts are sealed under the OS-protected master key
+//! one-time keys, the vault, the programs you allowed, your contacts and teams are sealed under the OS-protected master key
 //! (sealing-adr.md: DPAPI on Windows; the Secret Service on Linux for now).
 //! `settings.json` holds no secret.
 //!
@@ -26,6 +26,7 @@ const PENDING: &str = "pending.bin";
 const VAULT: &str = "vault.bin";
 const APPROVALS: &str = "approvals.bin";
 const CONTACTS: &str = "contacts.bin";
+const TEAMS: &str = "teams.bin";
 const SETTINGS: &str = "settings.json";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -56,6 +57,16 @@ pub struct Contact {
     pub identity: [u8; 32],
     /// Requests from their card, as sent.
     pub locks: Vec<Vec<u8>>,
+}
+
+/// A team: a name and the contacts in it, on this computer. Anyone can set up
+/// the same team on theirs; keys shared with it carry its name.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Team {
+    pub id: [u8; 16],
+    pub name: String,
+    /// Contacts' identities.
+    pub members: Vec<[u8; 32]>,
 }
 
 pub struct Store {
@@ -156,6 +167,18 @@ impl Store {
     pub fn save_contacts(&self, contacts: &[Contact]) -> Result<(), String> {
         let json = serde_json::to_vec(contacts).map_err(|e| e.to_string())?;
         self.write(CONTACTS, &json)
+    }
+
+    pub fn teams(&self) -> Result<Vec<Team>, String> {
+        match self.read(TEAMS)? {
+            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The teams file is damaged.".to_string()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_teams(&self, teams: &[Team]) -> Result<(), String> {
+        let json = serde_json::to_vec(teams).map_err(|e| e.to_string())?;
+        self.write(TEAMS, &json)
     }
 
     fn cipher(&self) -> ChaCha20Poly1305 {

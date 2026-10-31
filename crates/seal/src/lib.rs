@@ -1,5 +1,6 @@
 //! Handoff sealing core: device identity, key requests with one-time keys,
 //! contact cards that carry a batch of them, sealing a secret to a request,
+//! bundles of sealed keys for a team,
 //! opening it exactly once, and the armored text that carries them through
 //! chat and email.
 //!
@@ -8,6 +9,7 @@
 //! Callers pass the current time in Unix seconds; the crate never reads a clock.
 
 pub mod armor;
+mod bundle;
 mod card;
 mod identity;
 mod keyring;
@@ -17,6 +19,7 @@ mod wire;
 
 use std::fmt;
 
+pub use bundle::{Bundle, MAX_BUNDLE_KEYS};
 pub use card::{Card, MAX_CARD_LOCKS, create_card};
 pub use identity::{Identity, PublicIdentity};
 pub use keyring::{Keyring, Opened, PendingRequest};
@@ -42,6 +45,7 @@ pub enum Kind {
     Request = 1,
     Sealed = 2,
     Card = 3,
+    Bundle = 4,
 }
 
 impl Kind {
@@ -50,6 +54,7 @@ impl Kind {
             1 => Some(Kind::Request),
             2 => Some(Kind::Sealed),
             3 => Some(Kind::Card),
+            4 => Some(Kind::Bundle),
             _ => None,
         }
     }
@@ -61,6 +66,7 @@ pub enum Object {
     Request(Request),
     Sealed(Sealed),
     Card(Card),
+    Bundle(Bundle),
 }
 
 /// Parse and verify any `.handoff` object from its binary form.
@@ -69,6 +75,7 @@ pub fn parse_object(bytes: &[u8]) -> Result<Object, Error> {
         Kind::Request => Request::parse(bytes).map(Object::Request),
         Kind::Sealed => Sealed::parse(bytes).map(Object::Sealed),
         Kind::Card => Card::parse(bytes).map(Object::Card),
+        Kind::Bundle => Bundle::parse(bytes).map(Object::Bundle),
     }
 }
 

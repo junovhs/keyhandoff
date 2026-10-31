@@ -12,20 +12,25 @@ Encrypting a key at rest is the easy part. The real exposure comes from people h
 
 | Thing | What it is | Secret inside? |
 |---|---|---|
-| **Request file** (`Key request from Ann.handoff`) | "Ann is asking for a key." Holds Ann's public identity and a fresh one-time lock. | No |
+| **Card** (`KeyHandoff card - Ann.handoff`) | Ann's public identity and 12 one-time locks. Whoever has it can send Ann up to 12 keys. | No |
 | **Sealed key file** (`Key for Ann.handoff`) | The key, locked so only Ann's computer can open it, and only once. | Yes, encrypted |
+| **Team key file** (`Key for Platform.handoff`) | One key, sealed separately for each member of a team. Each member opens their own copy, once. | Yes, encrypted |
 | **Kept key** | An entry in your vault: its name and source, never its value. | Stored encrypted |
 
 Both files hold damage-resistant text, so they can also be pasted as text when a channel can't carry files.
 
-## Getting a key from someone
+## Sending a key
 
-1. **Ask.** Ann clicks **Request a key**. A request file goes on the clipboard, ready to paste into a chat.
-2. **Catch.** Ben opens the file. KeyHandoff shows who is asking and their computer's fingerprint, and Safe Copy turns on. Ben copies the key on the provider's page, and KeyHandoff catches that one copy and wipes the clipboard.
-3. **Seal.** Ben names the key. It's encrypted so only Ann's computer can open it, and only once. Ben sends back the sealed file and keeps nothing.
+1. **Share your card, once.** Ann clicks **Your card** and sends the file to Ben, in an email or chat. Each copy is for one person and carries fresh locks.
+2. **Add the card.** Ben opens it. Ann becomes a contact, with her computer's fingerprint to check with her if it matters.
+3. **Send a key.** Ben clicks **Send a key**, picks Ann and copies the key on the provider's page. KeyHandoff catches that one copy, wipes the clipboard, seals it to one of Ann's locks, and Ben sends back the file. Ben keeps nothing.
 4. **Keep.** Ann opens the file. The key goes into her vault, and every copy of the sealed file, in the chat or anywhere else, can never be opened again.
 
-To keep a key of your own, click **Add your own**, copy the key on the provider's page and name it. No files are involved. KeyHandoff has no way to show a key on screen.
+Ben can keep sending Ann keys until her card's locks run out; then he asks for a new card.
+
+**Teams.** In **Send a key**, **New team** groups some of your contacts under a name. Sending to a team catches the key once and seals it to every member in one file; you keep a copy too, filed under the team. **Welcome** on a member sends them every key you hold that was shared with the team, so someone new gets them all. There's no server, so a team lives on each person's computer: anyone can set up the same team to share with it, and everyone on it needs to have sent you their card.
+
+To keep a key of your own, click **Add a key**, copy the key on the provider's page and name it. No files are involved. KeyHandoff has no way to show a key on screen.
 
 ## Safe Copy
 

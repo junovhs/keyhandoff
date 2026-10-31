@@ -47,6 +47,9 @@ pub struct Item {
     pub added_at: u64,
     pub keep: Keep,
     pub expires_at: Option<u64>,
+    /// The team it was shared with, if any.
+    #[serde(default)]
+    pub team: Option<String>,
     nonce: [u8; 12],
     sealed: Vec<u8>,
 }
@@ -111,10 +114,18 @@ impl Vault {
             added_at: now,
             keep,
             expires_at: keep.expires_at(now),
+            team: None,
             nonce,
             sealed,
         });
         id
+    }
+
+    /// File a kept key under a team.
+    pub fn set_team(&mut self, id: [u8; 16], team: &str) {
+        if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
+            item.team = Some(team.to_string());
+        }
     }
 
     /// Change how long an item is kept, counted from when it was added.

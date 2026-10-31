@@ -15,6 +15,8 @@ export interface KeyView {
   added_at: number;
   expires_at: number | null;
   keep: Keep;
+  /** The team it was shared with, if any. */
+  team: string | null;
 }
 
 export interface SafeView {
@@ -23,6 +25,8 @@ export interface SafeView {
   for_name: string | null;
   /** The requester's computer fingerprint, to check who is asking. */
   for_computer: string | null;
+  /** It's for a team: every member gets their own copy. */
+  for_team: boolean;
   /** Unix ms when listening stops. */
   ends_at: number;
   file_name: string | null;
@@ -57,6 +61,15 @@ export interface ContactView {
   sends_left: number;
 }
 
+/** A team on this computer: a name and some of your contacts. */
+export interface TeamView {
+  id: string;
+  name: string;
+  members: ContactView[];
+  /** Keys you hold that were shared with this team. */
+  keys: number;
+}
+
 export interface View {
   name: string;
   /** This computer's fingerprint, which people you ask will see. */
@@ -75,12 +88,17 @@ export interface View {
   contacts: ContactView[];
   /** Whose card was just opened. */
   added: ContactView | null;
+  teams: TeamView[];
 }
 
 export const api = {
   view: () => invoke<View>("view"),
   copyCard: () => invoke<void>("copy_card"),
   sendTo: (id: string) => invoke<void>("send_to", { id }),
+  saveTeam: (id: string | null, name: string, members: string[]) => invoke<string>("save_team", { id, name, members }),
+  deleteTeam: (id: string) => invoke<void>("delete_team", { id }),
+  sendToTeam: (id: string) => invoke<void>("send_to_team", { id }),
+  welcome: (team: string, member: string) => invoke<void>("welcome", { team, member }),
   add: () => invoke<void>("add"),
   retry: () => invoke<void>("retry"),
   paste: () => invoke<void>("paste"),

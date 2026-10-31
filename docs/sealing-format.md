@@ -68,6 +68,31 @@ The sender checks the request's signature and expiry, then:
 
 The encrypted **payload** holds a label (for example "Dialpad", up to 64 bytes), an optional sender note (up to 200 bytes) and the secret (1 to 4096 bytes). The label sits inside the encryption, so the file shows nothing about what it carries.
 
+### Card (kind 3)
+
+A batch of requests from one computer, so someone can seal several keys to you without asking each time.
+
+| Field | Bytes | Meaning |
+|---|---|---|
+| header | 5 | `HOF`, version 0, kind 3 |
+| count | 1 | 1 to 32 locks |
+| locks | count × (2 + n) | each a big-endian length and a complete request (kind 1), signed as usual |
+
+Every lock must come from the same identity under the same name, or the card is refused. Each copy of your card gets fresh locks, and the pending one-time keys for all of them go into the keyring with a 180-day lifetime. A sender spends one lock per key, chosen at random, so two people holding the same copy rarely collide.
+
+### Bundle (kind 4)
+
+Several sealed keys in one file, labelled with a team name: one key sealed to each member of a team, or every team key sealed to one newcomer.
+
+| Field | Bytes | Meaning |
+|---|---|---|
+| header | 5 | `HOF`, version 0, kind 4 |
+| team | 1 + n | name length and UTF-8 name, 1 to 64 bytes |
+| count | 1 | 1 to 200 parts |
+| parts | count × (2 + n) | each a big-endian length and a complete sealed key (kind 2) |
+
+Each part is verified and opened like a sealed key; a recipient opens the parts sealed to its own locks and skips the rest. The team name is a label, not signed by anyone.
+
 ### Open and one-time key lifecycle
 
 - **Open:** find the pending entry by request id; check the expiry; verify the sender's signature; derive the key; decrypt. On success, **destroy the pending entry** (zeroized and removed from storage) before the secret goes to the vault. Every copy of the sealed file is then permanently unopenable.
