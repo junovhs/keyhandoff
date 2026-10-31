@@ -63,6 +63,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 
 /* frameless window chrome: the title area drags the window */
 .app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr; }
+/* The window is frameless and black, so a faint hairline keeps its edge
+   visible against dark backgrounds. Drawn on top so sheets and Safe Copy,
+   which cover the window's sides, never hide it. */
+.app::after { content: ""; position: absolute; inset: 0; z-index: 10; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
 .titlebar { display: flex; align-items: center; height: 48px; padding: 0 8px 0 20px; gap: 10px; }
 .titlebar .name { flex: 1; font-size: 15px; font-weight: 600; }
 .titlebar button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); }
