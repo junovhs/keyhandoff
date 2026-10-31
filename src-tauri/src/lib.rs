@@ -25,7 +25,7 @@ use crate::vault::Keep;
 const MAIN: &str = "main";
 /// The window's compact size while Safe Copy is on. The rest of the time the
 /// window is whatever size the person made it.
-const SAFE_SIZE: (f64, f64) = (400.0, 460.0);
+const SAFE_SIZE: (f64, f64) = (400.0, 520.0);
 const EXPIRY_CHECK: Duration = Duration::from_secs(60);
 
 type H<'a> = State<'a, Arc<Handoff>>;

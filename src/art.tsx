@@ -1,6 +1,6 @@
-// Art for the Calm look. Pixel art appears in icon tiles and the Safe Copy
-// picture, at 3x or more and whole-number scales so edges stay crisp. Small UI
-// icons are line icons: tiny pixel icons read as grainy.
+// Art for the Calm look. Pixel art appears only in icon tiles at 3x or more,
+// at whole-number scales so edges stay crisp. Small UI icons are line icons:
+// tiny pixel icons read as grainy. Safe Copy's picture is chunky line art.
 
 import { useRef, type PointerEvent } from "react";
 
@@ -38,41 +38,25 @@ export function Tile({ name, scale = 3, size = "md" }: { name: IconName; scale?:
   );
 }
 
-/**
- * Safe Copy's "copy your key" picture: two pixel pages that take turns bobbing
- * one pixel, in two frames like a sprite. The front page is backed by the
- * ground colour, which also cuts a one-pixel gap out of the page behind it.
- */
-export function CopyPages({ scale = 10 }: { scale?: number }) {
-  return (
-    <svg className="copy-pages" viewBox="0 -1 12 17" width={12 * scale} height={17 * scale} shapeRendering="crispEdges" aria-hidden>
-      <path className="back" fill="currentColor" d="M0 0h8v1h-8zM0 1h1v11h-1zM7 1h1v11h-1zM1 11h6v1h-6z" />
-      <g className="front">
-        <rect x="2" y="2" width="10" height="14" style={{ fill: "var(--ground)" }} />
-        <path
-          fill="currentColor"
-          d="M3 3h6v1h-6zM3 4h1v11h-1zM8 4h1v2h-1zM9 4h1v1h-1zM10 5h1v1h-1zM8 6h3v1h-3zM11 6h1v9h-1zM3 15h9v1h-9zM5 8h5v1h-5zM5 10h5v1h-5zM5 12h3v1h-3z"
-        />
-      </g>
-    </svg>
-  );
-}
+const FRONT = "M24 20H49L72 43V88H24Z";
+const CHECK = "M55 80L65 90L94 61";
 
 /**
- * Safe Copy's "caught" picture: the same two pages, still, with a big green
- * pixel check dropping onto them. The check is drawn in three-pixel strokes so it
- * reads at this size, on a ground-coloured outline one pixel wide that cuts it
- * off from the pages.
+ * Safe Copy's picture, the same in listening and caught so nothing moves when
+ * a key lands: two chunky pages that float gently, and a green check that
+ * draws itself on when `caught`. The front page and the check each sit on a
+ * ground-coloured outline that cuts a gap out of whatever is behind them.
  */
-export function CaughtPages({ scale = 7 }: { scale?: number }) {
+export function Pages({ caught }: { caught: boolean }) {
   return (
-    <svg className="caught-pages" viewBox="0 -1 19 19" width={19 * scale} height={19 * scale} shapeRendering="crispEdges" aria-hidden>
-      <path fill="currentColor" d="M0 0h8v1h-8zM0 1h1v11h-1zM7 1h1v11h-1zM1 11h6v1h-6z" />
-      <rect x="2" y="2" width="10" height="14" style={{ fill: "var(--ground)" }} />
-      <path fill="currentColor" d="M3 3h6v1h-6zM3 4h1v11h-1zM8 4h1v2h-1zM9 4h1v1h-1zM10 5h1v1h-1zM8 6h3v1h-3zM11 6h1v9h-1zM3 15h9v1h-9zM5 8h5v1h-5zM5 10h5v1h-5zM5 12h3v1h-3z" />
-      <g className="badge">
-        <path style={{ fill: "var(--ground)" }} d="M14 7h5v1h-5zM13 8h6v1h-6zM12 9h7v1h-7zM5 10h5v1h-5zM11 10h8v1h-8zM5 11h13v1h-13zM5 12h12v1h-12zM5 13h11v1h-11zM6 14h9v1h-9zM7 15h7v1h-7zM8 16h5v1h-5zM9 17h3v1h-3z" />
-        <path style={{ fill: "var(--ok)" }} d="M15 8h3v1h-3zM14 9h4v1h-4zM13 10h4v1h-4zM6 11h3v1h-3zM12 11h4v1h-4zM6 12h4v1h-4zM11 12h4v1h-4zM7 13h7v1h-7zM8 14h5v1h-5zM9 15h3v1h-3zM10 16h1v1h-1z" />
+    <svg className={`pages ${caught ? "caught" : ""}`} viewBox="0 -2 100 100" width="170" height="170" aria-hidden>
+      <rect className="back" x="9" y="3" width="40" height="62" />
+      <g className="front">
+        <path className="cut" d={FRONT} />
+        <path className="page" d={FRONT} />
+        <path className="line" d="M49 20V43H72M35 54H61M35 66H61" />
+        <path className="check-cut" d={CHECK} pathLength={1} />
+        <path className="check" d={CHECK} pathLength={1} />
       </g>
     </svg>
   );
@@ -95,6 +79,9 @@ const LINES = {
   shield: "M8 1.8l5 2v4c0 3.2-2.2 5.2-5 6.4-2.8-1.2-5-3.2-5-6.4v-4zM5.8 8.2l1.6 1.6 3-3.4",
   file: "M4 1.8h5l3 3V14.2H4zM9 1.8V5h3",
   search: "M7 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM10.8 10.8L14 14",
+  once: "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.2 2.6v3h3",
+  calendar: "M2.5 3.5h11v10h-11zM2.5 6.8h11M5.5 2v3M10.5 2v3M5.5 9.5h1M9.5 9.5h1M5.5 11.5h1",
+  forever: "M8 8C6.6 6.1 5.6 5.2 4.3 5.2a2.8 2.8 0 0 0 0 5.6C5.6 10.8 6.6 9.9 8 8s2.4-2.8 3.7-2.8a2.8 2.8 0 0 1 0 5.6C10.4 10.8 9.4 9.9 8 8z",
 } as const;
 
 /** A 16px line icon, coloured by the surrounding text colour. */

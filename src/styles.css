@@ -143,47 +143,44 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .safe .title { font-size: 20px; }
 .safe .secs { font: 500 15px var(--mono); }
 .safe .top { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
-.safe .top b { color: var(--text); font-weight: 600; }
-.safe .top .dot { width: 6px; height: 6px; background: var(--text-3); }
-.safe.listening .top .dot, .safe.caught .top .dot, .safe.sealed .top .dot { background: var(--accent-ink); }
-.safe.listening .top .dot { animation: blink 1.4s infinite; }
+.safe .top b { color: var(--text); font-weight: 600; font-size: 14px; }
+.safe .top .icon { width: 20px; height: 20px; stroke-width: 1.8; color: var(--ok); filter: drop-shadow(0 0 6px rgba(47, 213, 103, .55)); }
 .hero-text.center { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
 
-/* Listening: both pages breathe through six positions, one screen pixel
-   apart: 0, 1, 2, 2, 1, 0, the back page two frames behind the front. The
-   picture is drawn at 10 screen pixels per unit, so 0.1 unit is one screen pixel. */
-/* The picture, title and app note fill the space above the buttons and sit in
-   its middle, whatever the window size or display scale. */
-.listen-center { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
-.copy-now { display: grid; place-items: center; align-self: center; color: var(--text); }
-.copy-pages .front { animation: breathe calc(2.4s / var(--tempo)) steps(1, end) infinite; }
-.copy-pages .back { animation: breathe calc(2.4s / var(--tempo)) steps(1, end) calc(-1.6s / var(--tempo)) infinite; }
-@keyframes breathe {
-  0%, 83.33%, 100% { transform: none; }
-  16.67%, 66.67% { transform: translateY(-0.1px); }
-  33.33%, 50% { transform: translateY(-0.2px); }
-}
-/* Caught: the badge drops onto the still pages in two steps; the name and the
-   choice sit at the bottom. */
-.caught-pages .badge { animation: drop calc(.24s / var(--tempo)) steps(2, end) both; }
-@keyframes drop { from { transform: translateY(-2px); } }
-.caught-form { display: flex; flex-direction: column; gap: 10px; }
-.link.center { align-self: center; }
+/* Listening and caught: the stage (pages, headline, line under it) holds its
+   place; the part below sits at the bottom. */
+.stage { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding-top: 6px; }
+.stage .display { margin-top: 4px; }
+.stage .sub { margin: 0; font-size: 18px; color: var(--text-2); }
+.below { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.help.center, .link.center { align-self: center; text-align: center; }
+
+/* The pages float gently, the back one half a beat behind. The check draws on
+   when the key is caught, on a cut that separates it from the page. */
+.pages { overflow: visible; }
+.pages .back, .pages .page, .pages .line { fill: none; stroke: var(--text); stroke-width: 5.5; stroke-linejoin: miter; }
+.pages .page { fill: var(--ground); }
+.pages .cut { fill: var(--ground); stroke: var(--ground); stroke-width: 15; stroke-linejoin: miter; }
+.pages .check, .pages .check-cut { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.pages .check { stroke: var(--ok); stroke-width: 9; filter: drop-shadow(0 0 5px rgba(47, 213, 103, .6)); }
+.pages .check-cut { stroke: var(--ground); stroke-width: 17; }
+.pages.caught .check, .pages.caught .check-cut { stroke-dashoffset: 0; transition: stroke-dashoffset calc(.36s / var(--tempo)) cubic-bezier(.3, .7, .2, 1); }
+.pages .back { animation: float calc(2.8s / var(--tempo)) ease-in-out calc(-1.4s / var(--tempo)) infinite alternate; }
+.pages .front { animation: float calc(2.8s / var(--tempo)) ease-in-out infinite alternate; }
+@keyframes float { to { transform: translateY(-2px); } }
 .safe-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .safe-body .grow-space { flex: 1; }
 .asking { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .asking .mono { font-size: 11.5px; color: var(--text-2); }
 .safe .apps { margin: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 12.5px; color: var(--text-2); text-align: center; }
-.caught-head .icon { color: var(--accent-ink); width: 20px; height: 20px; }
 .link { align-self: flex-start; color: var(--text-2); font-size: 12.5px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .link:hover { color: var(--text); }
 .info { margin: 0; font-size: 12px; color: var(--text-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.caught-head { display: flex; align-items: center; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
 .name-in { height: 42px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--ground); color: var(--text); font: 400 15px var(--font); user-select: text; }
 .name-in:focus { outline: none; border-color: var(--accent); }
 .keep-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.keep-buttons button { height: 44px; border-radius: 8px; border: 1px solid var(--line-strong); font-size: 13.5px; font-weight: 500; }
+.keep-buttons button { height: 48px; border-radius: 10px; border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .keep-buttons button:hover { background: var(--raised); }
 .keep-buttons button.pick { background: var(--accent-grad); color: #fff; border-color: transparent; }
 

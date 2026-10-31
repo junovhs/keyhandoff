@@ -93,10 +93,10 @@ export function useView(): View | null {
   return view;
 }
 
-export const KEEP_CHOICES: { keep: Keep; label: string }[] = [
-  { keep: "once", label: "Once" },
-  { keep: "days30", label: "30 days" },
-  { keep: "keep", label: "Keep" },
+export const KEEP_CHOICES: { keep: Keep; label: string; icon: "once" | "calendar" | "forever" }[] = [
+  { keep: "once", label: "Use once", icon: "once" },
+  { keep: "days30", label: "Keep 30 days", icon: "calendar" },
+  { keep: "keep", label: "Keep forever", icon: "forever" },
 ];
 
 /** Run a command; resolve to its error text, or null on success. */

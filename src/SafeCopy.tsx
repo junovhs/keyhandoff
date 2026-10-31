@@ -1,92 +1,103 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CaughtPages, CopyPages, Icon, useDragOut } from "./art";
-import { api, attempt, KEEP_CHOICES, type KeyView, type SafeState, type SafeView, type View } from "./ipc";
+import { Icon, Pages, useDragOut } from "./art";
+import { api, attempt, KEEP_CHOICES, type KeyView, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
-
-const STATUS: Record<SafeState, string> = {
-  off: "Off", listening: "Listening", timeout: "Off", failed: "Off", caught: "Caught", sealed: "Sealed",
-};
 
 /**
  * Safe Copy, shown in place of the home screen while it is on; Rust keeps the
  * window on top meanwhile. Rust does the listening, wiping and sealing; this
  * only shows the state and never sees the key.
+ *
+ * Listening and caught share one stage, the pages and the headline, which stays
+ * put while the key lands: only the check draws on and the words change. What
+ * differs between the two sits below the stage.
  */
 export function SafeCopy({ view }: { view: View }) {
   const body = useRef<HTMLDivElement>(null);
+  const below = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const state = view.safe.state;
+  const staged = state === "listening" || state === "caught";
 
-  // Each state builds in fresh: the sealed file zooms in, the others rise.
+  // The stage never re-enters; the part below it fades in. The sealed file
+  // zooms in, and the remaining states rise.
   useLayoutEffect(() => {
     setError(null);
-    void enter(body.current, state === "sealed" ? "zoom" : "rise", state === "sealed" ? 420 : 300);
-  }, [state]);
+    if (staged) void enter(below.current, "fade", 220);
+    else void enter(body.current, state === "sealed" ? "zoom" : "rise", state === "sealed" ? 420 : 300);
+  }, [state, staged]);
 
   const run = async (p: Promise<unknown>) => setError(await attempt(p));
   const safe = view.safe;
-  const who = safe.for_name ? `For ${safe.for_name}` : "For you";
 
   return (
     <div className={`safe ${state}`}>
       <div className="top">
-        <i className="dot" />
+        <Icon name="shield" />
         <b>Safe Copy</b>
-        <span>{STATUS[state]} · {who}</span>
+        {safe.for_name && <span>for {safe.for_name}</span>}
       </div>
-      <div key={state} ref={body} className="safe-body">
-        {safe.for_computer && state === "listening" && (
-          <div className="asking">
-            <span>{safe.for_name} is asking</span>
-            <span className="mono">computer {safe.for_computer}</span>
+      {staged ? (
+        <div className="safe-body">
+          <div className="stage">
+            <Pages caught={state === "caught"} />
+            <h2 className="display">{state === "caught" ? "Caught" : "Copy your key"}</h2>
+            <p className="sub">{state === "caught" ? "Clipboard wiped." : <Countdown endsAt={safe.ends_at} />}</p>
           </div>
-        )}
-        {state === "listening" && <Listening safe={safe} />}
-        {(state === "timeout" || state === "failed") && (
-          <>
-            <h2 className="title">{state === "timeout" ? "Time ran out" : "Safe Copy stopped"}</h2>
-            <p className="help">{safe.message ?? "Nothing was caught. The clipboard was not read."}</p>
-            <span className="grow-space" />
-            <div className="btn-row">
-              <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
-              <button className="btn primary small grow" onClick={() => void run(api.retry())}>Try again</button>
-            </div>
-          </>
-        )}
-        {state === "caught" && <Caught view={view} run={run} />}
-        {state === "sealed" && <Sealed safe={safe} run={run} />}
-        {error && <p className="err">{error}</p>}
-      </div>
+          <div key={state} ref={below} className="below">
+            {state === "listening" ? <Listening safe={safe} /> : <Caught view={view} run={run} />}
+            {error && <p className="err">{error}</p>}
+          </div>
+        </div>
+      ) : (
+        <div key={state} ref={body} className="safe-body">
+          {(state === "timeout" || state === "failed") && (
+            <>
+              <h2 className="title">{state === "timeout" ? "Time ran out" : "Safe Copy stopped"}</h2>
+              <p className="help">{safe.message ?? "Nothing was caught. The clipboard was not read."}</p>
+              <span className="grow-space" />
+              <div className="btn-row">
+                <button className="btn secondary small" onClick={() => void api.closeSafe()}>Cancel</button>
+                <button className="btn primary small grow" onClick={() => void run(api.retry())}>Try again</button>
+              </div>
+            </>
+          )}
+          {state === "sealed" && <Sealed safe={safe} run={run} />}
+          {error && <p className="err">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-/** Listening: two pixel pages bob while the seconds count down. */
-function Listening({ safe }: { safe: SafeView }) {
-  const [left, setLeft] = useState(() => Math.max(0, safe.ends_at - Date.now()));
-  const [info, setInfo] = useState(false);
+/** "From anywhere · 59s", counting down to when listening stops. */
+function Countdown({ endsAt }: { endsAt: number }) {
+  const [left, setLeft] = useState(() => Math.max(0, endsAt - Date.now()));
   useEffect(() => {
-    const t = window.setInterval(() => setLeft(Math.max(0, safe.ends_at - Date.now())), 250);
+    const t = window.setInterval(() => setLeft(Math.max(0, endsAt - Date.now())), 250);
     return () => window.clearInterval(t);
-  }, [safe.ends_at]);
+  }, [endsAt]);
+  return <>From anywhere · {Math.ceil(left / 1000)}s</>;
+}
+
+/** Below the stage while listening: who is asking, clipboard apps, the info and Cancel. */
+function Listening({ safe }: { safe: SafeView }) {
+  const [info, setInfo] = useState(false);
   return (
     <>
-      <div className="listen-center">
-        <div className="copy-now">
-          <CopyPages />
+      {safe.for_computer && (
+        <div className="asking">
+          <span>{safe.for_name} is asking</span>
+          <span className="mono">computer {safe.for_computer}</span>
         </div>
-        <div className="hero-text center">
-          <h2 className="display md">Copy your key</h2>
-          <p className="lede">From anywhere · {Math.ceil(left / 1000)}s</p>
-        </div>
-        {safe.apps.length > 0 && (
-          <p className="apps">
-            {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
-          </p>
-        )}
-      </div>
+      )}
+      {safe.apps.length > 0 && (
+        <p className="apps">
+          {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
+        </p>
+      )}
       {info && (
         <p className="info">
           KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
@@ -124,43 +135,33 @@ function Caught({ view, run }: { view: View; run: Run }) {
   const save = (keep = view.keep) => void run(forSomeone ? api.seal(label) : api.keepOwn(label, keep));
   return (
     <>
-      <div className="listen-center">
-        <div className="copy-now">
-          <CaughtPages />
+      {view.safe.message && <p className="help center">{view.safe.message}</p>}
+      <input
+        ref={input}
+        className="name-in"
+        value={label}
+        maxLength={64}
+        placeholder="Name this key"
+        aria-label="Name this key"
+        onChange={(e) => setLabel(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+      />
+      {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
+      {forSomeone ? (
+        <button className="btn primary" onClick={() => save()}>
+          Seal for {view.safe.for_name}
+        </button>
+      ) : (
+        <div className="keep-buttons" role="group" aria-label="How long to keep it">
+          {KEEP_CHOICES.map((c) => (
+            <button key={c.keep} className={view.keep === c.keep ? "pick" : ""} onClick={() => save(c.keep)}>
+              <Icon name={c.icon} />
+              {c.label}
+            </button>
+          ))}
         </div>
-        <div className="hero-text center">
-          <h2 className="display md">Caught.</h2>
-          <p className="lede">Clipboard wiped.</p>
-          {view.safe.message && <p className="help">{view.safe.message}</p>}
-        </div>
-      </div>
-      <div className="caught-form">
-        <input
-          ref={input}
-          className="name-in"
-          value={label}
-          maxLength={64}
-          placeholder="Name this key"
-          aria-label="Name this key"
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-        />
-        {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
-        {forSomeone ? (
-          <button className="btn primary" onClick={() => save()}>
-            Seal for {view.safe.for_name}
-          </button>
-        ) : (
-          <div className="keep-buttons" role="group" aria-label="Keep it for">
-            {KEEP_CHOICES.map((c) => (
-              <button key={c.keep} className={view.keep === c.keep ? "pick" : ""} onClick={() => save(c.keep)}>
-                {c.label}
-              </button>
-            ))}
-          </div>
-        )}
-        <button className="link center" onClick={() => void api.closeSafe()}>Cancel</button>
-      </div>
+      )}
+      <button className="link center" onClick={() => void api.closeSafe()}>Cancel</button>
     </>
   );
 }
