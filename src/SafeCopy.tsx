@@ -99,11 +99,7 @@ function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
           <span className="mono">computer {safe.for_computer}</span>
         </div>
       )}
-      {safe.apps.length > 0 && (
-        <p className="apps">
-          {andList(safe.apps)} {safe.apps.length === 1 ? "is" : "are"} running. Clipboard apps can read the key when you copy it.
-        </p>
-      )}
+      <ClipboardWarning safe={safe} />
       {info && (
         <p className="info">
           KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
@@ -113,6 +109,31 @@ function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
       )}
     </>
   );
+}
+
+/**
+ * One message about what might read the key as you copy it: whether
+ * something read the bait KeyHandoff put on the clipboard, together with any
+ * known clipboard apps running (from the process list, never from the read).
+ */
+function ClipboardWarning({ safe }: { safe: SafeView }) {
+  const apps = safe.apps.length > 0 ? `${andList(safe.apps)} ${safe.apps.length === 1 ? "is" : "are"} running` : null;
+  if (safe.read) {
+    return (
+      <div className="warning" role="alert">
+        <Icon name="alert" />
+        <div>
+          <b>Something just read your clipboard.</b>
+          <p>
+            {apps
+              ? `${apps} and may be what read it. Close ${safe.apps.length === 1 ? "it" : "them"} before you copy, or the key could end up in its history.`
+              : "KeyHandoff can't tell what. Before you copy, close programs that watch the clipboard, or check your antivirus."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return apps ? <p className="apps">{apps}. Clipboard apps can read the key when you copy it.</p> : null;
 }
 
 /** "Ditto", "Ditto and CopyQ", "Ditto, CopyQ and ClipX". */

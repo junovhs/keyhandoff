@@ -31,6 +31,8 @@ To keep a key of your own, click **Add your own**, copy the key on the provider'
 
 Safe Copy reads the clipboard only after you ask it to. It catches one copy, then switches off, or stops after 60 seconds. Nothing watches the clipboard the rest of the time. After a catch it wipes the clipboard, and removes the copy from clipboard history where the system allows it.
 
+While it listens on Linux, KeyHandoff also puts harmless bait on the clipboard. If another program reads it before you copy, Safe Copy warns you then, while you can still close it. (Windows will follow.)
+
 When it turns on, it checks the running programs against a short list of known clipboard managers, such as Ditto or CopyQ, and names any it finds, since they can read the key as you copy it. Clipboard extensions built into a desktop shell don't show up as programs, so an empty list isn't a promise.
 
 ## Keep times

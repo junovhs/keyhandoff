@@ -57,7 +57,7 @@ Profile data lives in a `handoff` folder under the system's data directory. Each
 
 **Windows:** a message-only window with `AddClipboardFormatListener`. The first `CF_UNICODETEXT` change is read, our copy zeroed and the clipboard emptied. The matching Win+V entry is then looked for and deleted on a single-threaded WinRT thread. `ClearHistory` is the fallback only when the one entry can't be deleted, and that fallback is shown to the user. A copy made by another app can't be kept out of history up front.
 
-**Linux (X11):** XFixes reports the next clipboard owner change. The text is read once, then KeyHandoff takes the clipboard and refuses every paste until something else is copied. X11 has no shared history API, so a history manager may already have stored the copy. Wayland isn't supported.
+**Linux (X11):** While listening, KeyHandoff owns the clipboard with harmless bait text. X11 keeps no copy, so a program reading the clipboard must ask KeyHandoff; a request for the text (not just the list of formats, and not from the window manager's own clipboard keeper) trips a warning. XFixes reports the next clipboard owner change. The text is read once, then KeyHandoff takes the clipboard and refuses every paste until something else is copied. X11 has no shared history API, so a history manager may already have stored the copy. Wayland isn't supported.
 
 ## Programs asking for keys
 

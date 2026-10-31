@@ -38,6 +38,7 @@ Provider pages show you a key, and you copy it. From that copy until KeyHandoff 
 
 - **On Linux (X11), a program watching the clipboard sees every key you copy.** In 1,000 copies, an independent fast reader saw all 1,000 before Safe Copy took them. X11 hands the copied text to every program that asks, so this isn't a race Safe Copy can win. See [capture-tests.md](capture-tests.md).
 - **On Windows this hasn't been measured yet.** Until it has been, treat the moment as long enough for a watching program to win.
+- **The bait check is a warning, not a promise.** On Linux, while Safe Copy listens, KeyHandoff puts harmless text on the clipboard; if another program reads it, you're warned before you copy. A program that reads only when a new copy appears, or the desktop's own clipboard keeper (GNOME Shell keeps every copy), won't show up, and Windows has no bait yet. Test: [`x11_bait_trips_only_when_something_reads`](../src-tauri/src/os/linux/clipboard.rs). Rule 4.
 - **Safe Copy listens only when you arm it,** takes one copy, then stops, or stops after 60 seconds. Tests: [`x11_capture_takes_one_copy_and_clears_it`](../src-tauri/src/os/linux/clipboard.rs), [`x11_capture_times_out_and_cancels`](../src-tauri/src/os/linux/clipboard.rs), [`catches_one_copy_and_wipes_clipboard_and_history`](../src-tauri/src/os/windows/capture.rs), [`times_out_and_cancels`](../src-tauri/src/os/windows/capture.rs). These use the real clipboard, so they run on request rather than by default. Rule 7.
 
 ### Clipboard history

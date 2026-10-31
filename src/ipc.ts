@@ -29,6 +29,8 @@ export interface SafeView {
   message: string | null;
   /** Known clipboard apps that were running when Safe Copy armed. */
   apps: string[];
+  /** Something read the clipboard bait while Safe Copy listened. */
+  read: boolean;
 }
 
 /** A program asking for kept keys, waiting for Allow. */

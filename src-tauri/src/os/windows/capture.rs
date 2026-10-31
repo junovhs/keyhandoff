@@ -77,7 +77,15 @@ impl History {
     }
 }
 
-pub fn arm_capture(timeout: Duration, cancel: Arc<AtomicBool>, done: impl FnOnce(Captured) + Send + 'static) -> Result<(), String> {
+/// `read` would report something reading bait before the copy; Windows has no
+/// bait yet (it needs delayed rendering, and Win+V reads every copy), so it
+/// is never called here.
+pub fn arm_capture(
+    timeout: Duration,
+    cancel: Arc<AtomicBool>,
+    done: impl FnOnce(Captured) + Send + 'static,
+    _read: impl Fn() + Send + 'static,
+) -> Result<(), String> {
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     thread::Builder::new()
         .name("safe-copy".into())
@@ -341,7 +349,7 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(false));
         arm_capture(Duration::from_secs(10), cancel.clone(), move |c| {
             let _ = tx.send(c);
-        })
+        }, || {})
         .unwrap();
         set_clipboard_text(&key).unwrap();
         match rx.recv_timeout(Duration::from_secs(10)).expect("no result") {
@@ -397,7 +405,7 @@ mod tests {
             let (tx, rx) = mpsc::channel();
             arm_capture(Duration::from_secs(10), Arc::new(AtomicBool::new(false)), move |c| {
                 let _ = tx.send(c);
-            })
+            }, || {})
             .unwrap();
             set_clipboard_text(&key).unwrap();
             if let Ok(Captured::Caught(secret, _)) = rx.recv_timeout(Duration::from_secs(10)) {
@@ -417,7 +425,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         arm_capture(Duration::from_millis(300), Arc::new(AtomicBool::new(false)), move |c| {
             let _ = tx.send(c);
-        })
+        }, || {})
         .unwrap();
         assert!(matches!(rx.recv_timeout(Duration::from_secs(5)), Ok(Captured::TimedOut)));
 
@@ -425,7 +433,7 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(false));
         arm_capture(Duration::from_secs(30), cancel.clone(), move |c| {
             let _ = tx.send(c);
-        })
+        }, || {})
         .unwrap();
         cancel.store(true, Ordering::SeqCst);
         assert!(matches!(rx.recv_timeout(Duration::from_secs(5)), Ok(Captured::Cancelled)));

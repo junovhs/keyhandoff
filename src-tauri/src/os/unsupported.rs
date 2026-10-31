@@ -10,7 +10,12 @@ use super::{Captured, Clip, MasterKey, ServeKeys};
 
 const NOT_YET: &str = "KeyHandoff does not support this operating system yet.";
 
-pub fn arm_capture(_timeout: Duration, _cancel: Arc<AtomicBool>, _done: impl FnOnce(Captured) + Send + 'static) -> Result<(), String> {
+pub fn arm_capture(
+    _timeout: Duration,
+    _cancel: Arc<AtomicBool>,
+    _done: impl FnOnce(Captured) + Send + 'static,
+    _read: impl Fn() + Send + 'static,
+) -> Result<(), String> {
     Err(NOT_YET.into())
 }
 

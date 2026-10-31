@@ -27,10 +27,12 @@ pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Called once when a Safe Copy capture ends.
 pub type OnCaptured = Box<dyn FnOnce(Captured) + Send>;
+/// Called when something reads the clipboard bait while Safe Copy listens.
+pub type OnRead = Box<dyn Fn() + Send>;
 
 /// The clipboard operations the flows need; tests swap in fakes.
 pub struct Clipboard {
-    pub arm: fn(Duration, Arc<AtomicBool>, OnCaptured) -> Result<(), String>,
+    pub arm: fn(Duration, Arc<AtomicBool>, OnCaptured, OnRead) -> Result<(), String>,
     pub offer: fn(&Path, String) -> Result<(), String>,
     pub read: fn() -> Result<Clip, String>,
     /// Known clipboard apps running now, named when Safe Copy arms.
@@ -41,7 +43,7 @@ pub struct Clipboard {
 
 impl Clipboard {
     pub fn system() -> Self {
-        Self { arm: |t, c, done| os::arm_capture(t, c, done), offer: os::offer_file, read: os::read_clipboard, apps: os::clipboard_apps, text: os::offer_text }
+        Self { arm: |t, c, done, read| os::arm_capture(t, c, done, read), offer: os::offer_file, read: os::read_clipboard, apps: os::clipboard_apps, text: os::offer_text }
     }
 }
 
@@ -69,8 +71,9 @@ impl Target {
 
 enum Safe {
     Off,
-    /// `apps`: known clipboard apps running when it armed.
-    Listening { target: Target, ends_at: u64, cancel: Arc<AtomicBool>, apps: Vec<String> },
+    /// `apps`: known clipboard apps running when it armed. `read`: something
+    /// read the bait, set from the capture thread.
+    Listening { target: Target, ends_at: u64, cancel: Arc<AtomicBool>, apps: Vec<String>, read: Arc<AtomicBool> },
     TimedOut { target: Target },
     Failed { target: Target, message: String },
     /// Caught and wiped from the clipboard; waiting for a name (and, for
@@ -149,6 +152,8 @@ pub struct SafeView {
     pub message: Option<String>,
     /// Known clipboard apps that were running when Safe Copy armed.
     pub apps: Vec<String>,
+    /// Something read the clipboard bait while Safe Copy listened.
+    pub read: bool,
 }
 
 /// A program asking for kept keys, waiting for Allow.
@@ -328,7 +333,10 @@ impl Handoff {
         core.generation += 1;
         let generation = core.generation;
         let cancel = Arc::new(AtomicBool::new(false));
+        // Created first: a read can land before this function returns.
+        let read = Arc::new(AtomicBool::new(false));
         let me = self.me.clone();
+        let (tripped, me_read) = (read.clone(), self.me.clone());
         (self.clipboard.arm)(
             ARM_TIMEOUT,
             cancel.clone(),
@@ -337,9 +345,16 @@ impl Handoff {
                     handoff.captured(generation, result);
                 }
             }),
+            Box::new(move || {
+                if !tripped.swap(true, Ordering::SeqCst) {
+                    if let Some(handoff) = me_read.upgrade() {
+                        (handoff.notify)();
+                    }
+                }
+            }),
         )?;
         let apps = (self.clipboard.apps)();
-        core.safe = Safe::Listening { target, ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel, apps };
+        core.safe = Safe::Listening { target, ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel, apps, read };
         core.accepted = None;
         Ok(())
     }
@@ -662,12 +677,15 @@ impl Core {
             file_name: None,
             message: None,
             apps: Vec::new(),
+            read: false,
         };
         match &self.safe {
             Safe::Off => {
-                SafeView { state: "off", for_name: None, for_computer: None, ends_at: 0, file_name: None, message: None, apps: Vec::new() }
+                SafeView { state: "off", for_name: None, for_computer: None, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false }
             }
-            Safe::Listening { target, ends_at, apps, .. } => SafeView { ends_at: *ends_at, apps: apps.clone(), ..base("listening", target) },
+            Safe::Listening { target, ends_at, apps, read, .. } => {
+                SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), ..base("listening", target) }
+            }
             Safe::TimedOut { target } => base("timeout", target),
             Safe::Failed { target, message } => SafeView { message: Some(message.clone()), ..base("failed", target) },
             Safe::Caught { target, note, .. } => SafeView { message: note.clone(), ..base("caught", target) },
@@ -679,6 +697,7 @@ impl Core {
                 file_name: Some(display_name(file)),
                 message: None,
                 apps: Vec::new(),
+                read: false,
             },
         }
     }
@@ -790,12 +809,14 @@ mod tests {
     // The fake clipboard is process-wide; tests that use it take this lock.
     static SERIAL: StdMutex<()> = StdMutex::new(());
     static ARMED: StdMutex<Option<OnCaptured>> = StdMutex::new(None);
+    static BAIT_READ: StdMutex<Option<OnRead>> = StdMutex::new(None);
     static OFFERED: StdMutex<Option<(PathBuf, String)>> = StdMutex::new(None);
 
     fn fake() -> Clipboard {
         Clipboard {
-            arm: |_, _, done| {
+            arm: |_, _, done, read| {
                 *ARMED.lock().unwrap() = Some(done);
+                *BAIT_READ.lock().unwrap() = Some(read);
                 Ok(())
             },
             offer: |file, text| {
@@ -920,6 +941,9 @@ mod tests {
         let safe = me.handoff.view().safe;
         assert_eq!((safe.state, safe.for_name), ("listening", None));
         assert_eq!(safe.apps, ["CopyQ"], "running clipboard apps are named while listening");
+        assert!(!safe.read);
+        (BAIT_READ.lock().unwrap().as_ref().unwrap())();
+        assert!(me.handoff.view().safe.read, "a read of the bait shows while listening");
         copy(KEY);
         assert!(me.handoff.seal("X").is_err(), "your own key is never sealed");
         assert!(me.handoff.keep_own("  ", Keep::Once).is_err());

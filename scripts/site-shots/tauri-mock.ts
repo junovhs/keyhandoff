@@ -11,7 +11,7 @@ const KEYS: KeyView[] = [
   { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep" },
 ];
 
-function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = []): View["safe"] {
+function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = [], read = false): View["safe"] {
   return {
     state,
     for_name: forName,
@@ -20,6 +20,7 @@ function safe(state: SafeState, forName: string | null = "Ann", apps: string[] =
     file_name: state === "sealed" ? "Key for Ann.handoff" : null,
     message: null,
     apps,
+    read,
   };
 }
 
@@ -53,6 +54,8 @@ const SCENES: Record<string, Partial<View>> = {
   },
   "home-copied": { notice: "Copied DIALPAD_API_KEY=handoff:Dialpad" },
   "listening-apps": { safe: safe("listening", null, ["Ditto"]) },
+  "listening-read-app": { safe: safe("listening", null, ["Ditto"], true) },
+  "listening-read": { safe: safe("listening", null, [], true) },
   timeout: { safe: safe("timeout", null) },
 };
 

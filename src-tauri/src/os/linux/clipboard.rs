@@ -2,9 +2,12 @@
 //! 1x1 window, and its thread ends when the work is done, so nothing watches
 //! the clipboard while Safe Copy is off.
 //!
-//! - Capture: XFixes reports the next CLIPBOARD owner change; the text is
-//!   read once, then Handoff takes CLIPBOARD and PRIMARY and refuses every
-//!   paste until something else is copied, so the key cannot be pasted again.
+//! - Capture: while listening, KeyHandoff owns CLIPBOARD with harmless bait
+//!   text. X11 keeps no copy, so anything that reads the clipboard has to ask
+//!   KeyHandoff, and that request trips the warning. XFixes reports the next
+//!   owner change (your copy); the text is read once, then Handoff takes
+//!   CLIPBOARD and PRIMARY and refuses every paste until something else is
+//!   copied, so the key cannot be pasted again.
 //! - Offer: own CLIPBOARD and serve a file (`text/uri-list`,
 //!   `x-special/gnome-copied-files`) with the armored text as the text fallback.
 //!
@@ -44,6 +47,7 @@ x11rb::atom_manager! {
         TEXT_PLAIN: b"text/plain",
         TEXT_PLAIN_UTF8: b"text/plain;charset=utf-8",
         URI_LIST: b"text/uri-list",
+        NET_SUPPORTING_WM_CHECK: b"_NET_SUPPORTING_WM_CHECK",
         GNOME_FILES: b"x-special/gnome-copied-files",
     }
 }
@@ -58,6 +62,7 @@ static OWNER_GENERATION: AtomicU64 = AtomicU64::new(0);
 struct X {
     conn: RustConnection,
     win: u32,
+    root: u32,
     atoms: Atoms,
 }
 
@@ -82,7 +87,16 @@ impl X {
         .map_err(err)?;
         let atoms = Atoms::new(&conn).map_err(err)?.reply().map_err(err)?;
         conn.flush().map_err(err)?;
-        Ok(Self { conn, win, atoms })
+        Ok(Self { conn, win, root, atoms })
+    }
+
+    /// The X client of the window manager, from the window it advertises. On
+    /// GNOME it keeps the clipboard after apps close by reading every copy, as
+    /// part of the desktop, so its reads of the bait don't count.
+    fn desktop_client(&self) -> Option<u32> {
+        let reply = self.conn.get_property(false, self.root, self.atoms.NET_SUPPORTING_WM_CHECK, AtomEnum::WINDOW, 0, 1).ok()?.reply().ok()?;
+        let window = reply.value32()?.next()?;
+        Some(window & !self.conn.setup().resource_id_mask)
     }
 
     fn convert(&self, target: u32, time: u32) -> Result<(), String> {
@@ -169,9 +183,18 @@ fn err(e: impl std::fmt::Display) -> String {
     format!("Clipboard error: {e}")
 }
 
+/// What the bait says if something pastes it.
+const BAIT: &[u8] = b"KeyHandoff is waiting for a copy.";
+
 /// Arm Safe Copy: take the next text copied by another program, then clear the
-/// clipboard. `done` runs once, on the capture thread.
-pub fn arm_capture(timeout: Duration, cancel: Arc<AtomicBool>, done: impl FnOnce(Captured) + Send + 'static) -> Result<(), String> {
+/// clipboard. `done` runs once, on the capture thread; `read` runs whenever
+/// something reads the bait before your copy.
+pub fn arm_capture(
+    timeout: Duration,
+    cancel: Arc<AtomicBool>,
+    done: impl FnOnce(Captured) + Send + 'static,
+    read: impl Fn() + Send + 'static,
+) -> Result<(), String> {
     let x = X::open()?;
     x.conn.xfixes_query_version(5, 0).map_err(err)?.reply().map_err(err)?;
     x.conn
@@ -181,7 +204,7 @@ pub fn arm_capture(timeout: Duration, cancel: Arc<AtomicBool>, done: impl FnOnce
     thread::Builder::new()
         .name("safe-copy".into())
         .spawn(move || {
-            let result = capture(&x, timeout, &cancel);
+            let result = capture(&x, timeout, &cancel, &read);
             let caught = matches!(result, Captured::Caught(..));
             let generation = if caught { x.own(true).ok() } else { None };
             done(result);
@@ -193,8 +216,15 @@ pub fn arm_capture(timeout: Duration, cancel: Arc<AtomicBool>, done: impl FnOnce
     Ok(())
 }
 
-fn capture(x: &X, timeout: Duration, cancel: &AtomicBool) -> Captured {
+fn capture(x: &X, timeout: Duration, cancel: &AtomicBool, read: &dyn Fn()) -> Captured {
     let deadline = Instant::now() + timeout;
+    let bait: Vec<(u32, Vec<u8>)> =
+        [x.atoms.UTF8_STRING, x.atoms.TEXT_PLAIN_UTF8, x.atoms.TEXT_PLAIN, x.atoms.TEXT, AtomEnum::STRING.into()].map(|t| (t, BAIT.to_vec())).into();
+    let desktop = x.desktop_client();
+    let mask = x.conn.setup().resource_id_mask;
+    if let Err(e) = x.own(false) {
+        return Captured::Failed(e);
+    }
     loop {
         if cancel.load(Ordering::SeqCst) {
             return Captured::Cancelled;
@@ -208,6 +238,18 @@ fn capture(x: &X, timeout: Duration, cancel: &AtomicBool) -> Captured {
                     if let Err(e) = x.convert(x.atoms.UTF8_STRING, e.selection_timestamp) {
                         return Captured::Failed(e);
                     }
+                }
+                // Something asked for the bait's text: answer it and raise the
+                // warning. Asking only which formats exist (TARGETS) is what
+                // open apps do on every copy to update their Paste menus, so
+                // that alone isn't a read, and neither is the desktop's own
+                // clipboard keeper.
+                Ok(Some(Event::SelectionRequest(r))) => {
+                    let from_desktop = desktop.is_some_and(|d| r.requestor & !mask == d);
+                    if r.target != x.atoms.TARGETS && !from_desktop {
+                        read();
+                    }
+                    x.answer(&r, Some(&bait));
                 }
                 Ok(Some(Event::SelectionNotify(e))) if e.requestor == x.win && e.property != NONE => {
                     match x.take_property() {
@@ -394,7 +436,7 @@ mod tests {
     fn x11_capture_takes_one_copy_and_clears_it() {
         let (tx, rx) = std::sync::mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
-        arm_capture(Duration::from_secs(5), cancel, move |r| tx.send(r).unwrap()).unwrap();
+        arm_capture(Duration::from_secs(5), cancel, move |r| tx.send(r).unwrap(), || {}).unwrap();
         thread::sleep(Duration::from_millis(100));
         xclip_copy("  sk-synthetic-x11-0001\n");
         match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
@@ -415,11 +457,11 @@ mod tests {
     #[ignore = "needs an X11 display and xclip"]
     fn x11_capture_times_out_and_cancels() {
         let (tx, rx) = std::sync::mpsc::channel();
-        arm_capture(Duration::from_millis(300), Arc::new(AtomicBool::new(false)), move |r| tx.send(r).unwrap()).unwrap();
+        arm_capture(Duration::from_millis(300), Arc::new(AtomicBool::new(false)), move |r| tx.send(r).unwrap(), || {}).unwrap();
         assert!(matches!(rx.recv_timeout(Duration::from_secs(3)).unwrap(), Captured::TimedOut));
         let (tx, rx) = std::sync::mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
-        arm_capture(Duration::from_secs(5), cancel.clone(), move |r| tx.send(r).unwrap()).unwrap();
+        arm_capture(Duration::from_secs(5), cancel.clone(), move |r| tx.send(r).unwrap(), || {}).unwrap();
         cancel.store(true, Ordering::SeqCst);
         assert!(matches!(rx.recv_timeout(Duration::from_secs(3)).unwrap(), Captured::Cancelled));
     }
@@ -477,7 +519,7 @@ mod tests {
         for i in 0..copies {
             let key = format!("sk-synthetic-race-{i:04}");
             let (tx, rx) = std::sync::mpsc::channel();
-            arm_capture(Duration::from_secs(5), Arc::new(AtomicBool::new(false)), move |r| tx.send((r, Instant::now())).unwrap()).unwrap();
+            arm_capture(Duration::from_secs(5), Arc::new(AtomicBool::new(false)), move |r| tx.send((r, Instant::now())).unwrap(), || {}).unwrap();
             let copied = Instant::now();
             xclip_copy(&key);
             if let Ok((Captured::Caught(s, _), at)) = rx.recv_timeout(Duration::from_secs(5)) {
@@ -497,6 +539,43 @@ mod tests {
             pct(1.0)
         );
         assert_eq!(caught, copies, "Safe Copy missed copies; the race numbers would mean nothing");
+    }
+
+    /// The bait trips when an independent program reads the clipboard, not
+    /// otherwise, and the real copy is still caught afterwards.
+    #[test]
+    #[ignore = "needs an X11 display and xclip"]
+    fn x11_bait_trips_only_when_something_reads() {
+        use std::sync::atomic::AtomicUsize;
+        let arm = |reads: Arc<AtomicUsize>| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            arm_capture(Duration::from_secs(5), Arc::new(AtomicBool::new(false)), move |r| tx.send(r).unwrap(), move || {
+                reads.fetch_add(1, Ordering::SeqCst);
+            })
+            .unwrap();
+            rx
+        };
+
+        // Nothing watching: no trip, and the copy is caught.
+        let quiet = Arc::new(AtomicUsize::new(0));
+        let rx = arm(quiet.clone());
+        thread::sleep(Duration::from_millis(500));
+        assert_eq!(quiet.load(Ordering::SeqCst), 0, "tripped with nothing reading");
+        xclip_copy("sk-synthetic-bait-0001");
+        assert!(matches!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Captured::Caught(..)));
+
+        // Another program pastes while Safe Copy listens: it gets the bait and trips it.
+        let watched = Arc::new(AtomicUsize::new(0));
+        let rx = arm(watched.clone());
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(xclip_paste("UTF8_STRING").as_deref(), Some("KeyHandoff is waiting for a copy."));
+        thread::sleep(Duration::from_millis(100));
+        assert!(watched.load(Ordering::SeqCst) > 0, "a read did not trip the bait");
+        xclip_copy("sk-synthetic-bait-0002");
+        match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+            Captured::Caught(s, _) => assert_eq!(s.expose(), b"sk-synthetic-bait-0002"),
+            _ => panic!("the copy after the bait was not caught"),
+        }
     }
 
     #[test]
