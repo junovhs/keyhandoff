@@ -13,6 +13,7 @@
      near, slightly violet blue; --accent-ink is the lighter tint for small icons
      and text on black. Text on blue is white. */
   --ok: #2fd567;
+  --warn: #ffb020;
   --accent: #2f6bff; --accent-2: #5a5cff; --accent-ink: #6b95ff;
   --accent-grad: linear-gradient(100deg, var(--accent), var(--accent-2));
   --font: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -177,7 +178,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .pages .lock-shackle { fill: none; stroke: var(--ok); stroke-width: 6; }
 .pages .lock-body { fill: var(--ok); filter: drop-shadow(0 0 5px rgba(47, 213, 103, .6)); }
 .pages .back, .pages .front { transition: opacity calc(.3s / var(--tempo)) ease-out; }
-.pages.missed .back, .pages.missed .front { opacity: .35; }
+.pages.missed .back, .pages.missed .front { opacity: 0; }
+.pages .clock { opacity: 0; transition: opacity calc(.3s / var(--tempo)) ease-out; }
+.pages.missed .clock { opacity: 1; }
+.pages .clock-face { fill: none; stroke: var(--text); stroke-width: 5.5; stroke-linecap: square; }
+.pages .clock-hand { fill: none; stroke: var(--warn); stroke-width: 6.5; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(255, 176, 32, .55)); }
+.pages .clock-pin { fill: var(--warn); }
 
 /* Panel subjects: a page or window with a coloured mark, in the same line style. */
 .glyph { flex-shrink: 0; overflow: visible; }

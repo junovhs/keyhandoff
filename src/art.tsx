@@ -12,8 +12,9 @@ const LOCK_SHACKLE = "M70 70V63a8 8 0 0 1 16 0V70";
  * Safe Copy's picture, the same in every Safe Copy state so nothing moves:
  * two chunky pages that float gently, and a mark in the corner. `check` draws
  * a green check on when the key is caught; `lock` swaps it for a green lock
- * once sealed; `missed` dims the pages when time runs out. Marks sit on a
- * ground-coloured outline that cuts a gap out of the page behind them.
+ * once sealed; `missed` crossfades the pages to a stopwatch in the same place
+ * when time runs out. Marks sit on a ground-coloured outline that cuts a gap
+ * out of the page behind them.
  */
 export function Pages({ mark }: { mark: "none" | "check" | "lock" | "missed" }) {
   return (
@@ -30,6 +31,12 @@ export function Pages({ mark }: { mark: "none" | "check" | "lock" | "missed" }) 
           <path className="lock-shackle" d={LOCK_SHACKLE} />
           <rect className="lock-body" x="64" y="70" width="28" height="22" rx="2.5" />
         </g>
+      </g>
+      <g className="clock">
+        <circle className="clock-face" cx="50" cy="56" r="32" />
+        <path className="clock-face" d="M43 13H57M50 13V24M74 27L79 22" />
+        <path className="clock-hand" d="M50 56V36" />
+        <circle className="clock-pin" cx="50" cy="56" r="4.5" />
       </g>
     </svg>
   );
