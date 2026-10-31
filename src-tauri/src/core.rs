@@ -975,18 +975,18 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
-    /// The issue's check, for real: a Python script whose .env holds only a
-    /// pointer gets the key over the socket after Always allow; another
-    /// process asking over the same socket gets nothing and a prompt.
+    /// The pointer check, for real, for each loader: a script whose .env holds
+    /// only a pointer, with the loader copied next to it, gets the key over the
+    /// socket after Always allow; another process asking over the same socket
+    /// gets nothing and a prompt.
     #[cfg(target_os = "linux")]
-    #[test]
-    fn python_loader_gets_the_key_through_the_socket() {
+    fn loader_gets_the_key_through_the_socket(program: &str, loader: &str, script: (&str, &str)) {
         use sha2::{Digest, Sha256};
         use std::io::{BufRead, BufReader, Write};
         use std::process::Command;
 
-        if Command::new("python3").arg("--version").output().is_err() {
-            eprintln!("skipped: no python3");
+        if Command::new(program).arg("--version").output().is_err() {
+            eprintln!("skipped: no {program}");
             return;
         }
         let me = app("Juno");
@@ -999,17 +999,12 @@ mod tests {
         let project = me.data.join("project");
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join(".env"), "DIALPAD_API_KEY=handoff:Dialpad\nOTHER=plain\n").unwrap();
-        fs::write(
-            project.join("check.py"),
-            "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_API_KEY'].encode()).hexdigest())\n",
-        )
-        .unwrap();
-        let loaders = Path::new(env!("CARGO_MANIFEST_DIR")).join("../loaders");
+        fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("../loaders").join(loader), project.join(loader)).unwrap();
+        fs::write(project.join(script.0), script.1).unwrap();
         let run = || {
-            let out = Command::new("python3")
-                .arg("check.py")
+            let out = Command::new(program)
+                .arg(script.0)
                 .current_dir(&project)
-                .env("PYTHONPATH", &loaders)
                 .env("KEYHANDOFF_PROFILE", &profile)
                 .env_remove("DIALPAD_API_KEY")
                 .output()
@@ -1022,7 +1017,7 @@ mod tests {
         let first = std::thread::scope(|s| {
             let script = s.spawn(run);
             let shown = answer_when_asked(&h, Answer::Always);
-            assert!(shown.name.starts_with("python"), "{shown:?}");
+            assert!(shown.name.starts_with(program.trim_end_matches('3')), "{shown:?}");
             assert_eq!(shown.folder, Some(home_relative(&project.canonicalize().unwrap())));
             script.join().unwrap()
         });
@@ -1047,6 +1042,20 @@ mod tests {
         assert!(!files_contain(&project, KEY), "the project holds no key");
         let _ = fs::remove_file(sock);
         let _ = fs::remove_dir_all(me.data);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn python_loader_gets_the_key_through_the_socket() {
+        let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_API_KEY'].encode()).hexdigest())\n";
+        loader_gets_the_key_through_the_socket("python3", "keyhandoff_env.py", ("check.py", script));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn node_loader_gets_the_key_through_the_socket() {
+        let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_API_KEY).digest(\"hex\"));\n";
+        loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
     }
 
     #[test]

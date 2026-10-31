@@ -41,7 +41,7 @@ When you accept a key you can keep it **once**, for **30 days**, or until you re
 ## Using a key in a program
 
 1. **Point at the key.** Your `.env` holds `DIALPAD_API_KEY=handoff:Dialpad` instead of the key. The name matches a kept key, ignoring case. Names are unique, so a pointer always means one key.
-2. **Load it.** The program calls a one-line loader, such as `keyhandoff_env.load()` for Python. It asks the running app for every pointed-to key at once, over a local socket (a named pipe on Windows).
+2. **Load it.** The program calls a one-line loader: `keyhandoff_env.load()` for Python, or `await load()` from `keyhandoff_env.mjs` for Node.js. The loader runs inside the program and sets the variable there, rather than launching the program with the key, because a program's starting environment can be read by other programs running as you. It asks the running app for every pointed-to key at once, over a local socket (a named pipe on Windows).
 3. **Allow it.** KeyHandoff asks the operating system which program is asking and which folder it runs in. The first time, the window shows both, and you choose **Always allow**, **Just this once** or **Deny**. Always allow covers that program, in that folder, for those keys. The same program in another folder asks again, because allowing `python` everywhere would allow every script.
 4. **Use it.** The value goes into the program's own environment. Nothing is written to disk, and a key kept **once** is destroyed after this first use.
 

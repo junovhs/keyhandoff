@@ -15,7 +15,7 @@ KeyHandoff is a small desktop app for handing someone an API key, or any other s
 
 You can also catch a key for yourself with **Add your own**. KeyHandoff has no way to show a key on screen.
 
-**Use a key in a program.** Your `.env` holds a pointer instead of the key, such as `DIALPAD_API_KEY=handoff:Dialpad`. A one-line loader asks the running app for it (Python: copy [`loaders/keyhandoff_env.py`](loaders/keyhandoff_env.py) next to your script and call `keyhandoff_env.load()`). The first time a program asks from a folder, KeyHandoff shows which program and folder, and you choose Always allow, Just this once or Deny. The value goes into that process's environment and is never written to disk.
+**Use a key in a program.** Your `.env` holds a pointer instead of the key, such as `DIALPAD_API_KEY=handoff:Dialpad`. A one-line loader, copied next to your script, asks the running app for it: [`keyhandoff_env.py`](loaders/keyhandoff_env.py) for Python (`keyhandoff_env.load()`) or [`keyhandoff_env.mjs`](loaders/keyhandoff_env.mjs) for Node.js (`await load()`). The first time a program asks from a folder, KeyHandoff shows which program and folder, and you choose Always allow, Just this once or Deny. The value goes into that process's environment and is never written to disk.
 
 Typing a key into a field is still being built.
 
