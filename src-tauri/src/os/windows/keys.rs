@@ -44,9 +44,10 @@ fn peer(pipe: HANDLE) -> Option<Peer> {
         .ok()?;
     let program = image_path(process);
     let folder = program.as_ref().and_then(|_| current_dir(process));
+    let command = program.as_ref().and_then(|_| command_line(process));
     // SAFETY: we own the handle.
     let _ = unsafe { CloseHandle(process) };
-    Some(Peer { program: program?, folder })
+    Some(Peer { program: program?, folder, command })
 }
 
 fn image_path(process: HANDLE) -> Option<PathBuf> {
@@ -57,10 +58,44 @@ fn image_path(process: HANDLE) -> Option<PathBuf> {
     Some(PathBuf::from(String::from_utf16_lossy(&buf[..len as usize])))
 }
 
-/// `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`, at its x64 offsets. A
-/// 32-bit process or one we can't read gives `None`.
-#[cfg(target_pointer_width = "64")]
+/// `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`. A 32-bit process or one we
+/// can't read gives `None`.
 fn current_dir(process: HANDLE) -> Option<PathBuf> {
+    let path = parameter_string(process, 0x38)?;
+    // Always ends in a backslash; keep it only for a drive root.
+    let path = if path.len() > 3 { path.trim_end_matches('\\') } else { &path };
+    Some(PathBuf::from(path))
+}
+
+/// `RTL_USER_PROCESS_PARAMETERS.CommandLine`, for display.
+fn command_line(process: HANDLE) -> Option<String> {
+    let line = parameter_string(process, 0x70)?;
+    super::super::display_command(split_command_line(&line).iter().map(String::as_str))
+}
+
+/// Windows quoting, enough for display: spaces split, double quotes group.
+fn split_command_line(line: &str) -> Vec<String> {
+    let (mut args, mut arg, mut quoted) = (Vec::new(), String::new(), false);
+    for c in line.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            ' ' | '\t' if !quoted => {
+                if !arg.is_empty() {
+                    args.push(std::mem::take(&mut arg));
+                }
+            }
+            c => arg.push(c),
+        }
+    }
+    if !arg.is_empty() {
+        args.push(arg);
+    }
+    args
+}
+
+/// A UNICODE_STRING inside the process parameters, at its x64 offset.
+#[cfg(target_pointer_width = "64")]
+fn parameter_string(process: HANDLE, offset: usize) -> Option<String> {
     // SAFETY: all-zero is a valid PROCESS_BASIC_INFORMATION (null pointers, zero fields).
     let mut info: PROCESS_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
     let size = std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
@@ -70,18 +105,15 @@ fn current_dir(process: HANDLE) -> Option<PathBuf> {
         return None;
     }
     let params: usize = read(process, info.PebBaseAddress as usize + 0x20)?;
-    let bytes: u16 = read(process, params + 0x38)?;
-    let buffer: usize = read(process, params + 0x40)?;
-    let mut path = vec![0u16; usize::from(bytes) / 2];
-    read_into(process, buffer, &mut path)?;
-    let path = String::from_utf16(&path).ok()?;
-    // Always ends in a backslash; keep it only for a drive root.
-    let path = if path.len() > 3 { path.trim_end_matches('\\') } else { &path };
-    Some(PathBuf::from(path))
+    let bytes: u16 = read(process, params + offset)?;
+    let buffer: usize = read(process, params + offset + 8)?;
+    let mut units = vec![0u16; usize::from(bytes) / 2];
+    read_into(process, buffer, &mut units)?;
+    String::from_utf16(&units).ok()
 }
 
 #[cfg(not(target_pointer_width = "64"))]
-fn current_dir(_process: HANDLE) -> Option<PathBuf> {
+fn parameter_string(_process: HANDLE, _offset: usize) -> Option<String> {
     None
 }
 

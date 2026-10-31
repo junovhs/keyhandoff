@@ -12,7 +12,7 @@ mod pipe;
 mod protect;
 
 pub use capture::arm_capture;
-pub use clipboard::{offer_file, read_clipboard};
+pub use clipboard::{offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;

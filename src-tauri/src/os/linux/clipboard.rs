@@ -262,6 +262,25 @@ pub fn offer_file(file: &Path, text: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Put plain text on the clipboard. Only for text that isn't secret.
+pub fn offer_text(text: String) -> Result<(), String> {
+    let x = X::open()?;
+    let text = text.into_bytes();
+    let offer = vec![
+        (x.atoms.UTF8_STRING, text.clone()),
+        (x.atoms.TEXT_PLAIN_UTF8, text.clone()),
+        (x.atoms.TEXT_PLAIN, text.clone()),
+        (x.atoms.TEXT, text.clone()),
+        (AtomEnum::STRING.into(), text),
+    ];
+    let generation = x.own(false)?;
+    thread::Builder::new()
+        .name("clipboard-offer".into())
+        .spawn(move || x.serve(Some(&offer), generation))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Read the clipboard once for a paste: files first, then text.
 pub fn read_clipboard() -> Result<Clip, String> {
     let x = X::open()?;

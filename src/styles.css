@@ -63,8 +63,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 /* frameless window chrome: the title area drags the window */
 .app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr; }
 .titlebar { display: flex; align-items: center; height: 48px; padding: 0 8px 0 20px; gap: 10px; }
-.titlebar .shield { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-2); margin-right: 6px; }
-.titlebar .shield .icon { width: 14px; height: 14px; color: var(--accent-ink); }
 .titlebar .name { flex: 1; font-size: 15px; font-weight: 600; }
 .titlebar button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); }
 .titlebar button:hover { background: var(--raised); color: var(--text); }
@@ -97,6 +95,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .key-row:hover .forget, .key-row .forget:focus-visible, .key-row .forget.sure { opacity: 1; }
 .key-row .forget:hover { background: var(--raised); color: var(--text); }
 .key-row .forget.sure { color: var(--ground); background: var(--text); }
+.key-row .use { height: 30px; padding: 0 10px; border-radius: 7px; color: var(--text-2); font-size: 12px; font-weight: 500; opacity: 0; transition: opacity calc(.15s / var(--tempo)); }
+.key-row:hover .use, .key-row .use:focus-visible { opacity: 1; }
+.key-row .use:hover { background: var(--raised); color: var(--text); }
 .steps { margin: 0; padding: 18px; list-style: none; border: 1px dashed var(--line-strong); border-radius: 12px; display: flex; flex-direction: column; gap: 12px; }
 .steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; color: #d4d4d4; }
 .steps .n { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
@@ -127,9 +128,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .chip .help { white-space: nowrap; }
 .grab { cursor: grab; touch-action: none; }
 .grab:active { cursor: grabbing; }
-.checks { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
-.checks div { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; color: #d4d4d4; }
-.checks .icon { margin-top: 2px; color: var(--accent-ink); }
 
 /* Once / 30 days / Keep */
 .segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line-strong); border-radius: 10px; }

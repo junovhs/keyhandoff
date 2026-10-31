@@ -35,11 +35,13 @@ pub struct Clipboard {
     pub read: fn() -> Result<Clip, String>,
     /// Known clipboard apps running now, named when Safe Copy arms.
     pub apps: fn() -> Vec<String>,
+    /// Plain text that isn't secret, such as a pointer.
+    pub text: fn(String) -> Result<(), String>,
 }
 
 impl Clipboard {
     pub fn system() -> Self {
-        Self { arm: |t, c, done| os::arm_capture(t, c, done), offer: os::offer_file, read: os::read_clipboard, apps: os::clipboard_apps }
+        Self { arm: |t, c, done| os::arm_capture(t, c, done), offer: os::offer_file, read: os::read_clipboard, apps: os::clipboard_apps, text: os::offer_text }
     }
 }
 
@@ -155,6 +157,8 @@ pub struct ProgramView {
     /// `python3`, `node.exe`.
     pub name: String,
     pub path: String,
+    /// `python3 report.py`, to recognise the script; `None` when the OS won't say.
+    pub command: Option<String>,
     /// Where it runs, with the home folder as `~`; `None` when the OS won't say.
     pub folder: Option<String>,
     /// The names of the keys it wants.
@@ -164,6 +168,8 @@ pub struct ProgramView {
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct View {
     pub name: String,
+    /// This computer's fingerprint, which people you ask will see.
+    pub computer: String,
     pub protection: String,
     pub keep: Keep,
     pub keys: Vec<KeyView>,
@@ -435,6 +441,19 @@ impl Handoff {
         Ok(())
     }
 
+    /// Put a key's `handoff:Name` pointer on the clipboard. It names the key
+    /// without holding it, so it's fine in `.env` and on the clipboard.
+    pub fn copy_pointer(&self, id: &str) -> Result<(), String> {
+        let id = parse_id(id)?;
+        let label = {
+            let core = self.lock();
+            core.vault.items().iter().find(|i| i.id == id).map(|i| i.label.clone()).ok_or("That key is no longer here.")?
+        };
+        (self.clipboard.text)(format!("handoff:{label}"))?;
+        self.lock().notice = Some(format!("Copied handoff:{label}"));
+        Ok(())
+    }
+
     pub fn set_name(&self, name: &str) -> Result<(), String> {
         let name = clean_text(name, MAX_NAME_BYTES).ok_or("Use a short name without special characters.")?;
         let mut core = self.lock();
@@ -608,6 +627,7 @@ impl Core {
         let accepted = self.accepted.and_then(|id| keys.iter().find(|k| k.id == hex(&id)).cloned());
         View {
             name: self.settings.name.clone(),
+            computer: self.identity.public().fingerprint(),
             protection: self.settings.protection.clone().unwrap_or_default(),
             keep: self.settings.keep,
             keys,
@@ -625,6 +645,7 @@ impl Core {
         ProgramView {
             name: display_name(&ask.peer.program),
             path: ask.peer.program.to_string_lossy().into_owned(),
+            command: ask.peer.command.clone(),
             folder: ask.peer.folder.as_deref().map(home_relative),
             keys: labels.collect(),
         }
@@ -760,6 +781,10 @@ mod tests {
             },
             read: || Ok(Clip::Empty),
             apps: || vec!["CopyQ".into()],
+            text: |text| {
+                *OFFERED.lock().unwrap() = Some((PathBuf::new(), text));
+                Ok(())
+            },
         }
     }
 
@@ -819,6 +844,7 @@ mod tests {
         ben.handoff.open_path(&request_file).unwrap();
         let safe = ben.handoff.view().safe;
         assert_eq!((safe.state, safe.for_name.as_deref()), ("listening", Some("Ann")));
+        assert_eq!(safe.for_computer, Some(ann.handoff.view().computer), "Ann can read Ben the fingerprint he sees");
 
         // the copy is caught; sealed into a file.
         copy(KEY);
@@ -880,6 +906,8 @@ mod tests {
         assert_eq!((view.keys[0].label.as_str(), view.keys[0].from.as_deref(), view.keys[0].keep), ("Anthropic", None, Keep::Once));
         assert_eq!(view.keep, Keep::Once);
         assert!(!files_contain(&me.data, KEY));
+        me.handoff.copy_pointer(&view.keys[0].id).unwrap();
+        assert_eq!(offered().1, "handoff:Anthropic", "the pointer, never the key, goes on the clipboard");
 
         // A timeout offers Try again for the same target.
         me.handoff.add().unwrap();
@@ -919,7 +947,7 @@ mod tests {
     }
 
     fn peer(program: &str, folder: &str) -> Peer {
-        Peer { program: program.into(), folder: Some(folder.into()) }
+        Peer { program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")) }
     }
 
     /// Wait for a program to be asking, then answer it.
@@ -981,6 +1009,7 @@ mod tests {
     /// gets nothing and a prompt.
     #[cfg(target_os = "linux")]
     fn loader_gets_the_key_through_the_socket(program: &str, loader: &str, script: (&str, &str)) {
+        let script_name = script.0;
         use sha2::{Digest, Sha256};
         use std::io::{BufRead, BufReader, Write};
         use std::process::Command;
@@ -1018,6 +1047,7 @@ mod tests {
             let script = s.spawn(run);
             let shown = answer_when_asked(&h, Answer::Always);
             assert!(shown.name.starts_with(program.trim_end_matches('3')), "{shown:?}");
+            assert_eq!(shown.command, Some(format!("{program} {script_name}")), "the prompt names the script");
             assert_eq!(shown.folder, Some(home_relative(&project.canonicalize().unwrap())));
             script.join().unwrap()
         });

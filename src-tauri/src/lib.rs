@@ -148,6 +148,11 @@ fn forget(app: AppHandle, h: H, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn copy_pointer(app: AppHandle, h: H, id: String) -> Result<(), String> {
+    done(&app, h.copy_pointer(&id))
+}
+
+#[tauri::command]
 fn set_name(app: AppHandle, h: H, name: String) -> Result<(), String> {
     done(&app, h.set_name(&name))
 }
@@ -244,7 +249,7 @@ pub fn run() {
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
             view, ask, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
-            forget, set_name, answer, dismiss, ready
+            forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {
             let (store, settings) = Store::open(&args.profile)?;

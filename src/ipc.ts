@@ -36,6 +36,8 @@ export interface ProgramView {
   /** `python3`, `node.exe`. */
   name: string;
   path: string;
+  /** `python3 report.py`; null when the system won't say. */
+  command: string | null;
   /** Where it runs; null when the system won't say. */
   folder: string | null;
   keys: string[];
@@ -45,6 +47,8 @@ export type Answer = "always" | "once" | "deny";
 
 export interface View {
   name: string;
+  /** This computer's fingerprint, which people you ask will see. */
+  computer: string;
   protection: string;
   keep: Keep;
   keys: KeyView[];
@@ -70,6 +74,7 @@ export const api = {
   closeSafe: () => invoke<void>("close_safe"),
   setKeep: (id: string, keep: Keep) => invoke<void>("set_keep", { id, keep }),
   forget: (id: string) => invoke<void>("forget", { id }),
+  copyPointer: (id: string) => invoke<void>("copy_pointer", { id }),
   setName: (name: string) => invoke<void>("set_name", { name }),
   answer: (answer: Answer) => invoke<void>("answer", { answer }),
   dismiss: () => invoke<void>("dismiss"),

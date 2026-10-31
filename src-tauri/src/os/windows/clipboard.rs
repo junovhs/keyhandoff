@@ -74,6 +74,17 @@ pub fn offer_file(file: &Path, text: String) -> Result<(), String> {
 }
 
 /// Read the clipboard once for a paste: files first, then text.
+/// Put plain text on the clipboard. Only for text that isn't secret.
+pub fn offer_text(text: String) -> Result<(), String> {
+    let wide: Vec<u8> = text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
+    let _open = Open::new()?;
+    // SAFETY: the clipboard is open; the block is handed to the clipboard on success.
+    unsafe {
+        EmptyClipboard().map_err(|e| e.to_string())?;
+        set(CF_UNICODETEXT.0 as u32, &wide)
+    }
+}
+
 pub fn read_clipboard() -> Result<Clip, String> {
     let _open = Open::new()?;
     // SAFETY: the clipboard is open; we only read the handles it gives us
@@ -173,12 +184,7 @@ pub(crate) mod tests {
 
     /// Copy like another app would.
     pub fn set_clipboard_text(text: &str) -> Result<(), String> {
-        let wide: Vec<u8> = text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
-        let _open = Open::new()?;
-        unsafe {
-            EmptyClipboard().map_err(|e| e.to_string())?;
-            set(CF_UNICODETEXT.0 as u32, &wide)
-        }
+        offer_text(text.to_string())
     }
 
     /// The block we build is one the shell itself reads back as a file list,

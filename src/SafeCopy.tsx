@@ -35,7 +35,7 @@ export function SafeCopy({ view }: { view: View }) {
         <span>{STATUS[state]} · {who}</span>
       </div>
       <div key={state} ref={body} className="safe-body">
-        {safe.for_computer && (state === "listening" || state === "caught") && (
+        {safe.for_computer && state === "listening" && (
           <div className="asking">
             <span>{safe.for_name} is asking</span>
             <span className="mono">computer {safe.for_computer}</span>

@@ -18,6 +18,10 @@ pub fn offer_file(_file: &Path, _text: String) -> Result<(), String> {
     Err(NOT_YET.into())
 }
 
+pub fn offer_text(_text: String) -> Result<(), String> {
+    Err(NOT_YET.into())
+}
+
 pub fn read_clipboard() -> Result<Clip, String> {
     Err(NOT_YET.into())
 }

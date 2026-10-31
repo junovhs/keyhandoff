@@ -76,6 +76,23 @@ impl MasterKey {
 pub struct Peer {
     pub program: PathBuf,
     pub folder: Option<PathBuf>,
+    /// `python3 report.py`: shown so you recognise the script, never used
+    /// for approval (the program can set it to anything).
+    pub command: Option<String>,
+}
+
+/// A command line for display: the program's file name, then its arguments,
+/// cut to a readable length.
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+fn display_command<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<String> {
+    const MAX: usize = 200;
+    let first = args.next()?;
+    let program = first.rsplit(['/', '\\']).next().unwrap_or(first);
+    let mut out = std::iter::once(program).chain(args).collect::<Vec<_>>().join(" ");
+    if out.chars().count() > MAX {
+        out = out.chars().take(MAX).collect::<String>() + "…";
+    }
+    Some(out)
 }
 
 /// One connection from a program asking for keys.

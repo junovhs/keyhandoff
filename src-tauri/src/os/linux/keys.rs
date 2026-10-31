@@ -37,5 +37,8 @@ fn peer(stream: &UnixStream) -> Option<Peer> {
     }
     let proc = PathBuf::from(format!("/proc/{}", cred.pid));
     let program = fs::read_link(proc.join("exe")).ok()?;
-    Some(Peer { program, folder: fs::read_link(proc.join("cwd")).ok() })
+    let cmdline = fs::read(proc.join("cmdline")).unwrap_or_default();
+    let cmdline = String::from_utf8_lossy(&cmdline);
+    let command = super::super::display_command(cmdline.split('\0').filter(|a| !a.is_empty()));
+    Some(Peer { program, folder: fs::read_link(proc.join("cwd")).ok(), command })
 }

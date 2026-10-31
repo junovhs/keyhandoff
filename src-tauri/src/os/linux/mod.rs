@@ -8,7 +8,7 @@ mod instance;
 mod keys;
 mod protect;
 
-pub use clipboard::{arm_capture, offer_file, read_clipboard};
+pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::listen_for_keys;

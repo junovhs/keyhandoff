@@ -59,9 +59,6 @@ export function MainWindow() {
       <header className="titlebar" data-tauri-drag-region>
         <Logo />
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
-        <span className="shield" title="Keys are sealed on this device. KeyHandoff has no servers or accounts.">
-          <Icon name="shield" /> Protected
-        </span>
         <button aria-label="Minimize" onClick={() => void win.minimize()}>
           <Icon name="minimize" />
         </button>
@@ -74,7 +71,7 @@ export function MainWindow() {
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
-      {view?.asked && !view.accepted && <AskSheet fileName={view.asked} run={run} />}
+      {view?.asked && !view.accepted && <AskSheet fileName={view.asked} computer={view.computer} run={run} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${error ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
@@ -95,13 +92,7 @@ function Home({ view, run }: { view: View; run: Run }) {
     <>
       <div className="hero">
         <h1 className={`display ${long ? "sm" : ""}`}>{n === 0 ? "No keys yet." : <><span className="count">{n}</span> {n === 1 ? "key" : "keys"}, sealed.</>}</h1>
-        {!long && (
-          <p className="lede">
-            {n === 0
-              ? "Ask for a key, or add one of your own. Either way, it's never shown on screen."
-              : "Only you can open them. Nothing is stored online."}
-          </p>
-        )}
+        {n === 0 && <p className="lede">Ask for a key, or add one of your own.</p>}
       </div>
       <div className="btn-row">
         <button className="btn primary grow" onClick={() => void run(api.ask())}>
@@ -208,6 +199,9 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
               <span className="nm">{k.label}</span>
               <span className="meta">{k.from ? `From ${k.from}` : "Yours"} · {lifetime(k)}</span>
             </span>
+            <button className="use" onClick={() => void run(api.copyPointer(k.id))} title={`Copy handoff:${k.label} for a .env file`}>
+              Copy pointer
+            </button>
             <button
               className={`forget ${armed === k.id ? "sure" : ""}`}
               aria-label={`Forget ${k.label}`}
@@ -279,7 +273,6 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
           <h2 className="display md">{item.label}</h2>
         </div>
       </div>
-      <p className="lede">It's in your vault now.</p>
       <div className="keep-block">
         <span className="label">Keep it for</span>
         <div className="segmented">
@@ -296,11 +289,7 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
         </div>
         <p className="help">{KEEP_HELP[item.keep]}</p>
       </div>
-      <div className="checks">
-        <div><Icon name="check" />Sealed into your vault on this device.</div>
-        <div><Icon name="check" />The request's one-time key was destroyed.</div>
-        <div><Icon name="check" />The file in the chat can't be opened again, by anyone.</div>
-      </div>
+      <p className="help">It's in your keys. The copy in the chat can't be opened again.</p>
       <span className="grow-space" />
       <button className="btn primary" onClick={() => void api.dismiss()}>Done</button>
     </div>
@@ -323,18 +312,18 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
       </div>
       <div className="chip">
         <Icon name="file" />
-        <span className="mono">{program.path}</span>
+        <span className="mono">{program.command ?? program.name}</span>
       </div>
       <p className="lede">
-        Running in <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>, it asks for{" "}
+        It asks for{" "}
         {program.keys.map((k, i) => (
           <span key={k}>{i > 0 && ", "}<strong>{k}</strong></span>
-        ))}
-        .
+        ))}{" "}
+        from <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>.
       </p>
       <p className="help">
-        Always allow lets {program.name} get {one ? "this key" : "these keys"} whenever it runs in this folder. Anything else
-        that runs as you could do the same, so allow only programs you started.
+        <span className="mono">{program.path}</span>. Always allow covers this program in this folder; allow only programs you
+        started.
       </p>
       <span className="grow-space" />
       <div className="btn-row">
@@ -347,7 +336,7 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
 }
 
 /** After Ask: the request file is on the clipboard; it can also be dragged out. */
-function AskSheet({ fileName, run }: { fileName: string; run: Run }) {
+function AskSheet({ fileName, computer, run }: { fileName: string; computer: string; run: Run }) {
   const sheet = useRef<HTMLDivElement>(null);
   const drag = useDragOut(() => void run(api.dragOut("request")));
   useEffect(() => void enter(sheet.current, "rise", 360), [fileName]);
@@ -362,7 +351,10 @@ function AskSheet({ fileName, run }: { fileName: string; run: Run }) {
         <Icon name="file" />
         <span className="mono">{fileName}</span>
       </div>
-      <p className="help">It's on your clipboard. When the sealed reply comes back, paste it here.</p>
+      <p className="help">
+        Whoever opens it sees your computer as <span className="mono">{computer}</span>. Read it to them if they want to
+        check it's really you. When the sealed reply comes back, paste it here.
+      </p>
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void run(api.copyRequest())}>Copy again</button>
