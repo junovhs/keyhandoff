@@ -302,6 +302,8 @@ html.js .replay.ready .line:not(.on) { visibility: hidden; }
 .cell { display: flex; flex-direction: column; gap: 8px; padding: 32px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .cell .f-ico { margin-bottom: 8px; }
 .cell p { margin: 0; color: var(--text-2); font-size: 15.5px; }
+.limits { max-width: 720px; margin: 28px auto 0; text-align: center; font-size: 15px; color: var(--text-2); }
+.limits a { color: var(--accent-ink); white-space: nowrap; }
 
 /* roadmap */
 .road { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }

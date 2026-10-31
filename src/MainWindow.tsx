@@ -98,7 +98,7 @@ function Home({ view, run }: { view: View; run: Run }) {
         {!long && (
           <p className="lede">
             {n === 0
-              ? "Ask for a key, or add one of your own. Either way, nobody sees it."
+              ? "Ask for a key, or add one of your own. Either way, it's never shown on screen."
               : "Only you can open them. Nothing is stored online."}
           </p>
         )}
@@ -153,7 +153,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
       <ol className="steps">
         <li><span className="n">1</span><span><b>Request a key</b> and paste the request into a chat with whoever has it.</span></li>
         <li><span className="n">2</span><span>They send back a sealed file. Only this computer can open it.</span></li>
-        <li><span className="n">3</span><span>Paste it here. The key goes into your vault, and nobody ever sees it.</span></li>
+        <li><span className="n">3</span><span>Paste it here. The key goes into your vault and is never shown.</span></li>
       </ol>
     );
   }

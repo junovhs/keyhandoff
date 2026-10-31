@@ -10,6 +10,27 @@ import Tile from "../components/Tile.astro";
 const title = "KeyHandoff: API keys, hands off";
 const description = "Your .env is announcing itself. KeyHandoff catches, seals and hands off API keys so they stop living in plain text files and chats. No servers, no accounts.";
 const GITHUB = "https://github.com/junovhs/keyhandoff";
+const THREATS = `${GITHUB}/blob/main/docs/threats.md`;
+
+// Every status label on the page reads from here, so a change of status is one edit.
+// "testing": built and passing on Linux, not yet checked on Windows.
+type Stage = "now" | "testing" | "building" | "next";
+const FEATURES: { id: string; stage: Stage; icon: IconName; text: string }[] = [
+  { id: "handoff", stage: "now", icon: "check", text: "Requests and sealed replies between two people" },
+  { id: "safecopy", stage: "now", icon: "check", text: "Safe Copy: catch one copy, wipe the clipboard" },
+  { id: "vault", stage: "now", icon: "check", text: "Encrypted vault with Once, 30 days or Keep" },
+  { id: "platforms", stage: "now", icon: "check", text: "Windows and Linux (X11)" },
+  { id: "pointers", stage: "testing", icon: "file", text: "<code>.env</code> pointers for Python and Node.js, over a private pipe" },
+  { id: "approvals", stage: "testing", icon: "shield", text: "Approvals tied to program and folder" },
+  { id: "typing", stage: "building", icon: "type", text: "Typing a key into a field, no clipboard" },
+  { id: "hardware", stage: "next", icon: "chip", text: "Hardware-backed vault with TPM and Windows Hello" },
+];
+const stage = (id: string) => FEATURES.find((f) => f.id === id)!.stage;
+const statusKind = (id: string) => (stage(id) === "now" ? "now" : "building");
+const STAGE_LABEL: Record<Stage, string> = { now: "Available now", testing: "In testing", building: "In progress", next: "Up next" };
+const STAGE_SHORT: Record<Stage, string> = { now: "now", testing: "in testing", building: "in progress", next: "next" };
+/** "In testing", or with a prefix the short form: "Pointers: in testing". */
+const statusLabel = (id: string, prefix?: string) => (prefix ? prefix + STAGE_SHORT[stage(id)] : STAGE_LABEL[stage(id)]);
 const MAKER = "https://strangesystems.dev";
 
 // All sample values, shaped like real keys and truncated.
@@ -163,7 +184,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
               <button type="button" data-to="exposed" aria-pressed="true">Today</button>
               <button type="button" data-to="safe" aria-pressed="false">With KeyHandoff</button>
             </div>
-            <Status kind="building" label="Pointers in progress" />
+            <Status kind={statusKind("pointers")} label={statusLabel("pointers", "Pointers: ")} />
           </div>
         </figure>
       </div>
@@ -274,19 +295,19 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
           <Tile name="key" scale={3} />
           <h3>Just you</h3>
           <p>Every key in one sealed place, typed out for you when you need it.</p>
-          <span class="stack"><Status kind="now" label="Save: now" /><Status kind="building" label="Type: in progress" /></span>
+          <span class="stack"><Status kind={statusKind("vault")} label={statusLabel("vault", "Save: ")} /><Status kind={statusKind("typing")} label={statusLabel("typing", "Type: ")} /></span>
         </a>
         <a class="front rv" style="--d:80ms" href="#code">
           <Tile name="file" scale={3} />
           <h3>Your code</h3>
           <p>Pointers in <code>.env</code> instead of secrets. Your programs ask the vault.</p>
-          <span class="stack"><Status kind="building" /></span>
+          <span class="stack"><Status kind={statusKind("pointers")} label={statusLabel("pointers")} /></span>
         </a>
         <a class="front rv" style="--d:160ms" href="#team">
           <Tile name="send" scale={4} />
           <h3>Your team</h3>
           <p>Send a request, get a sealed reply. The chat only carries a useless file.</p>
-          <span class="stack"><Status kind="now" /></span>
+          <span class="stack"><Status kind={statusKind("handoff")} label={statusLabel("handoff")} /></span>
         </a>
       </div>
     </section>
@@ -296,9 +317,9 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
         <span class="eyebrow"><Icon name="user" />Just you</span>
         <h2>Every key in one place. None of them in your way.</h2>
         <ul class="feats">
-          <li><span class="f-ico"><Icon name="clip" size={18} /></span><div><h3>Bring it in <Status kind="now" /></h3><p>Copy the key once. Safe Copy catches it and wipes the clipboard.</p></div></li>
-          <li><span class="f-ico"><Icon name="clock" size={18} /></span><div><h3>Keep it your way <Status kind="now" /></h3><p>One tap: <b>Once</b>, <b>30 days</b> or <b>Keep</b>. Sealed on this device.</p></div></li>
-          <li><span class="f-ico"><Icon name="type" size={18} /></span><div><h3>Have it typed out <Status kind="building" /></h3><p>Click a box and KeyHandoff types the key straight into it.</p></div></li>
+          <li><span class="f-ico"><Icon name="clip" size={18} /></span><div><h3>Bring it in <Status kind={statusKind("safecopy")} label={statusLabel("safecopy")} /></h3><p>Copy the key once. Safe Copy catches it and wipes the clipboard.</p></div></li>
+          <li><span class="f-ico"><Icon name="clock" size={18} /></span><div><h3>Keep it your way <Status kind={statusKind("vault")} label={statusLabel("vault")} /></h3><p>One tap: <b>Once</b>, <b>30 days</b> or <b>Keep</b>. Sealed on this device.</p></div></li>
+          <li><span class="f-ico"><Icon name="type" size={18} /></span><div><h3>Have it typed out <Status kind={statusKind("typing")} label={statusLabel("typing")} /></h3><p>Click a box and KeyHandoff types the key straight into it.</p></div></li>
         </ul>
       </div>
       <div class="split-art solo-art rv">
@@ -313,7 +334,7 @@ const BUILT_IN: { icon: IconName; title: string; text: string }[] = [
 
     <section class="wrap" id="code">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="terminal" />Your code <Status kind="building" /></span>
+        <span class="eyebrow"><Icon name="terminal" />Your code <Status kind={statusKind("pointers")} label={statusLabel("pointers")} /></span>
         <h2>A search finds a pointer. Not a key.</h2>
         <p class="sub">The file stays and your code stays. The secret leaves, and your programs ask the app for it over a private pipe.</p>
       </div>
@@ -348,7 +369,7 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
 
     <section class="wrap" id="team">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />Your team <Status kind="now" /></span>
+        <span class="eyebrow"><Icon name="users" />Your team <Status kind={statusKind("handoff")} label={statusLabel("handoff")} /></span>
         <h2>Need a key from someone? Stop asking them to paste it.</h2>
         <p class="sub">The chat only ever carries a sealed file.</p>
       </div>
@@ -389,6 +410,10 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
           </div>
         ))}
       </div>
+      <p class="limits rv">
+        What it can't do: a program watching your clipboard can read a key at the moment you copy it, and anything running as you can reach the vault.{" "}
+        <a href={THREATS}>Everything it does and doesn't protect</a>
+      </p>
     </section>
 
     <section class="wrap" id="roadmap">
@@ -400,24 +425,21 @@ OPENAI_API_KEY=<mark>handoff:OpenAI</mark></code></pre>
         <div class="road-col on">
           <Status kind="now" label="Works today" />
           <ul>
-            <li><Icon name="check" />Requests and sealed replies between two people</li>
-            <li><Icon name="check" />Safe Copy: catch one copy, wipe the clipboard</li>
-            <li><Icon name="check" />Encrypted vault with Once, 30 days or Keep</li>
-            <li><Icon name="check" />Windows and Linux (X11)</li>
+            {FEATURES.filter((f) => f.stage === "now").map((f) => <li><Icon name={f.icon} /><span set:html={f.text} /></li>)}
           </ul>
         </div>
         <div class="road-col">
           <Status kind="building" label="Building now" />
           <ul>
-            <li><Icon name="file" /><code>.env</code> pointers over a private pipe</li>
-            <li><Icon name="shield" />Approvals tied to program and folder</li>
-            <li><Icon name="type" />Typing a key into a field, no clipboard</li>
+            {FEATURES.filter((f) => f.stage === "testing" || f.stage === "building").map((f) => (
+              <li><Icon name={f.icon} /><span set:html={f.stage === "testing" ? `${f.text} (in testing)` : f.text} /></li>
+            ))}
           </ul>
         </div>
         <div class="road-col">
           <span class="status next"><i></i>Up next</span>
           <ul>
-            <li><Icon name="chip" />Hardware-backed vault with TPM and Windows Hello</li>
+            {FEATURES.filter((f) => f.stage === "next").map((f) => <li><Icon name={f.icon} /><span set:html={f.text} /></li>)}
           </ul>
         </div>
       </div>

@@ -101,8 +101,9 @@ function Listening({ safe }: { safe: SafeView }) {
       )}
       {info && (
         <p className="info">
-          KeyHandoff catches that one copy, wipes your clipboard and its history, then you name the key.
-          It's never shown. Something already spying on this computer could still read it in that split second.
+          KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
+          system allows, then you name the key. It's never shown. A program watching your clipboard can still read
+          it as you copy.
         </p>
       )}
       <span className="grow-space" />

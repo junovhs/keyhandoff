@@ -61,15 +61,11 @@ export const docs = defineDocs({
       id: "limits",
       title: "What it protects, and what it doesn't",
       question: "What does KeyHandoff not protect against?",
-      answer: "KeyHandoff cannot protect against a compromised computer, malware running as you, or another program reading the clipboard in the moment before it is wiped.",
+      answer: "KeyHandoff can't stop a program watching the clipboard from reading a key at the moment you copy it, or stop malware running as you from reaching the vault. A program you allow can do anything with the key it gets.",
       blocks: [
         {
-          kind: "list",
-          items: [
-            "The copy moment: a copied key is on the clipboard, unencrypted, until the wipe.",
-            "Malware running as you can ask the operating system to unlock the vault.",
-            "Lost computers: keys are tied to one computer and there is no recovery. Replace the key with the provider.",
-          ],
+          kind: "p",
+          text: "The full list, with the test or design rule behind each claim, is in [What KeyHandoff protects, and what it doesn't](https://github.com/junovhs/keyhandoff/blob/main/docs/threats.md).",
         },
       ],
     },
