@@ -7,20 +7,20 @@ KeyHandoff is pre-release and has not had a security audit. This page lists what
 ### In transit
 
 - **Only the requester's computer can open a sealed key.** Another computer, even one with a pending request of its own, can't decrypt it. Test: [`wrong_recipient`](../crates/seal/tests/seal.rs).
-- **A sealed key opens once.** Opening it destroys the request's one-time key, so a second copy of the same file, in the chat or anywhere else, can't be opened by anyone. This still holds after a restart. Tests: [`opened_after_destroy`](../crates/seal/tests/seal.rs), [`request_safe_copy_seal_accept_and_once_only`](../src-tauri/src/core.rs). Rule 5.
+- **A sealed key opens once.** Opening it destroys the request's one-time key, so a second copy of the same file, in the chat or anywhere else, can't be opened by anyone. This still holds after a restart. Tests: [`opened_after_destroy`](../crates/seal/tests/seal.rs), [`a_card_lets_ben_send_ann_saved_keys_each_opening_once`](../src-tauri/src/core.rs). Rule 5.
 - **Requests run out.** A sender can't seal to an expired request, and a key sealed in time but opened late is refused. Test: [`expired_request`](../crates/seal/tests/seal.rs).
 - **Changed bytes are caught.** Changing any byte of a request or a sealed key fails its signature, so a swapped lock in a request is detected. Test: [`tampering_is_detected`](../crates/seal/tests/seal.rs).
 - **Damage is repaired or refused, never misread.** Text mangled by a chat app is repaired within a budget. Beyond it, the file is refused rather than opened as something else. Tests: [`survives_transit_damage`](../crates/seal/tests/armor.rs), [`too_damaged_is_refused_not_misread`](../crates/seal/tests/armor.rs).
 
 ### On the sender's computer
 
-- **Sending leaves nothing new behind.** You send a key you already hold; KeyHandoff seals it from your vault without the clipboard, and closing the window deletes the sealed file. Tests: [`ben_sends_a_key_he_already_holds_from_his_vault`](../src-tauri/src/core.rs), [`request_safe_copy_seal_accept_and_once_only`](../src-tauri/src/core.rs). Rule 6.
+- **Sending leaves nothing new behind.** You send a key you already hold; KeyHandoff seals it from your vault without the clipboard, and closing the window deletes the sealed file. Test: [`a_card_lets_ben_send_ann_saved_keys_each_opening_once`](../src-tauri/src/core.rs). Rule 6.
 
 ### On the receiver's computer
 
 - **Kept keys are encrypted on disk.** No key value appears in the vault or any other profile file, and a different master key can't open them. Tests: [`protected_files_hold_no_plaintext_and_need_the_key`](../src-tauri/src/store.rs), [`stores_sealed_and_round_trips`](../src-tauri/src/vault.rs).
 - **Each kept key is bound to its entry.** Moving one key's ciphertext onto another entry makes it fail to open. Test: [`swapped_ciphertext_does_not_open`](../src-tauri/src/vault.rs).
-- **Keys aren't shown.** The screens get names, states and ids only, never a value, and there's no way to reveal a key in normal use. Test: [`request_safe_copy_seal_accept_and_once_only`](../src-tauri/src/core.rs) checks that no value reaches the screens. Rules 6 and 8.
+- **Keys aren't shown.** The screens get names, states and ids only, never a value, and there's no way to reveal a key in normal use. Test: [`a_card_lets_ben_send_ann_saved_keys_each_opening_once`](../src-tauri/src/core.rs) checks that no value reaches the screens. Rules 6 and 8.
 - **Secret values aren't printed in logs.** Debug output of a payload never includes the secret. Test: [`debug_never_prints_the_secret`](../crates/seal/tests/seal.rs).
 - **No servers, accounts, telemetry or network code.** Rule 6.
 
@@ -64,7 +64,7 @@ Provider pages show you a key, and you copy it. From that copy until KeyHandoff 
 
 ### Cards and teams
 
-- **Each lock opens one key, once.** A card is a batch of one-time locks; every key sent with it uses one, and opening it destroys that lock. Tests: [`every_lock_seals_one_key_that_opens_once`](../crates/seal/tests/card.rs), [`a_card_lets_ben_send_ann_keys_each_opening_once`](../src-tauri/src/core.rs).
+- **Each lock opens one key, once.** A card is a batch of one-time locks; every key sent with it uses one, and opening it destroys that lock. Tests: [`every_lock_seals_one_key_that_opens_once`](../crates/seal/tests/card.rs), [`a_card_lets_ben_send_ann_saved_keys_each_opening_once`](../src-tauri/src/core.rs).
 - **A card copy is for one person.** If one copy reaches several people, two of them could use the same lock, and the second key wouldn't open. Each copy gets fresh locks, and senders pick a lock at random to make a clash rare, but it's not impossible. Rule 4.
 - **Teams live on each computer.** A team is a list of your contacts, and the team name inside a file isn't signed by anyone. Sending to a team seals a separate copy for each member, and you keep one too. Test: [`a_team_gets_each_key_once_and_a_newcomer_gets_them_all`](../src-tauri/src/core.rs). Rule 6.
 - **No one can be removed after the fact.** Taking someone off your team stops you sending them new keys, but the keys they already have stay with them. When someone leaves, replace the keys with the provider.

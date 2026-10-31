@@ -53,41 +53,15 @@ impl Clipboard {
     }
 }
 
-/// Who a Safe Copy capture is for.
-enum Target {
-    You,
-    Request(Request),
-    /// A team, by id and name: sealed to every member at once.
-    Team([u8; 16], String),
-}
-
-impl Target {
-    fn for_name(&self) -> Option<String> {
-        match self {
-            Target::You => None,
-            Target::Request(r) => Some(r.name().to_string()),
-            Target::Team(_, name) => Some(name.clone()),
-        }
-    }
-
-    fn for_computer(&self) -> Option<String> {
-        match self {
-            Target::Request(r) => Some(r.requester().fingerprint()),
-            Target::You | Target::Team(..) => None,
-        }
-    }
-}
-
 enum Safe {
     Off,
     /// `apps`: known clipboard apps running when it armed. `read`: something
     /// read the bait, set from the capture thread.
-    Listening { target: Target, ends_at: u64, cancel: Arc<AtomicBool>, apps: Vec<String>, read: Arc<AtomicBool> },
-    TimedOut { target: Target },
-    Failed { target: Target, message: String },
-    /// Caught and wiped from the clipboard; waiting for a name (and, for
-    /// yourself, a keep-time).
-    Caught { target: Target, secret: Secret, note: Option<String> },
+    Listening { ends_at: u64, cancel: Arc<AtomicBool>, apps: Vec<String>, read: Arc<AtomicBool> },
+    TimedOut,
+    Failed { message: String },
+    /// Caught and wiped from the clipboard; waiting for a name and a keep-time.
+    Caught { secret: Secret, note: Option<String> },
     /// `team`: sealed to every member of a team rather than one person.
     Sealed { for_name: String, team: bool, file: PathBuf, text: String },
 }
@@ -162,10 +136,8 @@ pub struct KeyView {
 pub struct SafeView {
     /// off, listening, timeout, failed, caught or sealed.
     pub state: &'static str,
-    /// The requester's name; `None` when catching a key for yourself.
+    /// Who a sealed key is for; `None` while catching a key of your own.
     pub for_name: Option<String>,
-    /// The requester's computer fingerprint, to check who is asking.
-    pub for_computer: Option<String>,
     /// It's for a team: every member gets their own copy.
     pub for_team: bool,
     /// When listening stops, in Unix milliseconds.
@@ -287,24 +259,6 @@ impl Handoff {
         core.view()
     }
 
-    /// A one-off request: one lock instead of a card's batch. The app shares
-    /// cards now; this stays for the tests of the request-and-seal core.
-    #[cfg(test)]
-    pub fn ask(&self) -> Result<(), String> {
-        let mut core = self.lock();
-        let (request, pending) = keyhandoff_seal::create_request(&core.identity, &core.settings.name, now(), keyhandoff_seal::DEFAULT_REQUEST_TTL)
-            .map_err(|e| e.to_string())?;
-        core.keyring.insert(pending);
-        core.store.save_keyring(&core.keyring)?;
-        let text = armor::request_text(&request);
-        let file = core.outbox.join(file_name("Key request from", request.name()));
-        os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
-        (self.clipboard.offer)(&file, text)?;
-        core.asked = Some(file);
-        core.accepted = None;
-        Ok(())
-    }
-
     /// Your card: a batch of one-time locks, each good for one key sent to you.
     /// Writes `KeyHandoff card - <you>.handoff` and puts it on the clipboard.
     pub fn copy_card(&self) -> Result<(), String> {
@@ -320,25 +274,6 @@ impl Handoff {
         core.asked = Some(file);
         core.accepted = None;
         Ok(())
-    }
-
-    /// Send a key to a contact: Safe Copy against one of their card's locks.
-    /// The lock is used up only once the key is sealed.
-    pub fn send_to(&self, id: &str) -> Result<(), String> {
-        let request = {
-            let mut core = self.lock();
-            let t = now();
-            let contact = core.contacts.iter_mut().find(|c| hex32(&c.identity) == id).ok_or("That contact is no longer here.")?;
-            contact.locks.retain(|l| Request::parse(l).is_ok_and(|r| !r.is_expired(t)));
-            let name = contact.name.clone();
-            // A random lock: if one card copy reached several people, two of
-            // them are unlikely to pick the same lock.
-            let lock = (!contact.locks.is_empty()).then(|| contact.locks[OsRng.next_u32() as usize % contact.locks.len()].clone());
-            core.store.save_contacts(&core.contacts)?;
-            let lock = lock.ok_or_else(|| format!("You've used up {name}'s card. Ask {name} for a new one."))?;
-            Request::parse(&lock).map_err(|e| e.to_string())?
-        };
-        self.arm(Target::Request(request))
     }
 
     /// Send a key you already hold to a contact: sealed from your vault to one
@@ -417,21 +352,6 @@ impl Handoff {
         core.store.save_teams(&core.teams)
     }
 
-    /// Share a key with a team: Safe Copy catches it once, then it's sealed to
-    /// every member. Everyone needs a card with a lock left.
-    pub fn send_to_team(&self, id: &str) -> Result<(), String> {
-        let target = {
-            let core = self.lock();
-            let team = core.teams.iter().find(|t| hex(&t.id) == id).ok_or("That team is no longer here.")?;
-            let short: Vec<String> = core.team_members(team).into_iter().filter(|c| c.locks.is_empty()).map(|c| c.name.clone()).collect();
-            if !short.is_empty() {
-                return Err(format!("Ask {} for a new card first.", short.join(", ")));
-            }
-            Target::Team(team.id, team.name.clone())
-        };
-        self.arm(target)
-    }
-
     /// Welcome someone to a team: every key you hold that was shared with the
     /// team, sealed to them in one file on the clipboard.
     pub fn welcome(&self, team_id: &str, member: &str) -> Result<(), String> {
@@ -484,22 +404,15 @@ impl Handoff {
 
     /// Add: arm Safe Copy for a key of your own.
     pub fn add(&self) -> Result<(), String> {
-        self.arm(Target::You)
+        self.arm()
     }
 
-    /// Arm again after a timeout or failure, for the same person.
+    /// Arm again after a timeout or failure.
     pub fn retry(&self) -> Result<(), String> {
-        let target = {
-            let mut core = self.lock();
-            match std::mem::replace(&mut core.safe, Safe::Off) {
-                Safe::TimedOut { target } | Safe::Failed { target, .. } => target,
-                other => {
-                    core.safe = other;
-                    return Err("Safe copy is not waiting to try again.".into());
-                }
-            }
-        };
-        self.arm(target)
+        if !matches!(self.lock().safe, Safe::TimedOut | Safe::Failed { .. }) {
+            return Err("Safe copy is not waiting to try again.".into());
+        }
+        self.arm()
     }
 
     /// Open a `.handoff` file (double-click, drop or paste).
@@ -540,16 +453,9 @@ impl Handoff {
 
     fn open_object(&self, bytes: &[u8]) -> Result<(), String> {
         match keyhandoff_seal::parse_object(bytes).map_err(|e| e.to_string())? {
+            // One-off requests came before cards; keys go to a card now.
             Object::Request(request) => {
-                let core = self.lock();
-                if request.requester() == core.identity.public() {
-                    return Err("This is your own request. Send it to the person who has the key.".into());
-                }
-                if request.is_expired(now()) {
-                    return Err("This request ran out. Ask them to send a new one.".into());
-                }
-                drop(core);
-                self.arm(Target::Request(request))
+                Err(format!("This key request is from an older KeyHandoff. Ask {} for their KeyHandoff card instead.", request.name()))
             }
             Object::Sealed(sealed) => self.lock().accept(&sealed),
             Object::Card(card) => self.lock().add_contact(&card),
@@ -557,7 +463,7 @@ impl Handoff {
         }
     }
 
-    fn arm(&self, target: Target) -> Result<(), String> {
+    fn arm(&self) -> Result<(), String> {
         let mut core = self.lock();
         core.close_safe();
         core.generation += 1;
@@ -584,7 +490,7 @@ impl Handoff {
             }),
         )?;
         let apps = (self.clipboard.apps)();
-        core.safe = Safe::Listening { target, ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel, apps, read };
+        core.safe = Safe::Listening { ends_at: now_ms() + ARM_TIMEOUT.as_millis() as u64, cancel, apps, read };
         core.accepted = None;
         Ok(())
     }
@@ -596,46 +502,21 @@ impl Handoff {
                 return;
             }
             let Safe::Listening { .. } = core.safe else { return };
-            let Safe::Listening { target, .. } = std::mem::replace(&mut core.safe, Safe::Off) else { unreachable!() };
             core.safe = match result {
-                Captured::Caught(secret, note) => Safe::Caught { target, secret, note },
-                Captured::TimedOut => Safe::TimedOut { target },
-                Captured::Failed(message) => Safe::Failed { target, message },
+                Captured::Caught(secret, note) => Safe::Caught { secret, note },
+                Captured::TimedOut => Safe::TimedOut,
+                Captured::Failed(message) => Safe::Failed { message },
                 Captured::Cancelled => Safe::Off,
             };
         }
         (self.notify)();
     }
 
-    /// Seal the caught key for its requester under `label`, and forget it.
-    pub fn seal(&self, label: &str) -> Result<(), String> {
-        let label = clean_text(label, MAX_LABEL_BYTES).ok_or("Give the key a short name.")?;
-        let mut core = self.lock();
-        if let Safe::Caught { target: Target::Team(..), .. } = &core.safe {
-            return core.seal_team(label);
-        }
-        let Safe::Caught { target: Target::Request(request), secret, .. } = &core.safe else {
-            return Err("There is no caught key to seal.".into());
-        };
-        let payload = Payload { label, note: core.settings.name.clone(), secret: Secret::new(secret.expose().to_vec()) };
-        let sealed = keyhandoff_seal::seal(&core.identity, request, &payload, now()).map_err(|e| e.to_string())?;
-        drop(payload);
-        let for_name = request.name().to_string();
-        let used = request.id();
-        core.use_lock(used)?;
-        let text = armor::sealed_text(&sealed, &for_name);
-        let file = core.outbox.join(file_name("Key for", &for_name));
-        os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
-        // Dropping the Caught state zeroizes the plaintext.
-        core.safe = Safe::Sealed { for_name, team: false, file, text };
-        Ok(())
-    }
-
     /// Keep the key you caught for yourself.
     pub fn keep_own(&self, label: &str, keep: Keep) -> Result<(), String> {
         let label = clean_text(label, MAX_LABEL_BYTES).ok_or("Give the key a short name.")?;
         let mut core = self.lock();
-        let Safe::Caught { target: Target::You, secret, .. } = &core.safe else {
+        let Safe::Caught { secret, .. } = &core.safe else {
             return Err("There is no caught key to keep.".into());
         };
         let secret = Secret::new(secret.expose().to_vec());
@@ -857,25 +738,6 @@ impl Core {
         team.members.iter().filter_map(|m| self.contacts.iter().find(|c| c.identity == *m)).collect()
     }
 
-    /// Seal the caught key to every member of the team, one random lock each,
-    /// into one bundle. You're on the team too, so you keep it, filed under it.
-    fn seal_team(&mut self, label: String) -> Result<(), String> {
-        let Safe::Caught { target: Target::Team(team_id, team_name), secret, .. } = &self.safe else {
-            return Err("There is no caught key to seal.".into());
-        };
-        let (team_id, team_name) = (*team_id, team_name.clone());
-        let secret = Secret::new(secret.expose().to_vec());
-        let team = self.teams.iter().find(|t| t.id == team_id).ok_or("That team is no longer here.")?.clone();
-        let (file, text) = self.seal_bundle(&team, &label, &secret)?;
-        let label = self.vault.free_name(&label);
-        let id = self.vault.add(&label, None, None, &secret, self.settings.keep, now());
-        self.vault.set_team(id, &team_name);
-        self.store.save_vault(&self.vault)?;
-        // Dropping the Caught state zeroizes the plaintext.
-        self.safe = Safe::Sealed { for_name: team_name, team: true, file, text };
-        Ok(())
-    }
-
     /// A kept key's name and value, for sending it on.
     fn kept(&self, key_id: &str) -> Result<(String, Secret), String> {
         let id = parse_id(key_id)?;
@@ -1094,37 +956,20 @@ impl Core {
     }
 
     fn safe_view(&self) -> SafeView {
-        let base = |state, target: &Target| SafeView {
-            state,
-            for_name: target.for_name(),
-            for_computer: target.for_computer(),
-            for_team: matches!(target, Target::Team(..)),
-            ends_at: 0,
-            file_name: None,
-            message: None,
-            apps: Vec::new(),
-            read: false,
-        };
+        let base = |state| SafeView { state, for_name: None, for_team: false, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false };
         match &self.safe {
-            Safe::Off => {
-                SafeView { state: "off", for_name: None, for_computer: None, for_team: false, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false }
+            Safe::Off => base("off"),
+            Safe::Listening { ends_at, apps, read, .. } => {
+                SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), ..base("listening") }
             }
-            Safe::Listening { target, ends_at, apps, read, .. } => {
-                SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), ..base("listening", target) }
-            }
-            Safe::TimedOut { target } => base("timeout", target),
-            Safe::Failed { target, message } => SafeView { message: Some(message.clone()), ..base("failed", target) },
-            Safe::Caught { target, note, .. } => SafeView { message: note.clone(), ..base("caught", target) },
+            Safe::TimedOut => base("timeout"),
+            Safe::Failed { message } => SafeView { message: Some(message.clone()), ..base("failed") },
+            Safe::Caught { note, .. } => SafeView { message: note.clone(), ..base("caught") },
             Safe::Sealed { for_name, team, file, .. } => SafeView {
-                state: "sealed",
                 for_name: Some(for_name.clone()),
-                for_computer: None,
                 for_team: *team,
-                ends_at: 0,
                 file_name: Some(display_name(file)),
-                message: None,
-                apps: Vec::new(),
-                read: false,
+                ..base("sealed")
             },
         }
     }
@@ -1301,69 +1146,41 @@ mod tests {
         })
     }
 
-    #[test]
-    fn request_safe_copy_seal_accept_and_once_only() {
-        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-        let ann = app("Ann");
-        let ben = app("Ben");
+    /// `to`'s card, opened on `from`'s computer: `to` is a contact. Returns their id.
+    fn give_card(to: &App, from: &App) -> String {
+        to.handoff.copy_card().unwrap();
+        let (file, _) = offered();
+        let kept = temp("card.handoff");
+        fs::copy(&file, &kept).unwrap();
+        to.handoff.dismiss();
+        from.handoff.open_path(&kept).unwrap();
+        let contact = from.handoff.view().added.unwrap();
+        from.handoff.dismiss();
+        let _ = fs::remove_file(kept);
+        contact.id
+    }
 
-        // Ask puts a request file on the clipboard.
-        ann.handoff.ask().unwrap();
-        let (request_file, request_text) = offered();
-        assert_eq!(request_file.file_name().unwrap(), "Key request from Ann.handoff");
-        assert!(request_text.contains("Ann is asking for a key"));
-        assert_eq!(ann.handoff.view().pending, 1);
-        assert!(ann.handoff.open_path(&request_file).unwrap_err().contains("your own request"));
+    /// A key `app` already holds, as if added with Safe Copy. Returns its id.
+    fn hold(app: &App, label: &str, key: &[u8]) -> String {
+        let mut core = app.handoff.lock();
+        let id = core.vault.add(label, None, None, &Secret::new(key.to_vec()), Keep::Forever, now());
+        core.store.save_vault(&core.vault).unwrap();
+        hex(&id)
+    }
 
-        // Ben opens it: Safe Copy arms for Ann.
-        ben.handoff.open_path(&request_file).unwrap();
-        let safe = ben.handoff.view().safe;
-        assert_eq!((safe.state, safe.for_name.as_deref()), ("listening", Some("Ann")));
-        assert_eq!(safe.for_computer, Some(ann.handoff.view().computer), "Ann can read Ben the fingerprint he sees");
-
-        // the copy is caught; sealed into a file.
-        copy(KEY);
-        assert_eq!(ben.handoff.view().safe.state, "caught");
-        ben.handoff.seal("Dialpad").unwrap();
-        let safe = ben.handoff.view().safe;
-        assert_eq!((safe.state, safe.file_name.as_deref()), ("sealed", Some("Key for Ann.handoff")));
-        ben.handoff.copy_sealed().unwrap();
-        let (sealed_file, _) = offered();
-        let sealed_copy = temp("sealed-copy.handoff");
-        fs::copy(&sealed_file, &sealed_copy).unwrap();
-        assert!(!files_contain(&ben.data, KEY), "sender data holds the key");
-        ben.handoff.close_safe();
-        assert!(!sealed_file.exists(), "sender keeps no sealed file after Done");
-        assert_eq!(ben.handoff.view().keys.len(), 0);
-
-        // Ann opens it; the key is kept with the sticky default.
-        ann.handoff.open_path(&sealed_copy).unwrap();
-        let view = ann.handoff.view();
-        let accepted = view.accepted.clone().unwrap();
-        assert_eq!((accepted.label.as_str(), accepted.from.as_deref(), accepted.keep), ("Dialpad", Some("Ben"), Keep::Forever));
-        assert_eq!(view.pending, 0, "one-time key destroyed");
-        assert!(!files_contain(&ann.data, KEY), "vault holds no plaintext");
-        assert!(!serde_json::to_string(&view).unwrap().contains("sk-synthetic"), "no value reaches the screens");
-
-        // The keep choice changes the item and becomes the next default.
-        ann.handoff.set_keep(&accepted.id, Keep::Days30).unwrap();
-        let view = ann.handoff.view();
-        assert_eq!(view.keep, Keep::Days30);
-        assert!(view.keys[0].expires_at.is_some());
-
-        // The same sealed file never opens again.
-        assert_eq!(ann.handoff.open_path(&sealed_copy).unwrap_err(), ALREADY_ACCEPTED);
-        let id = parse_id(&accepted.id).unwrap();
-        assert_eq!(ann.handoff.lock().vault.secret(id).unwrap().expose(), KEY);
-
-        for a in [ann, ben] {
-            let _ = fs::remove_dir_all(a.data);
-        }
-        let _ = fs::remove_file(sealed_copy);
+    /// The sealed file on the Sealed screen, copied out the way you'd send it; then Done.
+    fn send_out(app: &App) -> PathBuf {
+        app.handoff.copy_sealed().unwrap();
+        let (file, _) = offered();
+        let kept = temp("sealed.handoff");
+        fs::copy(&file, &kept).unwrap();
+        app.handoff.close_safe();
+        assert!(!file.exists(), "the sender keeps no sealed file after Done");
+        kept
     }
 
     #[test]
-    fn a_card_lets_ben_send_ann_keys_each_opening_once() {
+    fn a_card_lets_ben_send_ann_saved_keys_each_opening_once() {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         let ann = app("Ann");
         let ben = app("Ben");
@@ -1374,42 +1191,49 @@ mod tests {
         assert_eq!(card_file.file_name().unwrap(), "KeyHandoff card - Ann.handoff");
         assert!(card_text.contains("Ann's KeyHandoff card"));
         assert!(ann.handoff.open_path(&card_file).unwrap_err().contains("your own card"));
+        assert_eq!(ann.handoff.view().pending, CARD_LOCKS);
 
         // Ben opens it: Ann is a contact, with Ann's fingerprint to check.
         ben.handoff.open_path(&card_file).unwrap();
-        let view = ben.handoff.view();
-        let contact = view.added.clone().unwrap();
+        let contact = ben.handoff.view().added.clone().unwrap();
         assert_eq!((contact.name.as_str(), contact.sends_left), ("Ann", CARD_LOCKS));
         assert_eq!(contact.computer, ann.handoff.view().computer);
+        ben.handoff.dismiss();
 
-        // Send a key: Safe Copy for Ann. Cancelling doesn't spend a lock.
-        ben.handoff.send_to(&contact.id).unwrap();
-        assert_eq!(ben.handoff.view().safe.for_name.as_deref(), Some("Ann"));
-        ben.handoff.close_safe();
-        assert_eq!(ben.handoff.view().contacts[0].sends_left, CARD_LOCKS);
-
-        // Two keys, two locks; each sealed file opens once on Ann's computer.
+        // Ben sends two keys he holds: sealed straight from his vault, with no
+        // Safe Copy and nothing on the clipboard; a lock is spent per key.
         let mut sealed_files = Vec::new();
         for (i, key) in [b"sk-synthetic-card-0001".as_slice(), b"sk-synthetic-card-0002"].into_iter().enumerate() {
-            ben.handoff.send_to(&contact.id).unwrap();
-            copy(key);
-            ben.handoff.seal(&format!("Key {i}")).unwrap();
-            ben.handoff.copy_sealed().unwrap();
-            let (file, _) = offered();
-            let kept = temp(&format!("card-sealed-{i}.handoff"));
-            fs::copy(&file, &kept).unwrap();
-            ben.handoff.close_safe();
-            sealed_files.push(kept);
+            let key_id = hold(&ben, &format!("Key {i}"), key);
+            *OFFERED.lock().unwrap() = None;
+            ben.handoff.send_kept(&contact.id, &key_id).unwrap();
+            let safe = ben.handoff.view().safe;
+            assert_eq!((safe.state, safe.for_name.as_deref(), safe.file_name.as_deref()), ("sealed", Some("Ann"), Some("Key for Ann.handoff")));
+            assert!(ARMED.lock().unwrap().is_none() && OFFERED.lock().unwrap().is_none(), "no Safe Copy, no clipboard");
+            sealed_files.push(send_out(&ben));
         }
-        assert_eq!(ben.handoff.view().contacts[0].sends_left, CARD_LOCKS - 2, "a lock is spent per key sealed");
-        assert!(!files_contain(&ben.data, b"sk-synthetic-card"), "Ben keeps nothing");
+        assert_eq!(ben.handoff.view().contacts[0].sends_left, CARD_LOCKS - 2);
+        assert!(!files_contain(&ben.data, b"sk-synthetic-card"), "Ben's files hold no plaintext");
 
+        // Ann opens each once; kept with the sticky default, never in plaintext.
         for (i, file) in sealed_files.iter().enumerate() {
             ann.handoff.open_path(file).unwrap();
-            assert_eq!(ann.handoff.view().accepted.unwrap().label, format!("Key {i}"));
+            let accepted = ann.handoff.view().accepted.unwrap();
+            assert_eq!((accepted.label, accepted.from.as_deref(), accepted.keep), (format!("Key {i}"), Some("Ben"), Keep::Forever));
             assert_eq!(ann.handoff.open_path(file).unwrap_err(), ALREADY_ACCEPTED, "opens once");
         }
+        let view = ann.handoff.view();
+        assert_eq!(view.pending, CARD_LOCKS - 2, "each one-time key destroyed");
         assert!(!files_contain(&ann.data, b"sk-synthetic-card"), "Ann's vault holds no plaintext");
+        assert!(!serde_json::to_string(&view).unwrap().contains("sk-synthetic"), "no value reaches the screens");
+        let first = view.keys.iter().find(|k| k.label == "Key 0").unwrap().clone();
+        assert_eq!(ann.handoff.lock().vault.secret(parse_id(&first.id).unwrap()).unwrap().expose(), b"sk-synthetic-card-0001");
+
+        // The keep choice changes the item and becomes the next default.
+        ann.handoff.set_keep(&first.id, Keep::Days30).unwrap();
+        let view = ann.handoff.view();
+        assert_eq!(view.keep, Keep::Days30);
+        assert!(view.keys.iter().find(|k| k.id == first.id).unwrap().expires_at.is_some());
 
         for a in [ann, ben] {
             let _ = fs::remove_dir_all(a.data);
@@ -1418,95 +1242,20 @@ mod tests {
     }
 
     #[test]
-    fn ben_sends_a_key_he_already_holds_from_his_vault() {
-        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-        let (ben, ann, priya) = (app("Ben"), app("Ann"), app("Priya"));
-        for member in [&ann, &priya] {
-            member.handoff.copy_card().unwrap();
-            let (file, _) = offered();
-            let kept = temp("card.handoff");
-            fs::copy(&file, &kept).unwrap();
-            ben.handoff.open_path(&kept).unwrap();
-            ben.handoff.dismiss();
-        }
-        // Ben already holds the key.
-        let key_id = {
-            let mut core = ben.handoff.lock();
-            let id = core.vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
-            core.store.save_vault(&core.vault).unwrap();
-            hex(&id)
-        };
-        let id_of = |name: &str| ben.handoff.view().contacts.iter().find(|c| c.name == name).unwrap().id.clone();
-
-        // Pick Ann, pick the key: the sealed file is ready, and nothing was armed or copied.
-        *OFFERED.lock().unwrap() = None;
-        ben.handoff.send_kept(&id_of("Ann"), &key_id).unwrap();
-        let safe = ben.handoff.view().safe;
-        assert_eq!((safe.state, safe.for_name.as_deref(), safe.file_name.as_deref()), ("sealed", Some("Ann"), Some("Key for Ann.handoff")));
-        assert!(ARMED.lock().unwrap().is_none() && OFFERED.lock().unwrap().is_none(), "no Safe Copy, no clipboard");
-        ben.handoff.copy_sealed().unwrap();
-        let (file, _) = offered();
-        let kept = temp("kept-sealed.handoff");
-        fs::copy(&file, &kept).unwrap();
-        ben.handoff.close_safe();
-        assert_eq!(ben.handoff.view().contacts.iter().find(|c| c.name == "Ann").unwrap().sends_left, CARD_LOCKS - 1);
-
-        ann.handoff.open_path(&kept).unwrap();
-        let accepted = ann.handoff.view().accepted.unwrap();
-        assert_eq!((accepted.label.as_str(), accepted.from.as_deref()), ("Dialpad", Some("Ben")));
-        assert_eq!(ann.handoff.lock().vault.secret(parse_id(&accepted.id).unwrap()).unwrap().expose(), KEY, "Ann gets Ben's saved key");
-        assert_eq!(ann.handoff.open_path(&kept).unwrap_err(), ALREADY_ACCEPTED, "opens once");
-
-        // The same key to a team: one file, each member opens their own copy, and it's filed under the team.
-        let team = ben.handoff.save_team(None, "Platform", &[id_of("Ann"), id_of("Priya")]).unwrap();
-        ben.handoff.send_kept_to_team(&team, &key_id).unwrap();
-        ben.handoff.copy_sealed().unwrap();
-        let (file, _) = offered();
-        let bundle = temp("kept-team.handoff");
-        fs::copy(&file, &bundle).unwrap();
-        ben.handoff.close_safe();
-        for member in [&ann, &priya] {
-            member.handoff.dismiss();
-            member.handoff.open_path(&bundle).unwrap();
-            let id = member.handoff.view().keys.iter().find(|k| k.team.as_deref() == Some("Platform")).unwrap().id.clone();
-            assert_eq!(member.handoff.lock().vault.secret(parse_id(&id).unwrap()).unwrap().expose(), KEY);
-        }
-        assert_eq!(ben.handoff.view().keys[0].team.as_deref(), Some("Platform"));
-    }
-
-    #[test]
     fn a_team_gets_each_key_once_and_a_newcomer_gets_them_all() {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         let (ben, ann, priya, cat) = (app("Ben"), app("Ann"), app("Priya"), app("Cat"));
-        let card_of = |a: &App| {
-            a.handoff.copy_card().unwrap();
-            let (file, _) = offered();
-            let kept = temp("card.handoff");
-            fs::copy(&file, &kept).unwrap();
-            a.handoff.dismiss();
-            kept
-        };
-        // Ben has Ann's, Priya's and Cat's cards; each copy has fresh locks.
-        for member in [&ann, &priya, &cat] {
-            ben.handoff.open_path(&card_of(member)).unwrap();
-            ben.handoff.dismiss();
-        }
-        let id_of = |name: &str| ben.handoff.view().contacts.iter().find(|c| c.name == name).unwrap().id.clone();
-        let team = ben.handoff.save_team(None, "Platform", &[id_of("Ann"), id_of("Priya")]).unwrap();
+        let (ann_id, priya_id, cat_id) = (give_card(&ann, &ben), give_card(&priya, &ben), give_card(&cat, &ben));
+        let team = ben.handoff.save_team(None, "Platform", &[ann_id.clone(), priya_id.clone()]).unwrap();
 
         // Two keys shared with the team: one file each, every member opens their part once.
         let mut bundles = Vec::new();
         for (i, key) in [b"sk-synthetic-team-0001".as_slice(), b"sk-synthetic-team-0002"].into_iter().enumerate() {
-            ben.handoff.send_to_team(&team).unwrap();
-            assert_eq!(ben.handoff.view().safe.for_name.as_deref(), Some("Platform"));
-            copy(key);
-            ben.handoff.seal(&format!("Team key {i}")).unwrap();
-            ben.handoff.copy_sealed().unwrap();
-            let (file, _) = offered();
-            let kept = temp("team.handoff");
-            fs::copy(&file, &kept).unwrap();
-            ben.handoff.close_safe();
-            bundles.push(kept);
+            let key_id = hold(&ben, &format!("Team key {i}"), key);
+            ben.handoff.send_kept_to_team(&team, &key_id).unwrap();
+            let safe = ben.handoff.view().safe;
+            assert_eq!((safe.for_name.as_deref(), safe.for_team), (Some("Platform"), true));
+            bundles.push(send_out(&ben));
         }
         for member in [&ann, &priya] {
             for (i, bundle) in bundles.iter().enumerate() {
@@ -1518,17 +1267,17 @@ mod tests {
         }
         assert!(cat.handoff.open_path(&bundles[0]).unwrap_err().contains("Nothing in this file"), "Cat isn't on the team yet");
 
-        // Ben, who's on the team too, kept both; Cat joins and gets them all in one file.
+        // Ben's keys are filed under the team; Cat joins and gets them all in one file.
         assert_eq!(ben.handoff.view().teams[0].keys, 2);
-        ben.handoff.save_team(Some(&team), "Platform", &[id_of("Ann"), id_of("Priya"), id_of("Cat")]).unwrap();
-        ben.handoff.welcome(&team, &id_of("Cat")).unwrap();
+        ben.handoff.save_team(Some(&team), "Platform", &[ann_id, priya_id, cat_id.clone()]).unwrap();
+        ben.handoff.welcome(&team, &cat_id).unwrap();
         let (welcome, _) = offered();
         cat.handoff.open_path(&welcome).unwrap();
         let mut got: Vec<_> = cat.handoff.view().keys.iter().map(|k| (k.label.clone(), k.team.clone())).collect();
         got.sort();
         assert_eq!(got, [("Team key 0".to_string(), Some("Platform".to_string())), ("Team key 1".to_string(), Some("Platform".to_string()))]);
-        let cat_id = parse_id(&cat.handoff.view().keys[0].id).unwrap();
-        assert!(cat.handoff.lock().vault.secret(cat_id).unwrap().expose().starts_with(b"sk-synthetic-team-"));
+        let cat_key = parse_id(&cat.handoff.view().keys[0].id).unwrap();
+        assert!(cat.handoff.lock().vault.secret(cat_key).unwrap().expose().starts_with(b"sk-synthetic-team-"));
 
         for a in [&ben, &ann, &priya, &cat] {
             assert!(!files_contain(&a.data, b"sk-synthetic-team"), "no plaintext on disk");
@@ -1553,7 +1302,6 @@ mod tests {
         (BAIT_READ.lock().unwrap().as_ref().unwrap())();
         assert!(me.handoff.view().safe.read, "a read of the bait shows while listening");
         copy(KEY);
-        assert!(me.handoff.seal("X").is_err(), "your own key is never sealed");
         assert!(me.handoff.keep_own("  ", Keep::Once).is_err());
         me.handoff.keep_own("Anthropic", Keep::Once).unwrap();
         let view = me.handoff.view();
@@ -1583,22 +1331,25 @@ mod tests {
     }
 
     #[test]
-    fn sealed_for_someone_else_and_garbage_are_refused() {
+    fn sealed_for_someone_else_old_requests_and_garbage_are_refused() {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         let (a, b, c) = (app("Ann"), app("Ben"), app("Cat"));
-        a.handoff.ask().unwrap();
-        let (request, _) = offered();
-        b.handoff.open_path(&request).unwrap();
-        copy(KEY);
-        b.handoff.seal("Key").unwrap();
-        b.handoff.copy_sealed().unwrap();
-        let (sealed, _) = offered();
+        let ann = give_card(&a, &b);
+        b.handoff.send_kept(&ann, &hold(&b, "Key", KEY)).unwrap();
+        let sealed = send_out(&b);
         assert!(c.handoff.open_path(&sealed).is_err(), "Cat cannot open Ann's key");
         assert!(c.handoff.open_text("hello there").is_err());
-        assert_eq!(a.handoff.view().pending, 1, "Ann's one-time key untouched");
+        assert_eq!(a.handoff.view().pending, CARD_LOCKS, "Ann's one-time keys untouched");
+
+        // A one-off request from before cards starts nothing.
+        let identity = Identity::generate();
+        let (request, _) = keyhandoff_seal::create_request(&identity, "Dee", now(), keyhandoff_seal::DEFAULT_REQUEST_TTL).unwrap();
+        assert!(c.handoff.open_text(&armor::request_text(&request)).unwrap_err().contains("Ask Dee for their KeyHandoff card"));
+        assert_eq!(c.handoff.view().safe.state, "off");
         for x in [a, b, c] {
             let _ = fs::remove_dir_all(x.data);
         }
+        let _ = fs::remove_file(sealed);
     }
 
     fn peer(program: &str, folder: &str) -> Peer {

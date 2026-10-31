@@ -21,10 +21,8 @@ export interface KeyView {
 
 export interface SafeView {
   state: SafeState;
-  /** The requester; null when catching a key for yourself. */
+  /** Who a sealed key is for; null while catching a key of your own. */
   for_name: string | null;
-  /** The requester's computer fingerprint, to check who is asking. */
-  for_computer: string | null;
   /** It's for a team: every member gets their own copy. */
   for_team: boolean;
   /** Unix ms when listening stops. */
@@ -144,10 +142,8 @@ export function useGate(): GateView | null {
 export const api = {
   view: () => invoke<View>("view"),
   copyCard: () => invoke<void>("copy_card"),
-  sendTo: (id: string) => invoke<void>("send_to", { id }),
   saveTeam: (id: string | null, name: string, members: string[]) => invoke<string>("save_team", { id, name, members }),
   deleteTeam: (id: string) => invoke<void>("delete_team", { id }),
-  sendToTeam: (id: string) => invoke<void>("send_to_team", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */
   sendKept: (contact: string, key: string) => invoke<void>("send_kept", { contact, key }),
   sendKeptToTeam: (team: string, key: string) => invoke<void>("send_kept_to_team", { team, key }),
@@ -155,7 +151,6 @@ export const api = {
   add: () => invoke<void>("add"),
   retry: () => invoke<void>("retry"),
   paste: () => invoke<void>("paste"),
-  seal: (label: string) => invoke<void>("seal", { label }),
   keepOwn: (label: string, keep: Keep) => invoke<void>("keep_own", { label, keep }),
   copySealed: () => invoke<void>("copy_sealed"),
   copyRequest: () => invoke<void>("copy_request"),

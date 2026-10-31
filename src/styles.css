@@ -223,8 +223,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .pages:not(.none) .back, .pages:not(.none) .front { animation-play-state: paused; }
 .safe-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
 .safe-body .grow-space { flex: 1; }
-.asking { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-.asking .mono { font-size: 11.5px; color: var(--text-2); }
 .safe .apps { margin: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 12.5px; color: var(--text-2); text-align: center; }
 .warning { display: flex; gap: 10px; padding: 11px 12px; border: 1px solid rgba(255, 176, 32, .45); border-radius: 10px; background: rgba(255, 176, 32, .07); font-size: 12.5px; color: var(--text-2); }
 .warning .icon { color: var(--warn); width: 18px; height: 18px; margin-top: 1px; }

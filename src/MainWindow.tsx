@@ -70,7 +70,8 @@ export function MainWindow() {
   const bad = error ?? view?.problem ?? null;
   const toast = view?.program ? null : (bad ?? view?.notice ?? null);
   const safeOn = view !== null && view.safe.state !== "off";
-  const [sending, setSending] = useState(false);
+  // Send a key: open at the person-or-team list, or straight at someone's keys.
+  const [sending, setSending] = useState<To | "pick" | null>(null);
   const [security, setSecurity] = useState(false);
   // The team being edited, "new" for a new one.
   const [editing, setEditing] = useState<TeamView | "new" | null>(null);
@@ -94,14 +95,16 @@ export function MainWindow() {
       </header>
       <main className="stage" ref={stage}>
         {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending(true)} onSecurity={() => setSecurity(true)} />}
+        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
       {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
-      {view?.added && <ContactSheet contact={view.added} run={run} />}
+      {view?.added && (
+        <ContactSheet contact={view.added} onSend={(c) => void api.dismiss().then(() => setSending({ team: false, id: c.id, name: c.name }))} />
+      )}
       {view && sending && !safeOn && !editing && (
-        <SendSheet view={view} run={run} onEdit={setEditing} onClose={() => setSending(false)} />
+        <SendSheet view={view} run={run} start={sending === "pick" ? null : sending} onEdit={setEditing} onClose={() => setSending(null)} />
       )}
       {view && editing && !safeOn && (
         <TeamSheet
@@ -542,7 +545,7 @@ function CardSheet({ fileName, computer, run }: { fileName: string; computer: st
 }
 
 /** Someone's card was just opened: they're a contact now. */
-function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
+function ContactSheet({ contact, onSend }: { contact: ContactView; onSend: (c: ContactView) => void }) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => void enter(sheet.current, "rise", 360), [contact.id]);
   return (
@@ -561,7 +564,7 @@ function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void api.dismiss()}>Done</button>
-        <button className="btn primary grow" onClick={() => void run(api.dismiss().then(() => api.sendTo(contact.id)))}>
+        <button className="btn primary grow" onClick={() => onSend(contact)}>
           Send {contact.name} a key
         </button>
       </div>
@@ -569,10 +572,13 @@ function ContactSheet({ contact, run }: { contact: ContactView; run: Run }) {
   );
 }
 
-/** Send a key: pick a person or a team, then one of your saved keys. */
-function SendSheet({ view, run, onEdit, onClose }: { view: View; run: Run; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
+/** Who Send a key sends to: a contact or a team. */
+type To = { team: boolean; id: string; name: string };
+
+/** Send a key: pick a person or a team (unless `start` picked one), then one of your saved keys. */
+function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run; start: To | null; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
-  const [to, setTo] = useState<{ team: boolean; id: string; name: string } | null>(null);
+  const [to, setTo] = useState<To | null>(start);
   useEffect(() => void enter(sheet.current, "rise", 360), [to === null]);
   const { contacts, teams } = view;
   if (to) {

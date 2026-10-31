@@ -93,16 +93,10 @@ function Countdown({ endsAt }: { endsAt: number }) {
   return <>From anywhere · {Math.ceil(left / 1000)}s</>;
 }
 
-/** Below the stage while listening: who it's for, clipboard apps and the info. */
+/** Below the stage while listening: clipboard apps and the info. */
 function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
   return (
     <>
-      {safe.for_computer && (
-        <div className="asking">
-          <span>Sending to {safe.for_name}</span>
-          <span className="mono">computer {safe.for_computer}</span>
-        </div>
-      )}
       <ClipboardWarning safe={safe} />
       {info && (
         <p className="info">
@@ -145,18 +139,17 @@ function andList(names: string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** Caught and wiped. Name it, then seal it (for someone) or pick a keep-time (for you). */
+/** Caught and wiped. Name it, then pick a keep-time. */
 function Caught({ view, run }: { view: View; run: Run }) {
-  const forSomeone = view.safe.for_name !== null;
-  // A key for you lands in your own vault, where names are unique.
-  const [label, setLabel] = useState(() => (forSomeone ? "API key" : freeName("API key", view.keys)));
+  // It lands in your vault, where names are unique.
+  const [label, setLabel] = useState(() => freeName("API key", view.keys));
   const input = useRef<HTMLInputElement>(null);
-  const savedAs = forSomeone ? label : freeName(label, view.keys);
+  const savedAs = freeName(label, view.keys);
   useEffect(() => {
     input.current?.focus();
     input.current?.select();
   }, []);
-  const save = (keep = view.keep) => void run(forSomeone ? api.seal(label) : api.keepOwn(label, keep));
+  const save = (keep = view.keep) => void run(api.keepOwn(label, keep));
   return (
     <>
       {view.safe.message && <p className="help center">{view.safe.message}</p>}
@@ -171,20 +164,14 @@ function Caught({ view, run }: { view: View; run: Run }) {
         onKeyDown={(e) => e.key === "Enter" && save()}
       />
       {savedAs !== label.trim() && <p className="help">That name is taken, so it's saved as {savedAs}.</p>}
-      {forSomeone ? (
-        <button className="btn primary" onClick={() => save()}>
-          Seal for {view.safe.for_name}
-        </button>
-      ) : (
-        <div className="keep-buttons" role="group" aria-label="How long to keep it">
-          {KEEP_CHOICES.map((c) => (
-            <button key={c.keep} className={view.keep === c.keep ? "pick" : ""} onClick={() => save(c.keep)}>
-              <Icon name={c.icon} />
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="keep-buttons" role="group" aria-label="How long to keep it">
+        {KEEP_CHOICES.map((c) => (
+          <button key={c.keep} className={view.keep === c.keep ? "pick" : ""} onClick={() => save(c.keep)}>
+            <Icon name={c.icon} />
+            {c.label}
+          </button>
+        ))}
+      </div>
     </>
   );
 }

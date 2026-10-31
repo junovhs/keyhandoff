@@ -248,18 +248,8 @@ fn delete_team(app: AppHandle, h: H, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn send_to_team(app: AppHandle, h: H, id: String) -> Result<(), String> {
-    done(&app, h.send_to_team(&id))
-}
-
-#[tauri::command]
 fn welcome(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
     done(&app, h.welcome(&team, &member))
-}
-
-#[tauri::command]
-fn send_to(app: AppHandle, h: H, id: String) -> Result<(), String> {
-    done(&app, h.send_to(&id))
 }
 
 #[tauri::command]
@@ -285,11 +275,6 @@ fn retry(app: AppHandle, h: H) -> Result<(), String> {
 #[tauri::command]
 fn paste(app: AppHandle, h: H) -> Result<(), String> {
     done(&app, h.paste())
-}
-
-#[tauri::command]
-fn seal(app: AppHandle, h: H, label: String) -> Result<(), String> {
-    done(&app, h.seal(&label))
 }
 
 #[tauri::command]
@@ -442,7 +427,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Started(started))
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, send_to, save_team, delete_team, send_to_team, welcome, add, retry, paste, seal, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, welcome, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready
         ])
         .setup(move |app| {

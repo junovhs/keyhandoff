@@ -27,7 +27,7 @@ scripts/           Development helpers
 
 Tauri, with React and TypeScript screens and a Rust backend.
 
-**Secret values live only in Rust:** keys, one-time keys and caught clipboard text. Tauri commands give the screens names, states and ids. A screen asks to "seal what you caught for this request", and it never passes or receives the secret.
+**Secret values live only in Rust:** keys, one-time keys and caught clipboard text. Tauri commands give the screens names, states and ids. A screen asks to "send this saved key to Ann" or "keep what you caught as Dialpad", and it never passes or receives the secret.
 
 ## Sealing model
 
@@ -60,7 +60,7 @@ Profile data lives in a `handoff` folder under the system's data directory. Each
 
 ## Safe Copy capture
 
-- Arms only on a user action: opening a request, or Add.
+- Arms only on a user action: Add a key. Sending seals a key from the vault and never arms it.
 - On arming, names known clipboard managers found in the process list (`/proc/*/comm` on Linux, a Toolhelp snapshot on Windows).
 - Takes the first text clipboard change, then disarms. Times out after 60 seconds.
 - Never renders the value. It's zeroized when dropped.
