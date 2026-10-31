@@ -153,9 +153,9 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 
 /* Listening and caught: the stage (pages, headline, line under it) holds its
    place; the part below sits at the bottom. */
-.stage { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-.stage .display { margin-top: 4px; }
-.stage .sub { margin: 0; font-size: 18px; color: var(--text-2); }
+.safe-stage { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.safe-stage .display { margin-top: 4px; }
+.safe-stage .sub { margin: 0; font-size: 18px; color: var(--text-2); }
 .below { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .help.center { align-self: center; text-align: center; }
 .safe-foot { min-height: 36px; flex-shrink: 0; }

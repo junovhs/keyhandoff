@@ -1,5 +1,5 @@
-// Stands in for @tauri-apps/api so the real screens render in a plain browser
-// for the website's screenshots. All data here is sample data.
+// Stands in for @tauri-apps/api so the real screens render in a plain browser,
+// for the website's screenshots and the screen board. All data here is sample data.
 import type { KeyView, SafeState, View } from "../../src/ipc";
 
 const NOW = Math.floor(Date.now() / 1000);
@@ -11,19 +11,21 @@ const KEYS: KeyView[] = [
   { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep" },
 ];
 
-function safe(state: SafeState, forName: string | null = "Ann"): View["safe"] {
+function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = []): View["safe"] {
   return {
     state,
     for_name: forName,
-    for_computer: forName && "7F3A-91C2",
+    for_computer: forName && "72ca77a8cc39c3ba",
     ends_at: Date.now() + 42000,
     file_name: state === "sealed" ? "Key for Ann.handoff" : null,
     message: null,
+    apps,
   };
 }
 
 const HOME: View = {
   name: "Ann",
+  computer: "72ca77a8cc39c3ba",
   protection: "dpapi",
   keep: "keep",
   keys: KEYS,
@@ -32,14 +34,26 @@ const HOME: View = {
   accepted: null,
   asked: null,
   notice: null,
+  program: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
   home: {},
+  "home-empty": { keys: [] },
   ask: { keys: [], pending: 1, asked: "Key request from Ann.handoff" },
   listening: { name: "Ben", keys: [], safe: safe("listening") },
+  "caught-ann": { name: "Ben", keys: [], safe: safe("caught") },
   sealed: { name: "Ben", keys: [], safe: safe("sealed") },
   accepted: { accepted: { ...KEYS[0], added_at: NOW } },
+  "listening-you": { safe: safe("listening", null) },
+  "caught-you": { safe: safe("caught", null) },
+  "home-added": { notice: "OpenAI is in your keys." },
+  program: {
+    program: { name: "python3", path: "/usr/bin/python3", command: "python3 dialpad_report.py", folder: "~/code/report-bot", keys: ["Dialpad"] },
+  },
+  "home-copied": { notice: "Copied DIALPAD_API_KEY=handoff:Dialpad" },
+  "listening-apps": { safe: safe("listening", null, ["Ditto"]) },
+  timeout: { safe: safe("timeout", null) },
 };
 
 const scene = new URLSearchParams(location.search).get("s") ?? "home";

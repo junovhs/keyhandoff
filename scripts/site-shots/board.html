@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>KeyHandoff screen board</title>
+    <style>
+      body { margin: 0; padding: 48px; background: #101114; color: #e8e8e8; font: 15px/1.4 system-ui, sans-serif; width: max-content; }
+      h1 { margin: 0 0 8px; font-size: 26px; }
+      .lead { margin: 0 0 40px; color: #9aa0aa; }
+      .flow { margin-bottom: 56px; }
+      .flow h2 { margin: 0 0 16px; font-size: 19px; }
+      .row { display: flex; align-items: flex-start; gap: 12px; }
+      .step { display: flex; flex-direction: column; gap: 8px; }
+      .step figcaption { font-size: 13px; color: #9aa0aa; }
+      .step figcaption b { color: #e8e8e8; font-weight: 600; }
+      .step iframe { width: 400px; border: 0; border-radius: 8px; background: #000; box-shadow: 0 0 0 1px #2a2d33; }
+      .arrow { align-self: center; color: #5b616b; font-size: 26px; padding: 0 2px; margin-top: 28px; }
+      figure { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>KeyHandoff screens</h1>
+    <p class="lead">Every screen with sample data, in the order people meet them. Safe Copy screens are shown at the compact Safe Copy window size.</p>
+    <main id="board"></main>
+    <script type="module">
+      // [scene, who, what, window height]
+      const MAIN = 600, SAFE = 540;
+      const FLOWS = [
+        ["Ask someone for a key", [
+          ["home-empty", "Ann", "Starts with no keys", MAIN],
+          ["ask", "Ann", "Requests a key", MAIN],
+          ["listening", "Ben", "Opens the request", SAFE],
+          ["caught-ann", "Ben", "Copies the key", SAFE],
+          ["sealed", "Ben", "Sends back the sealed file", SAFE],
+          ["accepted", "Ann", "Opens the sealed file", MAIN],
+          ["home", "Ann", "Has the key", MAIN],
+        ]],
+        ["Add your own key", [
+          ["listening-you", "You", "Clicks Add your own", SAFE],
+          ["caught-you", "You", "Copies the key", SAFE],
+          ["home-added", "You", "Has the key", MAIN],
+        ]],
+        ["Use a key in a program", [
+          ["program", "You", "A script asks for a key", MAIN],
+          ["home-copied", "You", "Copy .env line on a key row", MAIN],
+        ]],
+        ["When it doesn't go to plan", [
+          ["listening-apps", "You", "A clipboard app is running", SAFE],
+          ["timeout", "You", "Time runs out", SAFE],
+        ]],
+      ];
+      const board = document.getElementById("board");
+      let n = 0;
+      for (const [title, steps] of FLOWS) {
+        const flow = document.createElement("section");
+        flow.className = "flow";
+        flow.innerHTML = `<h2>${title}</h2><div class="row"></div>`;
+        const row = flow.querySelector(".row");
+        steps.forEach(([scene, who, what, height], i) => {
+          if (i > 0) row.insertAdjacentHTML("beforeend", `<span class="arrow">→</span>`);
+          n += 1;
+          row.insertAdjacentHTML(
+            "beforeend",
+            `<figure class="step"><figcaption><b>${n}. ${who}</b> · ${what}</figcaption><iframe src="./index.html?s=${scene}" style="height:${height}px" title="${what}"></iframe></figure>`,
+          );
+        });
+        board.append(flow);
+      }
+    </script>
+  </body>
+</html>

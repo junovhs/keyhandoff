@@ -83,6 +83,7 @@ Tests only ever use synthetic keys. On Linux the real clipboard checks need `DIS
 
 ## Documentation
 
+- [Every screen, in flow order](docs/screens.png): regenerate with `node scripts/site-shots/board.mjs`
 - [What it protects, and what it doesn't](docs/threats.md)
 - [Capture tests: the copy moment](docs/capture-tests.md)
 - [Architecture](docs/architecture.md)

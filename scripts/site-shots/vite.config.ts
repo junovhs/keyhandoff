@@ -8,6 +8,15 @@ export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
   server: { port: 1430, strictPort: true, fs: { allow: ["../.."] } },
+  // index.html renders one screen (?s=scene); board.html lays every screen out.
+  build: {
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL("./index.html", import.meta.url)),
+        board: fileURLToPath(new URL("./board.html", import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: {
       "@tauri-apps/api/core": mock,

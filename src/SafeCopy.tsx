@@ -40,7 +40,7 @@ export function SafeCopy({ view }: { view: View }) {
       </div>
       {staged ? (
         <div className="safe-body">
-          <div className="stage">
+          <div className="safe-stage">
             <Pages caught={state === "caught"} />
             <h2 className="display">{state === "caught" ? "Caught" : "Copy your key"}</h2>
             <p className="sub">{state === "caught" ? "Clipboard wiped." : <Countdown endsAt={safe.ends_at} />}</p>
