@@ -96,7 +96,7 @@ const INCIDENTS = [
     <header class="wrap hero">
       <div class="hero-copy">
         <h1>Your <code>.env</code> is<br />announcing itself.</h1>
-        <p class="lede"><strong>Hand off API keys without anyone ever seeing them.</strong> From the moment a teammate sends you a key to the moment your code uses it, KeyHandoff keeps it hidden.</p>
+        <p class="lede"><strong>And that&rsquo;s just one place your keys leak.</strong> KeyHandoff keeps them hidden from the provider&rsquo;s page to your code, and to anyone you share them with.</p>
         <div class="cta">
           <a class="btn primary" href="#download"><Icon name="down" />Download</a>
           <a class="btn secondary" href={GITHUB}>See the code <Icon name="out" /></a>
@@ -185,9 +185,9 @@ const INCIDENTS = [
 
     <section class="wrap panel" id="solo">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="user" />Just you</span>
-        <h2>Getting keys in and out is quick and safe.</h2>
-        <p class="sub">Copy a key once and it&rsquo;s sealed away. When you need it, KeyHandoff types it in for you.</p>
+        <span class="eyebrow"><Icon name="key" />1 · Keep it</span>
+        <h2>Copy a new key once, and it goes straight into your vault.</h2>
+        <p class="sub">When you need it somewhere, KeyHandoff types it in for you.</p>
       </div>
       <div class="solo-stage rv" id="solo-stage" data-step="0">
         <p class="duo-cap" aria-live="polite">
@@ -239,8 +239,8 @@ const INCIDENTS = [
 
     <section class="wrap split" id="code">
       <div class="split-copy rv">
-        <span class="eyebrow"><Icon name="terminal" />Your code</span>
-        <h2>Your programs ask KeyHandoff for the key, and you decide which ones get it.</h2>
+        <span class="eyebrow"><Icon name="terminal" />2 · Use it</span>
+        <h2>Your code uses the key, and you decide which programs get it.</h2>
         <p class="sub">Your <code>.env</code> holds a pointer like <code>handoff:OpenAI</code> where the key used to be. When your program starts, it asks KeyHandoff over a private pipe on your machine, and the first time, you say whether that program in that folder is allowed.</p>
       </div>
       <div class="prompt rv">
@@ -253,8 +253,8 @@ const INCIDENTS = [
 
     <section class="wrap panel" id="team">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />Your team</span>
-        <h2>Send a key to anyone on your team.</h2>
+        <span class="eyebrow"><Icon name="users" />3 · Share it</span>
+        <h2>Need to share a key? We solved that too.</h2>
       </div>
       <div class="team-stage rv" id="duo" data-step="intro">
         <div class="frame-card f-intro" aria-hidden="true">
