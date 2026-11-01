@@ -1,0 +1,7 @@
+---
+// The app's 16px line icon (Icon in ../../../src/art.tsx), for the mock of the app.
+import { LINES } from "../../../src/art-paths";
+interface Props { name: keyof typeof LINES }
+const { name } = Astro.props;
+---
+<svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d={LINES[name]} /></svg>

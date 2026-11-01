@@ -1,0 +1,21 @@
+---
+// Safe Copy's picture (Pages in ../../../src/art.tsx), for the mock of the app.
+import { FRONT, FRONT_LINES, CHECK, LOCK_SHACKLE } from "../../../src/art-paths";
+interface Props { mark: "none" | "check" | "lock" }
+const { mark } = Astro.props;
+---
+<svg class={`pages ${mark}`} viewBox="0 -2 100 100" width="160" height="160" aria-hidden="true">
+  <rect class="back" x="9" y="3" width="40" height="62" />
+  <g class="front">
+    <path class="cut" d={FRONT} />
+    <path class="page" d={FRONT} />
+    <path class="line" d={FRONT_LINES} />
+    <path class="check-cut" d={CHECK} pathLength="1" />
+    <path class="check" d={CHECK} pathLength="1" />
+    <g class="lock">
+      <rect class="lock-cut" x="60" y="56" width="36" height="40" rx="4" />
+      <path class="lock-shackle" d={LOCK_SHACKLE} />
+      <rect class="lock-body" x="64" y="70" width="28" height="22" rx="2.5" />
+    </g>
+  </g>
+</svg>

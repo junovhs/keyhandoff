@@ -1,0 +1,13 @@
+---
+// A panel glyph (Glyph in ../../../src/art.tsx), for the mock of the app.
+import { FRONT, FRONT_LINES, GLYPH_MARKS } from "../../../src/art-paths";
+interface Props { mark: keyof typeof GLYPH_MARKS; size?: number }
+const { mark, size = 64 } = Astro.props;
+const { d, tone } = GLYPH_MARKS[mark];
+---
+<svg class="glyph" viewBox="18 14 84 84" width={size} height={size} aria-hidden="true">
+  <path class="page" d={FRONT} />
+  <path class="line" d={FRONT_LINES} />
+  <path class="mark-cut" d={d} />
+  <path class={`mark ${tone}`} d={d} />
+</svg>
