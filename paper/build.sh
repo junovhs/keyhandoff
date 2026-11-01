@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
-# Builds paper/paper.tex and paper/paper.pdf from paper/draft.md.
+# Builds paper/paper.tex and paper/paper.pdf from paper/paper.md.
 # Needs pandoc (3.x) and tectonic on PATH. paper.tex is what goes to arXiv.
 set -eu
 cd "$(dirname "$0")"
-pandoc draft.md --from markdown --to latex --standalone \
+pandoc paper.md --from markdown --to latex --standalone \
   --shift-heading-level-by=-1 --columns=40 --lua-filter=arxiv.lua \
   -V documentclass=article -V classoption=11pt -V geometry:margin=1in \
   -V colorlinks=true -V linkcolor=black -V urlcolor=blue \

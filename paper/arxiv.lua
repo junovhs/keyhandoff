@@ -1,5 +1,5 @@
--- Turns draft.md into a paper: the "Abstract" section becomes the abstract,
--- the byline under the title becomes the author, and the draft note is dropped.
+-- Turns paper.md into a paper: the "Abstract" section becomes the abstract,
+-- and the byline under the title becomes the author.
 function Pandoc(doc)
   local blocks, abstract, in_abstract = {}, {}, false
   for i, b in ipairs(doc.blocks) do
@@ -10,11 +10,20 @@ function Pandoc(doc)
       table.insert(blocks, b)
     elseif in_abstract then
       table.insert(abstract, b)
-    elseif i <= 3 and b.t == "Para" and pandoc.utils.stringify(b):match("junovhs@") then
-      doc.meta.author = pandoc.MetaInlines(b.content)
-    elseif b.t == "Para" and #b.content == 1 and b.content[1].t == "Emph"
-        and pandoc.utils.stringify(b):match("^Draft") then
-      -- the draft note
+    elseif i <= 3 and b.t == "Para" and pandoc.utils.stringify(b):match("@") then
+      -- "Name · email · link": the name on the first line, the rest under it.
+      local name, rest, i = {}, {}, 1
+      while i <= #b.content and not (b.content[i].t == "Str" and b.content[i].text == "·") do
+        table.insert(name, b.content[i]); i = i + 1
+      end
+      for j = i + 2, #b.content do table.insert(rest, b.content[j]) end
+      while #name > 0 and name[#name].t == "Space" do table.remove(name) end
+      doc.meta["author-meta"] = pandoc.utils.stringify(name)
+      if #rest > 0 then
+        table.insert(name, pandoc.LineBreak())
+        table.insert(name, pandoc.Span(rest, {class = "small"}))
+      end
+      doc.meta.author = pandoc.MetaInlines(name)
     else
       table.insert(blocks, b)
     end

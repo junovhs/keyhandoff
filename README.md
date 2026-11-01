@@ -21,7 +21,7 @@
   <a href="https://keyhandoff.dev">Website</a> &nbsp;·&nbsp;
   <a href="https://keyhandoff.dev/docs/">Docs</a> &nbsp;·&nbsp;
   <a href="docs/threats.md">Threat model</a> &nbsp;·&nbsp;
-  <a href="paper/draft.md">Paper draft</a>
+  <a href="paper/paper.pdf">Paper</a>
 </p>
 
 <br>
