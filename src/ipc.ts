@@ -35,6 +35,8 @@ export interface SafeView {
   read: boolean;
   /** The key a new value is being caught for, when replacing one. */
   replacing: string | null;
+  /** Sealed for someone whose computer is nearby: it can go straight there. */
+  nearby: boolean;
 }
 
 /** A program asking for kept keys, waiting for Allow. */
@@ -59,6 +61,8 @@ export interface ContactView {
   computer: string;
   /** Keys you can still send with the card you have. */
   sends_left: number;
+  /** Their computer is on this network with Nearby on. */
+  nearby: boolean;
 }
 
 /** A team on this computer: a name and some of your contacts. */
@@ -129,6 +133,8 @@ export interface View {
   teams: TeamView[];
   folder_teams: FolderTeamView[];
   invited: InviteView | null;
+  /** Nearby is on. */
+  nearby: boolean;
 }
 
 /** Before the vault opens: no passphrase yet, locked, or open. */
@@ -197,6 +203,10 @@ export const api = {
   /** Catch a new value for a key you added, keeping its name and allowed programs. */
   replace: (key: string) => invoke<void>("replace", { key }),
   keepReplacement: () => invoke<void>("keep_replacement"),
+  /** Let people on this network find this computer, and take keys from people on your list. */
+  setNearby: (on: boolean) => invoke<void>("set_nearby", { on }),
+  /** Hand the sealed key straight to its person's computer. */
+  sendNearby: () => invoke<void>("send_nearby"),
   /** Forget a contact and take them off your teams. */
   forgetContact: (id: string) => invoke<void>("forget_contact", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */

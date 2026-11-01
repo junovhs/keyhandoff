@@ -648,6 +648,15 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <h2 className="display md">Send a key</h2>
         <p className="lede">{contacts.length ? "Who's it for?" : "Nobody to send to yet."}</p>
       </div>
+      <button
+        className="chip nearby-toggle"
+        aria-pressed={view.nearby}
+        title="Let people on this network find this computer. Only people on your list can send you keys."
+        onClick={() => void run(api.setNearby(!view.nearby))}
+      >
+        <Icon name={view.nearby ? "check" : "users"} />
+        <span>{view.nearby ? "Nearby is on: people on this network can find you" : "Find people on this network"}</span>
+      </button>
       {view.folder_teams.length > 0 && (
         <div className="keys">
           <span className="label">Team folders</span>
@@ -688,6 +697,7 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
                 <span className="who">
                   <span className="nm">{c.name}</span>
                   <span className="meta">
+                    {c.nearby && <span className="near">Nearby · </span>}
                     <span className={runningLow(c) ? "low" : ""}>
                       {c.sends_left > 0 ? sendsLeft(c) : "Card used up: ask for a new one"}
                     </span>

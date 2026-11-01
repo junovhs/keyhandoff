@@ -71,6 +71,14 @@ Provider pages show you a key, and you copy it. From that copy until KeyHandoff 
 - **Teams live on each computer.** A team is a list of your contacts, and the team name inside a file isn't signed by anyone. Sending to a team seals a separate copy for each member, and you keep one too. Test: [`a_team_gets_each_key_once_and_a_newcomer_gets_them_all`](../src-tauri/src/core.rs). Rule 6.
 - **No one can be removed after the fact.** Taking someone off your team stops you sending them new keys, but the keys they already have stay with them. When someone leaves, replace the keys with the provider.
 
+### Nearby
+
+- **Off until you turn it on, and only while unlocked.** Locking stops it: nothing listens or announces. Test: [`nearby_takes_keys_only_from_people_on_your_list_and_stops_when_locked`](../src-tauri/src/core.rs). Rule 6.
+- **Only people on your list can hand you a key.** A key sealed by anyone else is refused, even someone who has your card. Same test.
+- **The network only carries sealed keys.** Someone else on the network sees that two KeyHandoffs talked, never a key.
+- **What it announces.** While it's on, this computer's fingerprint is visible to everything on the local network, so someone there could tell the same computer came back. On a network you don't trust, leave Nearby off.
+- **A fake announcement loses a key, it doesn't leak one.** If someone on the network claims to be Ann's computer, a key sent "nearby" goes to them still sealed for Ann, and only Ann's computer can open it. Ann just doesn't get it; send the file instead.
+
 ### People and channels
 
 - **First contact trusts the channel.** If someone can post as you in a chat, they can send a request in your name. Check the name and the computer fingerprint KeyHandoff shows before you copy a key.

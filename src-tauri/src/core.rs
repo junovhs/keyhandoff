@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::os::{self, Captured, Clip, Peer};
 use crate::folder;
+use crate::nearby::{self, Nearby, OnObject};
 use crate::store::{Approval, Contact, FolderTeam, Role, Settings, Store, Team};
 use rand_core::{OsRng, RngCore};
 use crate::vault::{Item, Keep, Vault};
@@ -67,7 +68,8 @@ enum Safe {
     Caught { secret: Secret, note: Option<String> },
     /// `team`: sealed to every member of a team rather than one person.
     /// `used_up`: whose card that send used up, to ask them for a new one.
-    Sealed { for_name: String, team: bool, file: PathBuf, text: String, used_up: Option<String> },
+    /// `to`: the person it's for, to hand it to their computer when it's nearby.
+    Sealed { for_name: String, team: bool, file: PathBuf, text: String, used_up: Option<String>, to: Option<[u8; 32]> },
 }
 
 /// The answer to a program asking for kept keys.
@@ -115,6 +117,8 @@ struct Core {
     invited: Option<(Invite, Option<PathBuf>)>,
     /// The key Safe Copy is catching a new value for, when replacing one.
     replacing: Option<[u8; 16]>,
+    /// Listening and announcing on the local network, while Nearby is on.
+    nearby: Option<Nearby>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -160,6 +164,8 @@ pub struct SafeView {
     pub read: bool,
     /// The key a new value is being caught for, when replacing one.
     pub replacing: Option<String>,
+    /// Sealed for someone whose computer is nearby: it can go straight there.
+    pub nearby: bool,
 }
 
 /// A program asking for kept keys, waiting for Allow.
@@ -185,6 +191,8 @@ pub struct ContactView {
     pub computer: String,
     /// Keys you can still send with the card you have.
     pub sends_left: usize,
+    /// Their computer is on this network with Nearby on.
+    pub nearby: bool,
 }
 
 /// A team kept in a shared folder.
@@ -258,6 +266,8 @@ pub struct View {
     pub teams: Vec<TeamView>,
     pub folder_teams: Vec<FolderTeamView>,
     pub invited: Option<InviteView>,
+    /// Nearby is on.
+    pub nearby: bool,
 }
 
 impl Handoff {
@@ -290,12 +300,18 @@ impl Handoff {
             folder_teams,
             invited: None,
             replacing: None,
+            nearby: None,
             approvals,
             program: None,
             asks: 0,
         };
         let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
         handoff.lock().tick()?;
+        if handoff.lock().settings.nearby {
+            if let Err(e) = handoff.start_nearby(true) {
+                handoff.lock().problem = Some(e);
+            }
+        }
         Ok(handoff)
     }
 
@@ -355,7 +371,7 @@ impl Handoff {
         let file = core.outbox.join(file_name("Key for", &name));
         os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
         let used_up = core.used_up(&[contact_identity]);
-        core.safe = Safe::Sealed { for_name: name, team: false, file, text, used_up };
+        core.safe = Safe::Sealed { for_name: name, team: false, file, text, used_up, to: Some(contact_identity) };
         Ok(())
     }
 
@@ -371,7 +387,7 @@ impl Handoff {
         core.vault.set_team(parse_id(key_id)?, &team.name);
         core.store.save_vault(&core.vault)?;
         let used_up = core.used_up(&team.members);
-        core.safe = Safe::Sealed { for_name: team.name, team: true, file, text, used_up };
+        core.safe = Safe::Sealed { for_name: team.name, team: true, file, text, used_up, to: None };
         Ok(())
     }
 
@@ -420,6 +436,71 @@ impl Handoff {
         let mut core = self.lock();
         core.teams.retain(|t| hex(&t.id) != id);
         core.store.save_teams(&core.teams)
+    }
+
+    /// Turn Nearby on or off. On, this computer can be found on the local
+    /// network while it's unlocked, and takes keys from people on your list.
+    pub fn set_nearby(&self, on: bool) -> Result<(), String> {
+        if on && self.lock().nearby.is_none() {
+            self.start_nearby(true)?;
+        }
+        let mut core = self.lock();
+        if !on {
+            core.nearby = None;
+        }
+        core.settings.nearby = on;
+        core.store.save_settings(&core.settings)
+    }
+
+    fn start_nearby(&self, announce: bool) -> Result<(), String> {
+        let (me, them) = (self.me.clone(), self.me.clone());
+        let on_object: OnObject = Arc::new(move |bytes| me.upgrade().ok_or_else(|| "KeyHandoff is locked.".to_string())?.receive_nearby(&bytes));
+        let changed = Arc::new(move || {
+            if let Some(h) = them.upgrade() {
+                (h.notify)();
+            }
+        });
+        let fingerprint = self.lock().identity.public().fingerprint();
+        let started = Nearby::start(&fingerprint, announce, on_object, changed)?;
+        self.lock().nearby = Some(started);
+        Ok(())
+    }
+
+    /// A sealed key handed over on the local network. Only people on your list
+    /// can do that; it's then opened like a file you opened yourself.
+    fn receive_nearby(&self, bytes: &[u8]) -> Result<(), String> {
+        let senders: Vec<PublicIdentity> = match keyhandoff_seal::parse_object(bytes).map_err(|e| e.to_string())? {
+            Object::Sealed(sealed) => vec![sealed.sender()],
+            Object::Bundle(bundle) => bundle.parts().iter().map(|p| p.sender()).collect(),
+            _ => return Err("Only keys can be sent nearby.".into()),
+        };
+        let known = {
+            let core = self.lock();
+            senders.iter().all(|s| core.contacts.iter().any(|c| c.identity == *s.as_bytes()))
+        };
+        if !known {
+            return Err("They aren't on this person's KeyHandoff list. Send the file instead.".into());
+        }
+        let result = self.open_object(bytes, None);
+        (self.notify)();
+        result
+    }
+
+    /// Hand the sealed key on the Sealed screen straight to its person's
+    /// computer, when it's nearby.
+    pub fn send_nearby(&self) -> Result<(), String> {
+        let (to, object, name) = {
+            let core = self.lock();
+            let Safe::Sealed { to: Some(to), text, for_name, .. } = &core.safe else { return Err("Nothing is sealed for one person.".into()) };
+            let to = core.nearby_at(to).ok_or_else(|| format!("{for_name}'s computer isn't nearby. Send the file instead."))?;
+            (to, armor::decode(text).map_err(|e| e.to_string())?, for_name.clone())
+        };
+        // No lock held while the network is in use, so this computer can still take keys.
+        nearby::deliver(to, &object)?;
+        let mut core = self.lock();
+        core.close_safe();
+        core.notice = Some(format!("Sent to {name}'s computer."));
+        Ok(())
     }
 
     /// Keep a new team in `folder`, which the team already syncs: the invite
@@ -1029,6 +1110,12 @@ impl Core {
         Ok(())
     }
 
+    /// Where this person's computer listens, if Nearby has seen it.
+    fn nearby_at(&self, identity: &[u8; 32]) -> Option<std::net::SocketAddr> {
+        let fingerprint = PublicIdentity::from_bytes(*identity).ok()?.fingerprint();
+        self.nearby.as_ref()?.find(&fingerprint)
+    }
+
     /// The index of a team you keep.
     fn keeping(&self, team_id: &str) -> Result<usize, String> {
         self.folder_teams
@@ -1123,11 +1210,11 @@ impl Core {
                     .into_iter()
                     .filter(|m| m.team_id() == team.id && m.keeper() == me)
                     .filter(|m| !added.iter().any(|a| a.member() == m.member()) && !declined.contains(m.member().as_bytes()))
-                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0 })
+                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0, nearby: false })
                     .collect();
                 let people = added
                     .iter()
-                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0 })
+                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0, nearby: false })
                     .collect();
                 let to_replace = self.vault.items().iter().filter(|i| to_replace.contains(&i.id)).map(|i| i.label.clone()).collect();
                 FolderTeamView { keeping: true, members: added.iter().map(|m| m.name().to_string()).collect(), asking, people, to_replace, ..base }
@@ -1258,7 +1345,8 @@ impl Core {
 
     fn contact_view(&self, c: &Contact) -> ContactView {
         let computer = PublicIdentity::from_bytes(c.identity).map(|p| p.fingerprint()).unwrap_or_default();
-        ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len() }
+        let nearby = self.nearby.as_ref().is_some_and(|n| n.find(&computer).is_some());
+        ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len(), nearby }
     }
 
     fn allowed(&self, peer: &Peer, key: [u8; 16]) -> bool {
@@ -1347,6 +1435,7 @@ impl Core {
             added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),
             teams: self.teams.iter().map(|t| self.team_view(t)).collect(),
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
+            nearby: self.nearby.is_some(),
             invited: self.invited.as_ref().map(|(invite, folder)| InviteView {
                 team: invite.team().to_string(),
                 keeper: invite.keeper_name().to_string(),
@@ -1388,6 +1477,7 @@ impl Core {
             apps: Vec::new(),
             read: false,
             replacing: replacing.clone(),
+            nearby: false,
         };
         match &self.safe {
             Safe::Off => base("off"),
@@ -1397,7 +1487,8 @@ impl Core {
             Safe::TimedOut => base("timeout"),
             Safe::Failed { message } => SafeView { message: Some(message.clone()), ..base("failed") },
             Safe::Caught { note, .. } => SafeView { message: note.clone(), ..base("caught") },
-            Safe::Sealed { for_name, team, file, used_up, .. } => SafeView {
+            Safe::Sealed { for_name, team, file, used_up, to, .. } => SafeView {
+                nearby: to.is_some_and(|id| self.nearby_at(&id).is_some()),
                 for_name: Some(for_name.clone()),
                 message: used_up.clone(),
                 for_team: *team,
@@ -1940,6 +2031,51 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_dir_all(shared);
+    }
+
+    #[test]
+    fn nearby_takes_keys_only_from_people_on_your_list_and_stops_when_locked() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ann, ben, mallory) = (app("Ann"), app("Ben"), app("Mallory"));
+        // Ben and Ann swapped cards. Mallory got hold of Ann's card, but Ann never opened hers.
+        let ann_on_ben = give_card(&ann, &ben);
+        give_card(&ben, &ann);
+        let ann_on_mallory = give_card(&ann, &mallory);
+        // Discovery is mDNS; here each side is told where Ann listens.
+        ann.handoff.start_nearby(false).unwrap();
+        let at = std::net::SocketAddr::from(([127, 0, 0, 1], ann.handoff.lock().nearby.as_ref().unwrap().port()));
+        let ann_fp = ann.handoff.view().computer;
+        for sender in [&ben, &mallory] {
+            sender.handoff.start_nearby(false).unwrap();
+            sender.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at);
+        }
+
+        let key = hold(&ben, "Dialpad", KEY);
+        ben.handoff.send_kept(&ann_on_ben, &key).unwrap();
+        assert!(ben.handoff.view().safe.nearby, "the Sealed screen offers to send it straight there");
+        ben.handoff.send_nearby().unwrap();
+        assert_eq!(ben.handoff.view().safe.state, "off");
+        let got = ann.handoff.view().accepted.expect("Ann has it");
+        assert_eq!((got.label.as_str(), got.from.as_deref()), ("Dialpad", Some("Ben")));
+        ann.handoff.dismiss();
+
+        let theirs = hold(&mallory, "Stripe", b"sk-synthetic-not-from-a-friend");
+        mallory.handoff.send_kept(&ann_on_mallory, &theirs).unwrap();
+        let refused = mallory.handoff.send_nearby().unwrap_err();
+        assert!(refused.contains("aren't on this person's KeyHandoff list"), "{refused}");
+        assert!(ann.handoff.view().keys.iter().all(|k| k.label != "Stripe"));
+
+        // Locking drops the core, and Nearby with it: nothing listens any more.
+        let weak = Arc::downgrade(&ann.handoff);
+        let App { handoff, data, .. } = ann;
+        drop(handoff);
+        assert!(weak.upgrade().is_none());
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(nearby::deliver(at, b"anything").is_err());
+
+        for d in [data, ben.data, mallory.data] {
+            let _ = fs::remove_dir_all(d);
+        }
     }
 
     #[test]

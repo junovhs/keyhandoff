@@ -51,6 +51,10 @@ pub struct Settings {
     /// default: it locks when the computer sleeps or the screen locks.
     #[serde(default)]
     pub lock_after_minutes: Option<u32>,
+    /// Nearby is on: other KeyHandoffs on the local network can find this one
+    /// while it's unlocked. Off unless you turn it on.
+    #[serde(default)]
+    pub nearby: bool,
 }
 
 /// A program allowed to get one kept key when it runs in one folder.

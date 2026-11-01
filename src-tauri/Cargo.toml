@@ -25,6 +25,8 @@ argon2 = "0.5"
 tauri-plugin-updater = "2"
 # The folder picker for team folders, called from Rust; the screens get only the path.
 tauri-plugin-dialog = "2"
+# Nearby: finding other KeyHandoffs on the local network, without a server.
+mdns-sd = "0.13"
 
 [dev-dependencies]
 # The pointer loader test compares a hash the script prints.

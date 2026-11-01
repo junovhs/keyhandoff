@@ -211,10 +211,15 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
           <Icon name="file" />
           <span className="mono">{safe.file_name}</span>
         </div>
-        <button className="btn primary" onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
+        <button className={`btn ${safe.nearby ? "secondary" : "primary"}`} onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
+      {safe.nearby && (
+        <button className="btn primary" onClick={() => void run(api.sendNearby())}>
+          Send to {safe.for_name}'s computer
+        </button>
+      )}
       <p className="help center">
         {copied
           ? "Now paste it into your chat."

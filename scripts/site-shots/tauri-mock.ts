@@ -11,8 +11,8 @@ const KEYS: KeyView[] = [
   { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep", team: null },
 ];
 
-const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", sends_left: 12 };
-const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b09d2a77f3c10", sends_left: 9 }];
+const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", sends_left: 12, nearby: false };
+const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b09d2a77f3c10", sends_left: 9, nearby: false }];
 
 const TEAMS: TeamView[] = [{ id: "t", name: "Platform", members: CONTACTS, keys: 2 }];
 
@@ -30,6 +30,7 @@ function safe(state: SafeState, forName: string | null = "Ann", apps: string[] =
     apps,
     read,
     replacing: null,
+    nearby: false,
   };
 }
 
@@ -55,6 +56,7 @@ const HOME: View = {
   teams: TEAMS,
   folder_teams: [],
   invited: null,
+  nearby: false,
 };
 
 const SCENES: Record<string, Partial<View>> = {
@@ -79,6 +81,9 @@ const SCENES: Record<string, Partial<View>> = {
   "folder-new": { name: "Ben", contacts: [], teams: [] },
   "folder-asking": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, asking: [ANN, CONTACTS[1]] }] },
   "folder-kept": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "send-nearby": { name: "Ben", nearby: true, contacts: [{ ...ANN, nearby: true }, CONTACTS[1]] },
+  "sealed-nearby": { name: "Ben", keys: [], nearby: true, safe: { ...safe("sealed"), nearby: true } },
+  "home-sent-nearby": { name: "Ben", nearby: true, notice: "Sent to Ann's computer." },
   "folder-share": { name: "Ben", contacts: [], teams: [], keys: KEYS.map((k) => ({ ...k, from: null })), folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
   "folder-left": {
     name: "Ben",

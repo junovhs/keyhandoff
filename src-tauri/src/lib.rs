@@ -8,6 +8,7 @@
 
 mod core;
 mod folder;
+mod nearby;
 mod os;
 mod pointer;
 mod session;
@@ -311,6 +312,18 @@ fn remove_from_team(app: AppHandle, h: H, team: String, member: String) -> Resul
 }
 
 #[tauri::command]
+fn set_nearby(app: AppHandle, h: H, on: bool) -> Result<(), String> {
+    done(&app, h.set_nearby(on))
+}
+
+/// Hands the sealed key to its person's computer on the local network. Off the
+/// main thread: it waits for their computer to answer.
+#[tauri::command]
+async fn send_nearby(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.send_nearby())
+}
+
+#[tauri::command]
 fn turn_away(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
     done(&app, h.turn_away(&team, &member))
 }
@@ -504,7 +517,7 @@ pub fn run() {
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {
