@@ -26,7 +26,7 @@ pub use identity::{Identity, PublicIdentity};
 pub use keyring::{Keyring, Opened, PendingRequest};
 pub use request::{Request, create_request};
 pub use sealed::{Payload, Sealed, Secret, seal};
-pub use team::{Invite, MAX_TEAM_MEMBERS, Member, Membership, TeamLock, TeamState, create_invite, join, reinvite, seal_team};
+pub use team::{Invite, MAX_TEAM_MEMBERS, Member, Membership, TeamLock, TeamState, create_invite, join, reinvite, rejoin, seal_team};
 
 /// Format version written into every object (`HOF` + version + kind).
 pub const FORMAT_VERSION: u8 = 0;

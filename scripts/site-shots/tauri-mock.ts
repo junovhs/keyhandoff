@@ -1,6 +1,6 @@
 // Stands in for @tauri-apps/api so the real screens render in a plain browser,
 // for the website's screenshots and the screen board. All data here is sample data.
-import type { ContactView, GateView, KeyView, SafeState, TeamView, View } from "../../src/ipc";
+import type { ContactView, FolderTeamView, GateView, KeyView, SafeState, TeamView, View } from "../../src/ipc";
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 24 * 60 * 60;
@@ -15,6 +15,9 @@ const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", s
 const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b09d2a77f3c10", sends_left: 9 }];
 
 const TEAMS: TeamView[] = [{ id: "t", name: "Platform", members: CONTACTS, keys: 2 }];
+
+const FOLDER = "/home/ben/Dropbox/Platform";
+const KEPT: FolderTeamView = { id: "f", name: "Platform", folder: FOLDER, keeper: "Ben", keeping: true, members: [], asking: [], waiting: false };
 
 function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = [], read = false): View["safe"] {
   return {
@@ -49,6 +52,8 @@ const HOME: View = {
   contacts: CONTACTS,
   added: null,
   teams: TEAMS,
+  folder_teams: [],
+  invited: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
@@ -68,6 +73,12 @@ const SCENES: Record<string, Partial<View>> = {
   })(),
   "sealed-used-up": { name: "Ben", keys: [], safe: { ...safe("sealed"), message: "That was the last key Ann's card could take. Ask Ann for a new one." } },
   accepted: { accepted: { ...KEYS[0], added_at: NOW } },
+  invite: { keys: [], invited: { team: "Platform", keeper: "Ben", computer: "9b3e51f07a2c44d1", folder: "/home/ann/Dropbox/Platform" } },
+  "invite-elsewhere": { keys: [], invited: { team: "Platform", keeper: "Ben", computer: "9b3e51f07a2c44d1", folder: null } },
+  "folder-new": { name: "Ben", contacts: [], teams: [] },
+  "folder-asking": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, asking: [ANN, CONTACTS[1]] }] },
+  "folder-kept": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "folder-waiting": { keys: [], contacts: [], teams: [], folder_teams: [{ ...KEPT, folder: "/home/ann/Dropbox/Platform", keeping: false, waiting: true }] },
   "listening-you": { safe: safe("listening", null) },
   "caught-you": { safe: safe("caught", null) },
   "home-added": { notice: "OpenAI is in your keys." },

@@ -7,6 +7,7 @@
 //! commands, the one window and opening files.
 
 mod core;
+mod folder;
 mod os;
 mod pointer;
 mod session;
@@ -258,6 +259,42 @@ fn delete_team(app: AppHandle, h: H, id: String) -> Result<(), String> {
     done(&app, h.delete_team(&id))
 }
 
+/// The folder picker for a team folder. Runs off the main thread, since it
+/// waits for the person to choose.
+#[tauri::command]
+async fn pick_folder(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog().file().blocking_pick_folder().and_then(|f| f.into_path().ok()).map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+fn make_folder_team(app: AppHandle, h: H, name: String, folder: String) -> Result<String, String> {
+    let result = h.make_folder_team(&name, &PathBuf::from(folder));
+    changed(&app);
+    result
+}
+
+#[tauri::command]
+fn join_team(app: AppHandle, h: H, folder: Option<String>) -> Result<(), String> {
+    done(&app, h.join_team(folder.map(PathBuf::from).as_deref()))
+}
+
+#[tauri::command]
+fn close_invite(app: AppHandle, h: H) {
+    h.close_invite();
+    changed(&app);
+}
+
+#[tauri::command]
+fn add_to_team(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
+    done(&app, h.add_to_team(&team, &member))
+}
+
+#[tauri::command]
+fn turn_away(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
+    done(&app, h.turn_away(&team, &member))
+}
+
 #[tauri::command]
 fn welcome(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
     done(&app, h.welcome(&team, &member))
@@ -443,10 +480,11 @@ pub fn run() {
     let updates = Arc::new(Updates::default());
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, turn_away, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {

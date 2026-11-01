@@ -9,6 +9,8 @@ import {
   useGate,
   useView,
   type ContactView,
+  type FolderTeamView,
+  type InviteView,
   type Keep,
   type KeyView,
   type ProgramView,
@@ -108,6 +110,7 @@ export function MainWindow() {
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
+      {view?.invited && !view.accepted && <InviteSheet invite={view.invited} run={run} />}
       {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
       {view?.added && (
         <ContactSheet contact={view.added} onSend={(c) => void api.dismiss().then(() => setSending({ team: false, id: c.id, name: c.name }))} />
@@ -637,6 +640,14 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <h2 className="display md">Send a key</h2>
         <p className="lede">{contacts.length ? "Who's it for?" : "Nobody to send to yet."}</p>
       </div>
+      {view.folder_teams.length > 0 && (
+        <div className="keys">
+          <span className="label">Team folders</span>
+          {view.folder_teams.map((t) => (
+            <FolderTeamRows key={t.id} team={t} run={run} />
+          ))}
+        </div>
+      )}
       {teams.length > 0 && (
         <div className="keys">
           <span className="label">Teams</span>
@@ -701,11 +712,83 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary grow" onClick={onClose}>Close</button>
-        {contacts.length > 0 && (
-          <button className="btn secondary grow" onClick={() => onEdit("new")}>
-            <Icon name="users" /> New team
-          </button>
-        )}
+        <button className="btn secondary grow" onClick={() => onEdit("new")}>
+          <Icon name="users" /> New team
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A team folder in Send a key: its row, then anyone asking to join it, for the keeper to add. */
+function FolderTeamRows({ team, run }: { team: FolderTeamView; run: Run }) {
+  const meta = team.waiting
+    ? `Waiting for ${team.keeper} to add you`
+    : team.members.length
+      ? team.members.join(", ")
+      : team.keeping
+        ? "No one yet. People join from invite.handoff in the folder."
+        : `Kept by ${team.keeper}`;
+  return (
+    <>
+      <div className="key-row" title={team.folder}>
+        <span className="key-ico"><Icon name="users" /></span>
+        <span className="who">
+          <span className="nm">{team.name}</span>
+          <span className="meta">{meta}</span>
+        </span>
+      </div>
+      {team.asking.map((p) => (
+        <div key={p.id} className="key-row">
+          <span className="key-ico on"><Icon name="user" /></span>
+          <span className="who">
+            <span className="nm">{p.name} wants to join</span>
+            <span className="meta">
+              Their computer is <span className="mono">{p.computer}</span>
+            </span>
+          </span>
+          <button className="use always" onClick={() => void run(api.turnAway(team.id, p.id))}>Not now</button>
+          <button className="use always" onClick={() => void run(api.addToTeam(team.id, p.id))}>Add</button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** A team invite you opened: who keeps the team, and Join. */
+function InviteSheet({ invite, run }: { invite: InviteView; run: Run }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), [invite.team]);
+  const join = () =>
+    void run(
+      invite.folder
+        ? api.joinTeam(null)
+        : api.pickFolder().then((folder) => (folder ? api.joinTeam(folder) : undefined)),
+    );
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="head">
+        <Glyph mark="send" />
+        <div>
+          <span className="lede">{invite.keeper} invited you to</span>
+          <h2 className="display md">{invite.team}</h2>
+        </div>
+      </div>
+      <p className="lede">
+        {invite.folder
+          ? `You'll join through this folder, and ${invite.keeper} adds you from there.`
+          : `Pick your copy of the team's shared folder. ${invite.keeper} adds you from there.`}
+      </p>
+      {invite.folder && <p className="info mono">{invite.folder}</p>}
+      <p className="help">
+        {invite.keeper}'s computer is <span className="mono">{invite.computer}</span>. If it matters, check it with them.
+      </p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn secondary" onClick={() => void run(api.closeInvite())}>Not now</button>
+        <button className="btn primary grow" onClick={join}>
+          {invite.folder ? `Join ${invite.team}` : "Pick folder and join"}
+        </button>
       </div>
     </div>
   );
@@ -723,6 +806,11 @@ function TeamSheet({ team, contacts, run, onClose }: { team: TeamView | null; co
   const saved = new Set(team?.members.map((m) => m.id) ?? []);
   const toggle = (id: string) => setPicked(picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id]);
   const save = () => void run(api.saveTeam(team?.id ?? null, name, picked).then(onClose));
+  // A new team can live in a folder the team already syncs instead.
+  const shareFolder = () =>
+    void run(
+      api.pickFolder().then((folder) => (folder ? api.makeFolderTeam(name, folder).then(onClose) : undefined)),
+    );
   return (
     <div className="sheet" ref={sheet}>
       <div className="hero">
@@ -752,14 +840,29 @@ function TeamSheet({ team, contacts, run, onClose }: { team: TeamView | null; co
           </div>
         ))}
       </div>
-      <p className="help">Everyone on the team needs to have sent you their card. Anyone can set up the same team on their computer to share too.</p>
+      <p className="help">
+        {team || contacts.length
+          ? "Everyone on the team needs to have sent you their card. Anyone can set up the same team on their computer to share too."
+          : "No cards yet? Keep the team in a folder you all sync instead, and people join from there."}
+      </p>
+      {!team && contacts.length > 0 && (
+        <button className="btn secondary" onClick={shareFolder} title="Dropbox, Google Drive, OneDrive, a repo or a network share">
+          <Icon name="file" /> Keep it in a shared folder
+        </button>
+      )}
       <span className="grow-space" />
       <div className="btn-row">
         {team && (
           <button className="btn secondary" onClick={() => void run(api.deleteTeam(team.id).then(onClose))}>Delete</button>
         )}
         <button className="btn secondary" onClick={onClose}>Cancel</button>
-        <button className="btn primary grow" onClick={save}>Save</button>
+        {team || contacts.length ? (
+          <button className="btn primary grow" onClick={save}>Save</button>
+        ) : (
+          <button className="btn primary grow" onClick={shareFolder} title="Dropbox, Google Drive, OneDrive, a repo or a network share">
+            Pick the shared folder
+          </button>
+        )}
       </div>
     </div>
   );

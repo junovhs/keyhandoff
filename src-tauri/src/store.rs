@@ -1,5 +1,5 @@
 //! A profile's files in the app data folder. The identity, the pending
-//! one-time keys, the vault, the programs you allowed, your contacts and teams are sealed under the master key,
+//! one-time keys, the vault, the programs you allowed, your contacts, teams and team folders are sealed under the master key,
 //! which only your passphrase or recovery code opens (`slots`).
 //! `settings.json` holds no secret.
 //!
@@ -29,6 +29,7 @@ const VAULT: &str = "vault.bin";
 const APPROVALS: &str = "approvals.bin";
 const CONTACTS: &str = "contacts.bin";
 const TEAMS: &str = "teams.bin";
+const FOLDER_TEAMS: &str = "folder-teams.bin";
 const SETTINGS: &str = "settings.json";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -78,6 +79,28 @@ pub struct Team {
     pub name: String,
     /// Contacts' identities.
     pub members: Vec<[u8; 32]>,
+}
+
+/// A team kept in a folder its members already sync (`folder`). The keeper is
+/// pinned when the team is made or joined: only states it signs count.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FolderTeam {
+    pub id: [u8; 16],
+    pub name: String,
+    /// Where this computer reads and writes the team's files.
+    pub folder: PathBuf,
+    pub keeper: [u8; 32],
+    pub keeper_name: String,
+    pub role: Role,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Role {
+    /// You keep it: the memberships you added, the people you turned away and
+    /// the last version written.
+    Keeper { members: Vec<Vec<u8>>, declined: Vec<[u8; 32]>, version: u64 },
+    /// You joined: your team lock, the last version you opened and who was on it.
+    Member { lock: [u8; 32], version: u64, members: Vec<String> },
 }
 
 pub struct Store {
@@ -322,6 +345,18 @@ impl Store {
     pub fn save_teams(&self, teams: &[Team]) -> Result<(), String> {
         let json = serde_json::to_vec(teams).map_err(|e| e.to_string())?;
         self.write(TEAMS, &json)
+    }
+
+    pub fn folder_teams(&self) -> Result<Vec<FolderTeam>, String> {
+        match self.read(FOLDER_TEAMS)? {
+            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The team folders file is damaged.".to_string()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_folder_teams(&self, teams: &[FolderTeam]) -> Result<(), String> {
+        let json = Zeroizing::new(serde_json::to_vec(teams).map_err(|e| e.to_string())?);
+        self.write(FOLDER_TEAMS, &json)
     }
 
     fn cipher(&self) -> ChaCha20Poly1305 {

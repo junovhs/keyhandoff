@@ -23,6 +23,8 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 zeroize = "1"
 argon2 = "0.5"
 tauri-plugin-updater = "2"
+# The folder picker for team folders, called from Rust; the screens get only the path.
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 # The pointer loader test compares a hash the script prints.

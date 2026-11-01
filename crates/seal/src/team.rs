@@ -63,29 +63,30 @@ pub struct Invite {
     team_id: [u8; 16],
     team: String,
     keeper: PublicIdentity,
+    keeper_name: String,
     expires_at: u64,
 }
 
 /// Make an invite to a new team. The team id is random and names the team for
 /// good; the name can change in later states.
-pub fn create_invite(keeper: &Identity, team: &str, now: u64, ttl: u64) -> Result<Invite, Error> {
+pub fn create_invite(keeper: &Identity, keeper_name: &str, team: &str, now: u64, ttl: u64) -> Result<Invite, Error> {
     if !wire::valid_text(team, MAX_NAME_BYTES, false) || ttl == 0 {
         return Err(Error::InvalidField);
     }
     let expires_at = now.checked_add(ttl).ok_or(Error::InvalidField)?;
     let mut team_id = [0u8; 16];
     OsRng.try_fill_bytes(&mut team_id).map_err(|_| Error::Randomness)?;
-    invite_for(keeper, team_id, team, now, expires_at)
+    invite_for(keeper, keeper_name, team_id, team, now, expires_at)
 }
 
 /// Another invite to an existing team, for people who join later.
-pub fn reinvite(keeper: &Identity, team_id: [u8; 16], team: &str, now: u64, ttl: u64) -> Result<Invite, Error> {
+pub fn reinvite(keeper: &Identity, keeper_name: &str, team_id: [u8; 16], team: &str, now: u64, ttl: u64) -> Result<Invite, Error> {
     let expires_at = now.checked_add(ttl).ok_or(Error::InvalidField)?;
-    invite_for(keeper, team_id, team, now, expires_at)
+    invite_for(keeper, keeper_name, team_id, team, now, expires_at)
 }
 
-fn invite_for(keeper: &Identity, team_id: [u8; 16], team: &str, now: u64, expires_at: u64) -> Result<Invite, Error> {
-    if !wire::valid_text(team, MAX_NAME_BYTES, false) || expires_at <= now {
+fn invite_for(keeper: &Identity, keeper_name: &str, team_id: [u8; 16], team: &str, now: u64, expires_at: u64) -> Result<Invite, Error> {
+    if !wire::valid_text(team, MAX_NAME_BYTES, false) || !wire::valid_text(keeper_name, MAX_NAME_BYTES, false) || expires_at <= now {
         return Err(Error::InvalidField);
     }
     let mut bytes = Vec::new();
@@ -95,6 +96,7 @@ fn invite_for(keeper: &Identity, team_id: [u8; 16], team: &str, now: u64, expire
     bytes.extend_from_slice(&now.to_be_bytes());
     bytes.extend_from_slice(&expires_at.to_be_bytes());
     push_text(&mut bytes, team);
+    push_text(&mut bytes, keeper_name);
     let signature = keeper.sign(INVITE_DOMAIN, &bytes);
     bytes.extend_from_slice(&signature);
     Invite::parse(&bytes)
@@ -113,6 +115,8 @@ impl Invite {
         let expires_at = r.u64()?;
         let len = r.u8()? as usize;
         let team = r.text(len, MAX_NAME_BYTES, false)?;
+        let len = r.u8()? as usize;
+        let keeper_name = r.text(len, MAX_NAME_BYTES, false)?;
         let signed_len = r.pos();
         let signature = r.array()?;
         r.finish()?;
@@ -120,7 +124,7 @@ impl Invite {
             return Err(Error::Malformed);
         }
         keeper.verify(INVITE_DOMAIN, &bytes[..signed_len], &signature)?;
-        Ok(Self { bytes: bytes.to_vec(), team_id, team, keeper, expires_at })
+        Ok(Self { bytes: bytes.to_vec(), team_id, team, keeper, keeper_name, expires_at })
     }
 
     pub fn to_bytes(&self) -> &[u8] {
@@ -134,6 +138,11 @@ impl Invite {
     /// The team's name as the keeper typed it.
     pub fn team(&self) -> &str {
         &self.team
+    }
+
+    /// The keeper's display name, as they typed it. Not verified by anyone.
+    pub fn keeper_name(&self) -> &str {
+        &self.keeper_name
     }
 
     /// The computer that keeps the team. Joining pins it: only states it signs
@@ -169,6 +178,22 @@ pub fn join(member: &Identity, name: &str, invite: &Invite, now: u64) -> Result<
         return Err(Error::InvalidField);
     }
     let lock = TeamLock { secret: StaticSecret::random_from_rng(OsRng) };
+    Ok((membership(member, name, invite, &lock, now)?, lock))
+}
+
+/// Answer another invite to a team you're on, with the lock you already have,
+/// so the keeper's next version still opens for you.
+pub fn rejoin(member: &Identity, name: &str, invite: &Invite, lock: &TeamLock, now: u64) -> Result<Membership, Error> {
+    if invite.is_expired(now) {
+        return Err(Error::Expired);
+    }
+    if !wire::valid_text(name, MAX_NAME_BYTES, false) {
+        return Err(Error::InvalidField);
+    }
+    membership(member, name, invite, lock, now)
+}
+
+fn membership(member: &Identity, name: &str, invite: &Invite, lock: &TeamLock, now: u64) -> Result<Membership, Error> {
     let mut bytes = Vec::new();
     wire::write_header(&mut bytes, Kind::Membership);
     bytes.extend_from_slice(&invite.team_id);
@@ -179,7 +204,7 @@ pub fn join(member: &Identity, name: &str, invite: &Invite, now: u64) -> Result<
     push_text(&mut bytes, name);
     let signature = member.sign(MEMBER_DOMAIN, &bytes);
     bytes.extend_from_slice(&signature);
-    Ok((Membership::parse(&bytes)?, lock))
+    Membership::parse(&bytes)
 }
 
 impl Membership {

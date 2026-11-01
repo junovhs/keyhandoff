@@ -28,9 +28,10 @@ struct Team {
 
 fn platform() -> Team {
     let ben = Identity::generate();
-    let invite = create_invite(&ben, "Platform", NOW, WEEK).unwrap();
+    let invite = create_invite(&ben, "Ben", "Platform", NOW, WEEK).unwrap();
     // The invite and the replies travel as files in the folder; read them back as the other side would.
     let Object::Invite(received) = parse_object(invite.to_bytes()).unwrap() else { panic!("not an invite") };
+    assert_eq!((received.keeper_name(), received.team(), received.keeper()), ("Ben", "Platform", ben.public()));
     let ann = join(&Identity::generate(), "Ann", &received, NOW + 60).unwrap();
     let priya = join(&Identity::generate(), "Priya", &received, NOW + 60).unwrap();
     Team { ben, invite, ann, priya }
@@ -78,7 +79,7 @@ fn rotating_reaches_everyone_and_a_removed_member_gets_nothing_new() {
 #[test]
 fn people_for_another_team_or_keeper_are_refused() {
     let t = platform();
-    let other_invite = create_invite(&t.ben, "Billing", NOW, WEEK).unwrap();
+    let other_invite = create_invite(&t.ben, "Ben", "Billing", NOW, WEEK).unwrap();
     let elsewhere = join(&Identity::generate(), "Sam", &other_invite, NOW).unwrap().0;
     let refused = seal_team(&t.ben, t.invite.team_id(), "Platform", 1, &[t.ann.0.clone(), elsewhere], &[], NOW);
     assert_eq!(refused.unwrap_err(), Error::WrongKind);
@@ -109,7 +110,7 @@ fn changed_files_and_old_invites_are_refused() {
 
     assert_eq!(join(&Identity::generate(), "Late", &t.invite, NOW + WEEK).unwrap_err(), Error::Expired);
     // A fresh invite to the same team lets them in, and their reply counts for it.
-    let again = reinvite(&t.ben, t.invite.team_id(), "Platform", NOW + WEEK, WEEK).unwrap();
+    let again = reinvite(&t.ben, "Ben", t.invite.team_id(), "Platform", NOW + WEEK, WEEK).unwrap();
     let late = join(&Identity::generate(), "Late", &again, NOW + WEEK + 1).unwrap();
     let state = seal_team(&t.ben, t.invite.team_id(), "Platform", 2, &[t.ann.0.clone(), late.0], &[key("Stripe", "sk_test_1")], NOW + WEEK + 2).unwrap();
     assert_eq!(secrets(&state, &late.1), vec![("Stripe".to_string(), b"sk_test_1".to_vec())]);

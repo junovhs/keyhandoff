@@ -106,6 +106,7 @@ A team can live in a folder its members already sync. KeyHandoff only reads and 
 | keeper | 32 | the keeper's Ed25519 identity |
 | created, expires | 8 + 8 | Unix seconds |
 | team | 1 + n | name, 1 to 64 bytes |
+| keeper name | 1 + n | as the keeper typed it, 1 to 64 bytes; shown as "Ben invited you", not verified |
 | signature | 64 | keeper, domain `handoff:team-invite:v0` |
 
 **Membership (kind 6).** A joiner's answer: their identity and a fresh X25519 **team lock**, bound to the team id and the keeper, signed by the joiner (`handoff:team-member:v0`). The joiner keeps the lock's private key in the vault. Writing a membership into the folder only asks to join; the keeper adds people.

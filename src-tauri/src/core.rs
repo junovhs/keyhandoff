@@ -1,6 +1,6 @@
 //! Every KeyHandoff flow, without Tauri: your card and contacts, Safe Copy,
-//! seal, accept and vault, add for yourself, and giving kept keys to the
-//! programs you allow. A request is the one-off form of a card: one lock.
+//! seal, accept and vault, add for yourself, teams kept in a shared folder,
+//! and giving kept keys to the programs you allow. A request is the one-off form of a card: one lock.
 //!
 //! Secret values live here and in `os`; [`View`] is what the screens get:
 //! names, states and ids only.
@@ -12,13 +12,14 @@ use std::sync::{mpsc, Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use keyhandoff_seal::{
-    armor, Bundle, Card, Identity, Keyring, Object, Payload, PublicIdentity, Request, Secret, DEFAULT_CARD_TTL,
-    MAX_LABEL_BYTES, MAX_NAME_BYTES,
+    armor, create_invite, join, seal_team, Bundle, Card, Error as SealError, Identity, Invite, Keyring, Membership, Object, Payload,
+    PublicIdentity, Request, Secret, TeamLock, DEFAULT_CARD_TTL, MAX_LABEL_BYTES, MAX_NAME_BYTES,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::os::{self, Captured, Clip, Peer};
-use crate::store::{Approval, Contact, Settings, Store, Team};
+use crate::folder;
+use crate::store::{Approval, Contact, FolderTeam, Role, Settings, Store, Team};
 use rand_core::{OsRng, RngCore};
 use crate::vault::{Item, Keep, Vault};
 
@@ -28,6 +29,8 @@ const MAX_FILE_BYTES: u64 = 64 * 1024;
 const ALREADY_ACCEPTED: &str = "This key was already accepted and can't be opened.";
 /// How many keys someone can send you with one copy of your card.
 pub const CARD_LOCKS: usize = 12;
+/// An invite in a team folder works for this long; a new one can be made any time.
+const INVITE_TTL: u64 = 30 * 24 * 60 * 60;
 /// A program waiting for Allow is refused after this long.
 pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -106,6 +109,10 @@ struct Core {
     /// The contact whose card was just opened, for the sheet that says so.
     added: Option<[u8; 32]>,
     teams: Vec<Team>,
+    /// Teams kept in a shared folder, yours or ones you joined.
+    folder_teams: Vec<FolderTeam>,
+    /// An invite just opened, waiting for Join, and the folder it was opened from.
+    invited: Option<(Invite, Option<PathBuf>)>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -176,6 +183,34 @@ pub struct ContactView {
     pub sends_left: usize,
 }
 
+/// A team kept in a shared folder.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct FolderTeamView {
+    pub id: String,
+    pub name: String,
+    pub folder: String,
+    pub keeper: String,
+    /// You keep it: you add people and write its keys.
+    pub keeping: bool,
+    /// Who is on it, as of the last version.
+    pub members: Vec<String>,
+    /// For the keeper: people who asked to join and wait for Add.
+    pub asking: Vec<ContactView>,
+    /// For a joiner: asked, and the keeper hasn't added you yet.
+    pub waiting: bool,
+}
+
+/// An invite you opened, waiting for Join.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct InviteView {
+    pub team: String,
+    pub keeper: String,
+    /// The keeper's computer fingerprint, to check with them.
+    pub computer: String,
+    /// The folder it was opened from, which Join uses unless you pick another.
+    pub folder: Option<String>,
+}
+
 /// A team on this computer.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct TeamView {
@@ -213,6 +248,8 @@ pub struct View {
     /// Whose card was just opened.
     pub added: Option<ContactView>,
     pub teams: Vec<TeamView>,
+    pub folder_teams: Vec<FolderTeamView>,
+    pub invited: Option<InviteView>,
 }
 
 impl Handoff {
@@ -223,6 +260,7 @@ impl Handoff {
         let approvals = store.approvals()?;
         let contacts = store.contacts()?;
         let teams = store.teams()?;
+        let folder_teams = store.folder_teams()?;
         os::private_dir(&outbox).map_err(|e| e.to_string())?;
         clear_outbox(&outbox);
         let core = Core {
@@ -241,6 +279,8 @@ impl Handoff {
             contacts,
             added: None,
             teams,
+            folder_teams,
+            invited: None,
             approvals,
             program: None,
             asks: 0,
@@ -257,6 +297,9 @@ impl Handoff {
     pub fn view(&self) -> View {
         let mut core = self.lock();
         let _ = core.tick();
+        if let Err(e) = core.read_folders() {
+            core.problem = Some(e);
+        }
         core.view()
     }
 
@@ -370,6 +413,97 @@ impl Handoff {
         core.store.save_teams(&core.teams)
     }
 
+    /// Keep a new team in `folder`, which the team already syncs: the invite
+    /// goes there for people to open. Returns the team's id.
+    pub fn make_folder_team(&self, name: &str, folder: &Path) -> Result<String, String> {
+        let name = clean_text(name, MAX_NAME_BYTES).ok_or("Give the team a short name.")?;
+        if !folder.is_dir() {
+            return Err("Pick a folder the team already shares.".into());
+        }
+        let mut core = self.lock();
+        let invite = create_invite(&core.identity, &core.settings.name, &name, now(), INVITE_TTL).map_err(|e| e.to_string())?;
+        folder::write_invite(folder, &invite)?;
+        let team = FolderTeam {
+            id: invite.team_id(),
+            name: name.clone(),
+            folder: folder.to_path_buf(),
+            keeper: *core.identity.public().as_bytes(),
+            keeper_name: core.settings.name.clone(),
+            role: Role::Keeper { members: Vec::new(), declined: Vec::new(), version: 0 },
+        };
+        core.folder_teams.push(team);
+        core.save_folder_teams()?;
+        core.notice = Some(format!("{name} is ready. When someone opens invite.handoff in the folder, you'll see them here."));
+        Ok(hex(&invite.team_id()))
+    }
+
+    /// Join the team of the invite just opened, through `folder` or the folder
+    /// the invite was opened from.
+    pub fn join_team(&self, folder: Option<&Path>) -> Result<(), String> {
+        let mut core = self.lock();
+        let (invite, opened_in) = core.invited.clone().ok_or("Open the team's invite first.")?;
+        let folder = folder.map(Path::to_path_buf).or(opened_in).ok_or("Pick your copy of the team's folder.")?;
+        if !folder.is_dir() {
+            return Err("Pick your copy of the team's folder.".into());
+        }
+        let (membership, lock) = join(&core.identity, &core.settings.name, &invite, now()).map_err(|e| match e {
+            SealError::Expired => format!("This invite ran out. Ask {} for a new one.", invite.keeper_name()),
+            e => e.to_string(),
+        })?;
+        folder::write_membership(&folder, &membership)?;
+        core.folder_teams.push(FolderTeam {
+            id: invite.team_id(),
+            name: invite.team().to_string(),
+            folder,
+            keeper: *invite.keeper().as_bytes(),
+            keeper_name: invite.keeper_name().to_string(),
+            role: Role::Member { lock: *lock.to_bytes(), version: 0, members: Vec::new() },
+        });
+        core.save_folder_teams()?;
+        core.invited = None;
+        core.notice = Some(format!("You asked to join {}. {} adds you next.", invite.team(), invite.keeper_name()));
+        Ok(())
+    }
+
+    /// Put away the invite just opened without joining.
+    pub fn close_invite(&self) {
+        self.lock().invited = None;
+    }
+
+    /// The keeper adds someone who asked to join: the next version of the
+    /// team is sealed for them too.
+    pub fn add_to_team(&self, team_id: &str, member: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let me = core.identity.public();
+        let index = core.keeping(team_id)?;
+        let team = &core.folder_teams[index];
+        let asking = folder::memberships(&team.folder)
+            .into_iter()
+            .find(|m| hex32(m.member().as_bytes()) == member && m.team_id() == team.id && m.keeper() == me)
+            .ok_or("They're no longer asking to join.")?;
+        let Role::Keeper { members, .. } = &mut core.folder_teams[index].role else { unreachable!("keeping") };
+        if !members.iter().any(|m| Membership::parse(m).is_ok_and(|m| m.member() == asking.member())) {
+            members.push(asking.to_bytes().to_vec());
+        }
+        let name = asking.name().to_string();
+        core.write_team(index)?;
+        core.notice = Some(format!("{name} is on {}.", core.folder_teams[index].name));
+        Ok(())
+    }
+
+    /// The keeper turns away someone who asked to join; they're not shown again.
+    pub fn turn_away(&self, team_id: &str, member: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let index = core.keeping(team_id)?;
+        let identity = parse_identity(member)?;
+        if let Role::Keeper { declined, .. } = &mut core.folder_teams[index].role {
+            if !declined.contains(&identity) {
+                declined.push(identity);
+            }
+        }
+        core.save_folder_teams()
+    }
+
     /// Welcome someone to a team: every key you hold that was shared with the
     /// team, sealed to them in one file on the clipboard.
     pub fn welcome(&self, team_id: &str, member: &str) -> Result<(), String> {
@@ -442,10 +576,11 @@ impl Handoff {
         }
         let bytes = fs::read(path).map_err(|_| unreadable())?;
         if bytes.starts_with(b"HOF") {
-            return self.open_object(&bytes);
+            return self.open_object(&bytes, Some(path));
         }
         let text = String::from_utf8(bytes).map_err(|_| "This is not a KeyHandoff file.".to_string())?;
-        self.open_text(&text)
+        let bytes = armor::decode(&text).map_err(|e| e.to_string())?;
+        self.open_object(&bytes, Some(path))
     }
 
     /// Paste: a copied `.handoff` file or its text.
@@ -466,10 +601,12 @@ impl Handoff {
 
     pub fn open_text(&self, text: &str) -> Result<(), String> {
         let bytes = armor::decode(text).map_err(|e| e.to_string())?;
-        self.open_object(&bytes)
+        self.open_object(&bytes, None)
     }
 
-    fn open_object(&self, bytes: &[u8]) -> Result<(), String> {
+    /// `from`: the file it was read from, if any. An invite opened from inside a
+    /// team folder joins that folder.
+    fn open_object(&self, bytes: &[u8], from: Option<&Path>) -> Result<(), String> {
         match keyhandoff_seal::parse_object(bytes).map_err(|e| e.to_string())? {
             // One-off requests came before cards; keys go to a card now.
             Object::Request(request) => {
@@ -478,10 +615,9 @@ impl Handoff {
             Object::Sealed(sealed) => self.lock().accept(&sealed),
             Object::Card(card) => self.lock().add_contact(&card),
             Object::Bundle(bundle) => self.lock().accept_bundle(&bundle),
-            // The team folder format exists before the app reads team folders.
-            Object::Invite(_) | Object::Membership(_) | Object::TeamState(_) => {
-                Err("This is a team folder file. This version of KeyHandoff can't open team folders yet.".into())
-            }
+            Object::Invite(invite) => self.lock().invite(invite, from.and_then(Path::parent).map(Path::to_path_buf)),
+            Object::Membership(_) => Err("This asks to join a team. The team's keeper picks it up from the team folder.".into()),
+            Object::TeamState(_) => Err("This is a team's own file. KeyHandoff reads it from the team folder.".into()),
         }
     }
 
@@ -756,6 +892,91 @@ impl Core {
         Ok(())
     }
 
+    fn invite(&mut self, invite: Invite, folder: Option<PathBuf>) -> Result<(), String> {
+        if invite.keeper() == self.identity.public() {
+            return Err(format!("This is your own invite to {}. Others open it to join.", invite.team()));
+        }
+        if self.folder_teams.iter().any(|t| t.id == invite.team_id()) {
+            return Err(format!("You're already on {}.", invite.team()));
+        }
+        self.invited = Some((invite, folder));
+        Ok(())
+    }
+
+    /// The index of a team you keep.
+    fn keeping(&self, team_id: &str) -> Result<usize, String> {
+        self.folder_teams
+            .iter()
+            .position(|t| hex(&t.id) == team_id && matches!(t.role, Role::Keeper { .. }))
+            .ok_or_else(|| "That team is no longer here.".to_string())
+    }
+
+    /// Write the next version of a team you keep into its folder.
+    fn write_team(&mut self, index: usize) -> Result<(), String> {
+        let team = &self.folder_teams[index];
+        let Role::Keeper { members, version, .. } = &team.role else { return Err("Only the team's keeper can change it.".into()) };
+        let memberships: Vec<Membership> = members.iter().filter_map(|m| Membership::parse(m).ok()).collect();
+        let next = version + 1;
+        let state = seal_team(&self.identity, team.id, &team.name, next, &memberships, &[], now()).map_err(|e| e.to_string())?;
+        folder::write_state(&team.folder, &state)?;
+        if let Role::Keeper { version, .. } = &mut self.folder_teams[index].role {
+            *version = next;
+        }
+        self.save_folder_teams()
+    }
+
+    /// Read newer versions of the teams you joined from their folders. A
+    /// version from anyone but the pinned keeper, or not newer, is ignored.
+    fn read_folders(&mut self) -> Result<(), String> {
+        let mut changed = false;
+        for team in &mut self.folder_teams {
+            let Role::Member { lock, version, members } = &mut team.role else { continue };
+            let Some(state) = folder::state(&team.folder) else { continue };
+            if state.team_id() != team.id || *state.keeper().as_bytes() != team.keeper || state.version() <= *version {
+                continue;
+            }
+            let lock = TeamLock::from_bytes(lock);
+            if state.open(&lock).is_ok() {
+                *version = state.version();
+                *members = state.members().iter().map(|m| m.name.clone()).collect();
+                team.name = state.team().to_string();
+                changed = true;
+            }
+        }
+        if changed { self.save_folder_teams() } else { Ok(()) }
+    }
+
+    fn save_folder_teams(&self) -> Result<(), String> {
+        self.store.save_folder_teams(&self.folder_teams)
+    }
+
+    fn folder_team_view(&self, team: &FolderTeam) -> FolderTeamView {
+        let me = self.identity.public();
+        let base = FolderTeamView {
+            id: hex(&team.id),
+            name: team.name.clone(),
+            folder: team.folder.display().to_string(),
+            keeper: team.keeper_name.clone(),
+            keeping: false,
+            members: Vec::new(),
+            asking: Vec::new(),
+            waiting: false,
+        };
+        match &team.role {
+            Role::Keeper { members, declined, .. } => {
+                let added: Vec<Membership> = members.iter().filter_map(|m| Membership::parse(m).ok()).collect();
+                let asking = folder::memberships(&team.folder)
+                    .into_iter()
+                    .filter(|m| m.team_id() == team.id && m.keeper() == me)
+                    .filter(|m| !added.iter().any(|a| a.member() == m.member()) && !declined.contains(m.member().as_bytes()))
+                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0 })
+                    .collect();
+                FolderTeamView { keeping: true, members: added.iter().map(|m| m.name().to_string()).collect(), asking, ..base }
+            }
+            Role::Member { version, members, .. } => FolderTeamView { members: members.clone(), waiting: *version == 0, ..base },
+        }
+    }
+
     fn team_members(&self, team: &Team) -> Vec<&Contact> {
         team.members.iter().filter_map(|m| self.contacts.iter().find(|c| c.identity == *m)).collect()
     }
@@ -966,6 +1187,13 @@ impl Core {
             contacts: self.contacts.iter().map(|c| self.contact_view(c)).collect(),
             added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),
             teams: self.teams.iter().map(|t| self.team_view(t)).collect(),
+            folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
+            invited: self.invited.as_ref().map(|(invite, folder)| InviteView {
+                team: invite.team().to_string(),
+                keeper: invite.keeper_name().to_string(),
+                computer: invite.keeper().fingerprint(),
+                folder: folder.as_ref().map(|f| f.display().to_string()),
+            }),
         }
     }
 
@@ -1036,6 +1264,17 @@ fn hex(id: &[u8; 16]) -> String {
 
 fn hex32(id: &[u8; 32]) -> String {
     id.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn parse_identity(s: &str) -> Result<[u8; 32], String> {
+    if s.len() != 64 {
+        return Err("That person is no longer here.".into());
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).map_err(|_| "That person is no longer here.".to_string())?;
+    }
+    Ok(out)
 }
 
 fn parse_id(s: &str) -> Result<[u8; 16], String> {
@@ -1321,6 +1560,68 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         bundles.iter().for_each(|f| drop(fs::remove_file(f)));
+    }
+
+    #[test]
+    fn a_team_folder_lets_people_join_only_when_the_keeper_adds_them() {
+        let (ben, ann, priya) = (app("Ben"), app("Ann"), app("Priya"));
+        let shared = temp("shared");
+        fs::create_dir_all(&shared).unwrap();
+        let team = ben.handoff.make_folder_team("Platform", &shared).unwrap();
+
+        // Ann opens the invite where the folder synced it, and joins that folder.
+        ann.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+        let invited = ann.handoff.view().invited.unwrap();
+        assert_eq!((invited.team.as_str(), invited.keeper.as_str()), ("Platform", "Ben"));
+        ann.handoff.join_team(None).unwrap();
+        priya.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+        priya.handoff.join_team(Some(&shared)).unwrap();
+        assert!(ann.handoff.view().folder_teams[0].waiting, "asking isn't being on it");
+
+        let asking: Vec<_> = ben.handoff.view().folder_teams[0].asking.iter().map(|a| (a.name.clone(), a.id.clone())).collect();
+        assert_eq!(asking.iter().map(|a| a.0.as_str()).collect::<Vec<_>>().len(), 2);
+        let id = |name: &str| asking.iter().find(|a| a.0 == name).unwrap().1.clone();
+        ben.handoff.add_to_team(&team, &id("Ann")).unwrap();
+        ben.handoff.turn_away(&team, &id("Priya")).unwrap();
+        let kept = &ben.handoff.view().folder_teams[0];
+        assert_eq!((kept.members.clone(), kept.asking.len()), (vec!["Ann".to_string()], 0));
+
+        let ann_team = &ann.handoff.view().folder_teams[0];
+        assert_eq!((ann_team.waiting, ann_team.members.clone(), ann_team.keeper.as_str()), (false, vec!["Ann".to_string()], "Ben"));
+        assert!(priya.handoff.view().folder_teams[0].waiting, "turned away stays waiting");
+
+        // An older version, or one from a computer that isn't the keeper, dropped
+        // into the folder changes nothing for Ann.
+        let v1 = fs::read(shared.join("team.handoff")).unwrap();
+        ben.handoff.add_to_team(&team, &id("Priya")).unwrap();
+        assert_eq!(ann.handoff.view().folder_teams[0].members, ["Ann", "Priya"]);
+        fs::write(shared.join("team.handoff"), &v1).unwrap();
+        assert_eq!(ann.handoff.view().folder_teams[0].members, ["Ann", "Priya"]);
+        // Mallory writes a version sealed to Ann's lock (its public half is in Ann's
+        // membership, in the folder) and signs it herself. It opens for Ann's
+        // lock, so only the pinned keeper stops it.
+        let mallory = Identity::generate();
+        let Object::Invite(invite) =
+            keyhandoff_seal::parse_object(&armor::decode(&fs::read_to_string(shared.join("invite.handoff")).unwrap()).unwrap()).unwrap()
+        else {
+            panic!("invite")
+        };
+        let ann_lock = {
+            let core = ann.handoff.lock();
+            let Role::Member { lock, .. } = &core.folder_teams[0].role else { panic!("member") };
+            TeamLock::from_bytes(lock)
+        };
+        let forged_invite = keyhandoff_seal::reinvite(&mallory, "Ben", invite.team_id(), "Platform", now(), 60).unwrap();
+        let sealed_to_ann = keyhandoff_seal::rejoin(&mallory, "Mallory", &forged_invite, &ann_lock, now()).unwrap();
+        let forged = seal_team(&mallory, invite.team_id(), "Platform", 99, &[sealed_to_ann], &[], now()).unwrap();
+        assert!(forged.open(&ann_lock).is_ok(), "the forgery opens with Ann's lock");
+        folder::write_state(&shared, &forged).unwrap();
+        assert_eq!(ann.handoff.view().folder_teams[0].members, ["Ann", "Priya"]);
+
+        for a in [ben, ann, priya] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        let _ = fs::remove_dir_all(shared);
     }
 
     #[test]

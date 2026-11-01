@@ -68,6 +68,32 @@ export interface TeamView {
   keys: number;
 }
 
+/** A team kept in a folder the team already syncs. */
+export interface FolderTeamView {
+  id: string;
+  name: string;
+  folder: string;
+  keeper: string;
+  /** You keep it: you add people and write its keys. */
+  keeping: boolean;
+  /** Who is on it, as of the last version. */
+  members: string[];
+  /** For the keeper: people who asked to join and wait for Add. */
+  asking: ContactView[];
+  /** For a joiner: asked, and the keeper hasn't added you yet. */
+  waiting: boolean;
+}
+
+/** A team invite you opened, waiting for Join. */
+export interface InviteView {
+  team: string;
+  keeper: string;
+  /** The keeper's computer fingerprint, to check with them. */
+  computer: string;
+  /** The folder it was opened from; null when it came some other way. */
+  folder: string | null;
+}
+
 export interface View {
   name: string;
   /** This computer's fingerprint, which people you ask will see. */
@@ -95,6 +121,8 @@ export interface View {
   /** Whose card was just opened. */
   added: ContactView | null;
   teams: TeamView[];
+  folder_teams: FolderTeamView[];
+  invited: InviteView | null;
 }
 
 /** Before the vault opens: no passphrase yet, locked, or open. */
@@ -148,6 +176,14 @@ export const api = {
   copyCard: () => invoke<void>("copy_card"),
   saveTeam: (id: string | null, name: string, members: string[]) => invoke<string>("save_team", { id, name, members }),
   deleteTeam: (id: string) => invoke<void>("delete_team", { id }),
+  /** The system folder picker; null when the person cancels. */
+  pickFolder: () => invoke<string | null>("pick_folder"),
+  makeFolderTeam: (name: string, folder: string) => invoke<string>("make_folder_team", { name, folder }),
+  /** Join the invite just opened; null uses the folder it was opened from. */
+  joinTeam: (folder: string | null) => invoke<void>("join_team", { folder }),
+  closeInvite: () => invoke<void>("close_invite"),
+  addToTeam: (team: string, member: string) => invoke<void>("add_to_team", { team, member }),
+  turnAway: (team: string, member: string) => invoke<void>("turn_away", { team, member }),
   /** Forget a contact and take them off your teams. */
   forgetContact: (id: string) => invoke<void>("forget_contact", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */
