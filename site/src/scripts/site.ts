@@ -22,8 +22,8 @@ const solo = document.getElementById("solo-stage");
 // Safe Copy listening, caught, the vault, then KeyHandoff typing the key in.
 if (solo) runFrames(solo, [["0", 2200], ["1", 3000], ["2", 2400], ["3", 6400]], "3", soloTyping(solo));
 const circle = document.getElementById("circle-stage");
-// You alone, then Ann's card arrives, then a team that one send reaches.
-if (circle) runFrames(circle, [["0", 3200], ["1", 3600], ["2", 4400]], "2");
+// Ben has the keys, invites Ann and Priya, they join and get them, he changes one, then Priya leaves.
+if (circle) runFrames(circle, [["0", 2600], ["1", 3000], ["2", 3600], ["3", 3600], ["4", 4800]], "4");
 const duo = document.getElementById("duo");
 // An opening line, three steps in Ben's window, two in Ann's, then a closing line.
 if (duo) runFrames(duo, [["intro", 3600], ["0", 2600], ["1", 2400], ["2", 3400], ["3", 2800], ["4", 3000], ["outro", 4000]], "4");

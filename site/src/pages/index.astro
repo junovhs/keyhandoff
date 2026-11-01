@@ -350,30 +350,31 @@ const INCIDENTS = [
         <span class="eyebrow"><Icon name="users" />How teams work</span>
         <h2>Start on your own. Add teammates when you need them.</h2>
       </div>
-      <div class="circle-stage rv" id="circle-stage" data-step="0">
+      <div class="lc-stage rv" id="circle-stage" data-step="0">
         <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>On your own, it&rsquo;s already a vault for your keys.</span>
-          <span class="s1"><b>2</b>To add Ann, she sends you her card once.</span>
-          <span class="s2"><b>3</b>Make a team, and one send reaches everyone.</span>
+          <span class="s0"><b>1</b>Ben has the team&rsquo;s keys.</span>
+          <span class="s1"><b>2</b>He invites Ann and Priya.</span>
+          <span class="s2"><b>3</b>They join, and the keys follow.</span>
+          <span class="s3"><b>4</b>Change a key once. Everyone gets it.</span>
+          <span class="s4"><b>5</b>Someone leaves? Their copies stop working.</span>
         </p>
-        <div class="circle-map" aria-hidden="true">
-          <svg class="links" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <line class="to-ann" x1="22" y1="50" x2="68" y2="30" />
-            <line class="to-priya" x1="22" y1="50" x2="84" y2="56" />
-            <line class="to-ben" x1="22" y1="50" x2="66" y2="76" />
+        <div class="lc" aria-hidden="true">
+          <svg class="lc-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line class="ln-ann" x1="22" y1="44" x2="76" y2="22" />
+            <line class="ln-priya" x1="22" y1="44" x2="76" y2="70" />
           </svg>
-          <span class="team-ring"><span>Platform team</span></span>
-          <span class="peer you" style="--x:22%; --y:50%"><i>You</i><em><Icon name="lock" size={13} />3 keys</em></span>
-          <span class="peer p-ann" style="--x:68%; --y:30%"><i>A</i>Ann</span>
-          <span class="peer p-priya" style="--x:84%; --y:56%"><i>P</i>Priya</span>
-          <span class="peer p-ben" style="--x:66%; --y:76%"><i>B</i>Ben</span>
-          <span class="file-chip card-chip"><Icon name="file" size={14} />Ann&rsquo;s card</span>
-          <span class="copy" style="--x:68%; --y:30%"><Icon name="key" size={14} /></span>
-          <span class="copy" style="--x:84%; --y:56%; --d:.15s"><Icon name="key" size={14} /></span>
-          <span class="copy" style="--x:66%; --y:76%; --d:.3s"><Icon name="key" size={14} /></span>
+          <span class="pn pb" style="--x:22%; --y:44%"><i>B</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
+          <span class="pn pa" style="--x:76%; --y:22%"><i>A</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
+          <span class="pn pp" style="--x:76%; --y:70%"><i>P</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
+          <span class="fly inv to-a"><Icon name="file" size={18} /></span>
+          <span class="fly inv to-p"><Icon name="file" size={18} /></span>
+          <span class="fly bundle join to-a"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
+          <span class="fly bundle join to-p"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
+          <span class="fly bundle one to-a"><i class="dot t1"></i></span>
+          <span class="fly bundle one to-p"><i class="dot t1"></i></span>
+          <span class="fly bundle again to-a"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
         </div>
       </div>
-      <p class="wire-note rv"><Icon name="shield" />A card holds no secret, and there&rsquo;s no server or sign-up: your teams live on your computer.</p>
     </section>
 
     <section class="wrap" id="built-in">
