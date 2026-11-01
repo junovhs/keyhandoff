@@ -50,7 +50,7 @@ pub struct Payload {
 }
 
 impl Payload {
-    fn encode(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
+    pub(crate) fn encode(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
         let secret = self.secret.expose();
         if !wire::valid_text(&self.label, MAX_LABEL_BYTES, false)
             || !wire::valid_text(&self.note, MAX_NOTE_BYTES, true)
@@ -69,7 +69,7 @@ impl Payload {
         Ok(out)
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, Error> {
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Error> {
         let mut r = Reader::new(bytes, 0);
         let label_len = r.u8()? as usize;
         let label = r.text(label_len, MAX_LABEL_BYTES, false)?;

@@ -1,6 +1,6 @@
 //! Handoff sealing core: device identity, key requests with one-time keys,
 //! contact cards that carry a batch of them, sealing a secret to a request,
-//! bundles of sealed keys for a team,
+//! bundles of sealed keys for a team, teams kept in a shared folder,
 //! opening it exactly once, and the armored text that carries them through
 //! chat and email.
 //!
@@ -15,6 +15,7 @@ mod identity;
 mod keyring;
 mod request;
 mod sealed;
+mod team;
 mod wire;
 
 use std::fmt;
@@ -25,6 +26,7 @@ pub use identity::{Identity, PublicIdentity};
 pub use keyring::{Keyring, Opened, PendingRequest};
 pub use request::{Request, create_request};
 pub use sealed::{Payload, Sealed, Secret, seal};
+pub use team::{Invite, MAX_TEAM_MEMBERS, Member, Membership, TeamLock, TeamState, create_invite, join, reinvite, seal_team};
 
 /// Format version written into every object (`HOF` + version + kind).
 pub const FORMAT_VERSION: u8 = 0;
@@ -46,6 +48,9 @@ pub enum Kind {
     Sealed = 2,
     Card = 3,
     Bundle = 4,
+    Invite = 5,
+    Membership = 6,
+    TeamState = 7,
 }
 
 impl Kind {
@@ -55,6 +60,9 @@ impl Kind {
             2 => Some(Kind::Sealed),
             3 => Some(Kind::Card),
             4 => Some(Kind::Bundle),
+            5 => Some(Kind::Invite),
+            6 => Some(Kind::Membership),
+            7 => Some(Kind::TeamState),
             _ => None,
         }
     }
@@ -67,6 +75,9 @@ pub enum Object {
     Sealed(Sealed),
     Card(Card),
     Bundle(Bundle),
+    Invite(Invite),
+    Membership(Membership),
+    TeamState(TeamState),
 }
 
 /// Parse and verify any `.handoff` object from its binary form.
@@ -76,6 +87,9 @@ pub fn parse_object(bytes: &[u8]) -> Result<Object, Error> {
         Kind::Sealed => Sealed::parse(bytes).map(Object::Sealed),
         Kind::Card => Card::parse(bytes).map(Object::Card),
         Kind::Bundle => Bundle::parse(bytes).map(Object::Bundle),
+        Kind::Invite => Invite::parse(bytes).map(Object::Invite),
+        Kind::Membership => Membership::parse(bytes).map(Object::Membership),
+        Kind::TeamState => TeamState::parse(bytes).map(Object::TeamState),
     }
 }
 

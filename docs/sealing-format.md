@@ -93,6 +93,45 @@ Several sealed keys in one file, labelled with a team name: one key sealed to ea
 
 Each part is verified and opened like a sealed key; a recipient opens the parts sealed to its own locks and skips the rest. The team name is a label, not signed by anyone.
 
+### Teams kept in a folder (kinds 5, 6 and 7)
+
+A team can live in a folder its members already sync. KeyHandoff only reads and writes the folder; Dropbox, a repo or a network share moves the files. Everything in it is public keys and ciphertext.
+
+**Invite (kind 5).** The keeper's "join this team".
+
+| Field | Bytes | Meaning |
+|---|---|---|
+| header | 5 | `HOF`, version 0, kind 5 |
+| team id | 16 | random; names the team for good |
+| keeper | 32 | the keeper's Ed25519 identity |
+| created, expires | 8 + 8 | Unix seconds |
+| team | 1 + n | name, 1 to 64 bytes |
+| signature | 64 | keeper, domain `handoff:team-invite:v0` |
+
+**Membership (kind 6).** A joiner's answer: their identity and a fresh X25519 **team lock**, bound to the team id and the keeper, signed by the joiner (`handoff:team-member:v0`). The joiner keeps the lock's private key in the vault. Writing a membership into the folder only asks to join; the keeper adds people.
+
+**Team state (kind 7).** Version *n* of the team, signed by the keeper (`handoff:team-state:v0`).
+
+| Field | Bytes | Meaning |
+|---|---|---|
+| header | 5 | `HOF`, version 0, kind 7 |
+| team id, keeper | 16 + 32 | as in the invite |
+| version | 8 | starts at 1; apps refuse anything at or below the last version opened |
+| created | 8 | Unix seconds |
+| team | 1 + n | current name |
+| members | 1 + count × (32 + 32 + 1 + n) | 1 to 64: identity, team lock, name |
+| ephemeral | 32 | fresh X25519 public key for this version |
+| slots | count × 48 | the content key wrapped for each member, in member order |
+| nonce, length, ciphertext | 12 + 4 + n | the keys (each a payload as in a sealed key), under the content key |
+| signature | 64 | keeper, over everything above |
+
+The content key is random per version. Each slot is ChaCha20-Poly1305 under HKDF-SHA256(salt = the public header through the ephemeral key, ikm = X25519(ephemeral, member lock), info = `handoff:team-wrap:v0` ‖ ephemeral ‖ lock), with the header as associated data. Every wrap key is used once, so its nonce is fixed at zero. The keys' ciphertext has everything before the nonce as associated data.
+
+- **Opening:** verify the signature; check the keeper is the one pinned when you joined and the version is newer than the last you opened; find your lock in the member list; unwrap; decrypt.
+- **Rotating:** the keeper writes version *n+1* with the new key under the same name. Members' `.env` pointers use the name, so their programs keep working.
+- **Leaving:** version *n+1* has no slot for the person who left. What they were given before stays with them, so leaving prompts the keeper to rotate those keys with the provider.
+- **What the folder shows:** who is on the team and when it changed, never the keys or their names.
+
 ### Open and one-time key lifecycle
 
 - **Open:** find the pending entry by request id; check the expiry; verify the sender's signature; derive the key; decrypt. On success, **destroy the pending entry** (zeroized and removed from storage) before the secret goes to the vault. Every copy of the sealed file is then permanently unopenable.
@@ -140,6 +179,8 @@ HRQ1 7KQ4 M2PD 9XWR TH3C K8N5
 - **P-256 ECDH + AES-GCM:** fine, but in Rust the dalek X25519 and Ed25519 crates are smaller and harder to misuse.
 - **Unsigned requests and sealed keys:** anyone who saw a request in a chat could send a fake key back, or swap the lock under someone's name. Signatures plus continuity make the first contact trust the channel and later contacts checkable.
 - **TPM or Windows Hello from the start:** stronger, but slower to build and it can prompt; DPAPI first, same file format.
+- **Team updates through a relay server:** the smoothest delivery, but it breaks "no servers": someone has to run it, and it sees who talks to whom and when. A folder the team already syncs carries the same sealed files with no new service.
+- **Team keys sealed to one-time locks:** each update would need fresh locks from every member, which is the "send files back and forth forever" problem. A long-lived team lock per member and team trades that for one rule: a removed member gets nothing new, and rotation covers what they had.
 - **base64 or hex armor:** base64 is mangled by case changes and confusable characters; hex is twice as long. Crockford base32 survives both.
 
 ## Consequences

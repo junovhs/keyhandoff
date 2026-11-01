@@ -43,6 +43,9 @@ fn marker(kind: Kind) -> &'static str {
         Kind::Sealed => "HANDOFF SEALED KEY",
         Kind::Card => "HANDOFF CARD",
         Kind::Bundle => "HANDOFF KEYS",
+        Kind::Invite => "HANDOFF TEAM INVITE",
+        Kind::Membership => "HANDOFF TEAM REPLY",
+        Kind::TeamState => "HANDOFF TEAM STATE",
     }
 }
 
@@ -137,7 +140,7 @@ pub fn decode(text: &str) -> Result<Vec<u8>, Error> {
     // whitespace, so markers are found however a chat app mangled them.
     let upper: String = text.to_uppercase().chars().filter(|c| !IGNORED.contains(c)).collect();
     let upper = upper.split_whitespace().collect::<Vec<_>>().join(" ");
-    let (kind, body_start) = [Kind::Request, Kind::Sealed, Kind::Card, Kind::Bundle]
+    let (kind, body_start) = [Kind::Request, Kind::Sealed, Kind::Card, Kind::Bundle, Kind::Invite, Kind::Membership, Kind::TeamState]
         .into_iter()
         .filter_map(|k| upper.find(&format!("BEGIN {}", marker(k))).map(|at| (k, at + 6 + marker(k).len())))
         .min_by_key(|&(_, at)| at)

@@ -478,6 +478,10 @@ impl Handoff {
             Object::Sealed(sealed) => self.lock().accept(&sealed),
             Object::Card(card) => self.lock().add_contact(&card),
             Object::Bundle(bundle) => self.lock().accept_bundle(&bundle),
+            // The team folder format exists before the app reads team folders.
+            Object::Invite(_) | Object::Membership(_) | Object::TeamState(_) => {
+                Err("This is a team folder file. This version of KeyHandoff can't open team folders yet.".into())
+            }
         }
     }
 
