@@ -232,6 +232,7 @@ export const docs = defineDocs({
                     { title: "Rotate", text: "Replaced a key with the provider? Click **Replace** on it and copy the new value. Everyone's copy updates under the same name, so `.env` pointers and allowed programs keep working." },
                   ],
                 },
+                { kind: "p", text: "**Taking someone off:** in Send a key, click the cross next to them, then **Take off**. They get nothing new from the team, and you see the team keys they had. Replace each with the provider, then click **Replace** on it; it leaves the list and everyone still on the team gets the new one. Their KeyHandoff says they were taken off." },
                 { kind: "p", text: "KeyHandoff never syncs anything itself; the folder's own app does. Everything in the folder is sealed: who's on the team and when it changed is visible, never the keys or their names. Only the person who made the team can add people or change its keys, and nobody joins until they're added." },
               ],
             },

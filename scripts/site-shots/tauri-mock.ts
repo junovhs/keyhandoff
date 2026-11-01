@@ -17,7 +17,7 @@ const CONTACTS: ContactView[] = [ANN, { id: "p", name: "Priya", computer: "e41b0
 const TEAMS: TeamView[] = [{ id: "t", name: "Platform", members: CONTACTS, keys: 2 }];
 
 const FOLDER = "/home/ben/Dropbox/Platform";
-const KEPT: FolderTeamView = { id: "f", name: "Platform", folder: FOLDER, keeper: "Ben", keeping: true, members: [], asking: [], waiting: false };
+const KEPT: FolderTeamView = { id: "f", name: "Platform", folder: FOLDER, keeper: "Ben", keeping: true, members: [], asking: [], waiting: false, people: [], to_replace: [] };
 
 function safe(state: SafeState, forName: string | null = "Ann", apps: string[] = [], read = false): View["safe"] {
   return {
@@ -80,6 +80,14 @@ const SCENES: Record<string, Partial<View>> = {
   "folder-asking": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, asking: [ANN, CONTACTS[1]] }] },
   "folder-kept": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
   "folder-share": { name: "Ben", contacts: [], teams: [], keys: KEYS.map((k) => ({ ...k, from: null })), folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "folder-left": {
+    name: "Ben",
+    contacts: [],
+    teams: [],
+    folder_teams: [{ ...KEPT, members: ["Ann"], people: [ANN], to_replace: ["Stripe (billing)", "OpenAI"] }],
+    notice: "Priya is off Platform and gets nothing new. Replace the 2 keys they had with the provider, then click Replace on each.",
+  },
+  "home-removed": { notice: "Ben took you off Platform. Keys it gave you stay in your keys but won't be updated." },
   "replacing": { name: "Ben", safe: { ...safe("listening", null), replacing: "Stripe (billing)" } },
   "replace-caught": { name: "Ben", safe: { ...safe("caught", null), replacing: "Stripe (billing)" } },
   "home-replaced": { name: "Ben", notice: "Stripe (billing) is replaced. Programs using it get the new key. Platform gets it through the folder." },

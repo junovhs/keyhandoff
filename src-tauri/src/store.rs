@@ -104,6 +104,9 @@ pub enum Role {
         version: u64,
         #[serde(default)]
         keys: Vec<[u8; 16]>,
+        /// Team keys someone who left still holds, until you replace each one.
+        #[serde(default)]
+        to_replace: Vec<[u8; 16]>,
     },
     /// You joined: your team lock, the last version you opened, who was on it,
     /// and each team key's name with the vault item that holds your copy.
@@ -114,6 +117,16 @@ pub enum Role {
         #[serde(default)]
         keys: Vec<(String, [u8; 16])>,
     },
+}
+
+impl FolderTeam {
+    /// How many people the keeper has added.
+    pub fn role_members(&self) -> usize {
+        match &self.role {
+            Role::Keeper { members, .. } => members.len(),
+            Role::Member { members, .. } => members.len(),
+        }
+    }
 }
 
 pub struct Store {

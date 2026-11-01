@@ -202,6 +202,10 @@ pub struct FolderTeamView {
     pub asking: Vec<ContactView>,
     /// For a joiner: asked, and the keeper hasn't added you yet.
     pub waiting: bool,
+    /// For the keeper: people on the team, to remove.
+    pub people: Vec<ContactView>,
+    /// For the keeper: team keys someone who left still has, to replace with the provider.
+    pub to_replace: Vec<String>,
 }
 
 /// An invite you opened, waiting for Join.
@@ -434,7 +438,7 @@ impl Handoff {
             folder: folder.to_path_buf(),
             keeper: *core.identity.public().as_bytes(),
             keeper_name: core.settings.name.clone(),
-            role: Role::Keeper { members: Vec::new(), declined: Vec::new(), version: 0, keys: Vec::new() },
+            role: Role::Keeper { members: Vec::new(), declined: Vec::new(), version: 0, keys: Vec::new(), to_replace: Vec::new() },
         };
         core.folder_teams.push(team);
         core.save_folder_teams()?;
@@ -515,6 +519,47 @@ impl Handoff {
         let name = asking.name().to_string();
         core.write_team(index)?;
         core.notice = Some(format!("{name} is on {}.", core.folder_teams[index].name));
+        Ok(())
+    }
+
+    /// The keeper takes someone off the team: the next version leaves them out,
+    /// and every team key they were given waits to be replaced with the provider.
+    pub fn remove_from_team(&self, team_id: &str, member: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let index = core.keeping(team_id)?;
+        let identity = parse_identity(member)?;
+        let Role::Keeper { members, declined, keys, to_replace, .. } = &mut core.folder_teams[index].role else { unreachable!("keeping") };
+        let before = members.len();
+        let mut name = String::new();
+        members.retain(|m| match Membership::parse(m) {
+            Ok(m) if *m.member().as_bytes() == identity => {
+                name = m.name().to_string();
+                false
+            }
+            _ => true,
+        });
+        if members.len() == before {
+            return Err("They're no longer on the team.".into());
+        }
+        // Their membership stays in the folder; don't offer it again.
+        declined.push(identity);
+        for id in keys.iter() {
+            if !to_replace.contains(id) {
+                to_replace.push(*id);
+            }
+        }
+        let held = keys.len();
+        let team = core.folder_teams[index].name.clone();
+        if core.folder_teams[index].role_members() == 0 {
+            // A team with nobody on it has nothing to seal; the next Add writes it.
+            core.save_folder_teams()?;
+        } else {
+            core.write_team(index)?;
+        }
+        core.notice = Some(match held {
+            0 => format!("{name} is off {team}."),
+            n => format!("{name} is off {team} and gets nothing new. Replace the {n} {} they had with the provider, then click Replace on each.", if n == 1 { "key" } else { "keys" }),
+        });
         Ok(())
     }
 
@@ -617,6 +662,11 @@ impl Handoff {
         }
         core.store.save_vault(&core.vault)?;
         let label = core.vault.items().iter().find(|i| i.id == id).map(|i| i.label.clone()).unwrap_or_default();
+        for team in &mut core.folder_teams {
+            if let Role::Keeper { to_replace, .. } = &mut team.role {
+                to_replace.retain(|k| *k != id);
+            }
+        }
         let teams: Vec<usize> = (0..core.folder_teams.len())
             .filter(|&i| matches!(&core.folder_teams[i].role, Role::Keeper { keys, .. } if keys.contains(&id)))
             .collect();
@@ -1014,13 +1064,23 @@ impl Core {
     fn read_folders(&mut self) -> Result<(), String> {
         let mut changed = false;
         let mut news = Vec::new();
+        let mut removed = Vec::new();
         for team in &mut self.folder_teams {
             let Role::Member { lock, version, members, keys } = &mut team.role else { continue };
             let Some(state) = folder::state(&team.folder) else { continue };
             if state.team_id() != team.id || *state.keeper().as_bytes() != team.keeper || state.version() <= *version {
                 continue;
             }
-            let Ok(payloads) = state.open(&TeamLock::from_bytes(lock)) else { continue };
+            let Ok(payloads) = state.open(&TeamLock::from_bytes(lock)) else {
+                // A newer version from the keeper that leaves you out, after you were
+                // on the team: you were taken off. Before that, you're still waiting.
+                if *version > 0 {
+                    removed.push(team.id);
+                    news.push(format!("{} took you off {}. Keys it gave you stay in your keys but won't be updated.", team.keeper_name, team.name));
+                    changed = true;
+                }
+                continue;
+            };
             *version = state.version();
             *members = state.members().iter().map(|m| m.name.clone()).collect();
             team.name = state.team().to_string();
@@ -1030,6 +1090,7 @@ impl Core {
         if !changed {
             return Ok(());
         }
+        self.folder_teams.retain(|t| !removed.contains(&t.id));
         self.store.save_vault(&self.vault)?;
         if !news.is_empty() {
             self.notice = Some(news.join(" "));
@@ -1052,9 +1113,11 @@ impl Core {
             members: Vec::new(),
             asking: Vec::new(),
             waiting: false,
+            people: Vec::new(),
+            to_replace: Vec::new(),
         };
         match &team.role {
-            Role::Keeper { members, declined, .. } => {
+            Role::Keeper { members, declined, to_replace, .. } => {
                 let added: Vec<Membership> = members.iter().filter_map(|m| Membership::parse(m).ok()).collect();
                 let asking = folder::memberships(&team.folder)
                     .into_iter()
@@ -1062,7 +1125,12 @@ impl Core {
                     .filter(|m| !added.iter().any(|a| a.member() == m.member()) && !declined.contains(m.member().as_bytes()))
                     .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0 })
                     .collect();
-                FolderTeamView { keeping: true, members: added.iter().map(|m| m.name().to_string()).collect(), asking, ..base }
+                let people = added
+                    .iter()
+                    .map(|m| ContactView { id: hex32(m.member().as_bytes()), name: m.name().to_string(), computer: m.member().fingerprint(), sends_left: 0 })
+                    .collect();
+                let to_replace = self.vault.items().iter().filter(|i| to_replace.contains(&i.id)).map(|i| i.label.clone()).collect();
+                FolderTeamView { keeping: true, members: added.iter().map(|m| m.name().to_string()).collect(), asking, people, to_replace, ..base }
             }
             Role::Member { version, members, .. } => FolderTeamView { members: members.clone(), waiting: *version == 0, ..base },
         }
@@ -1813,6 +1881,62 @@ mod tests {
         assert!(!files_contain(&shared, b"sk_test_new") && !files_contain(&shared, b"sk_test_old"), "the folder holds no plaintext");
 
         for a in [ben, ann] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        let _ = fs::remove_dir_all(shared);
+    }
+
+    #[test]
+    fn removing_someone_lists_what_they_had_and_they_get_nothing_new() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ben, ann, priya) = (app("Ben"), app("Ann"), app("Priya"));
+        let shared = temp("shared");
+        fs::create_dir_all(&shared).unwrap();
+        let team = ben.handoff.make_folder_team("Platform", &shared).unwrap();
+        for who in [&ann, &priya] {
+            who.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+            who.handoff.join_team(None).unwrap();
+        }
+        for p in ben.handoff.view().folder_teams[0].asking.clone() {
+            ben.handoff.add_to_team(&team, &p.id).unwrap();
+        }
+        let hold = |label: &str, value: &[u8]| hex(&ben.handoff.lock().vault.add(label, None, None, &Secret::new(value.to_vec()), Keep::Forever, now()));
+        let (stripe, openai) = (hold("Stripe", b"sk_test_stripe_1"), hold("OpenAI", b"sk-test-openai-1"));
+        ben.handoff.share_with_folder_team(&team, &stripe).unwrap();
+        ben.handoff.share_with_folder_team(&team, &openai).unwrap();
+        assert_eq!(priya.handoff.view().keys.len(), 2);
+        let priya_lock = {
+            let core = priya.handoff.lock();
+            let Role::Member { lock, .. } = &core.folder_teams[0].role else { panic!("member") };
+            TeamLock::from_bytes(lock)
+        };
+
+        // Ben takes Priya off: he's shown exactly what she had.
+        let priya_id = ben.handoff.view().folder_teams[0].people.iter().find(|p| p.name == "Priya").unwrap().id.clone();
+        ben.handoff.remove_from_team(&team, &priya_id).unwrap();
+        let kept = &ben.handoff.view().folder_teams[0];
+        assert_eq!((kept.members.clone(), kept.to_replace.clone()), (vec!["Ann".to_string()], vec!["Stripe".to_string(), "OpenAI".to_string()]));
+        assert_eq!(folder::state(&shared).unwrap().open(&priya_lock).unwrap_err(), SealError::UnknownRequest, "no slot for her");
+        let told = priya.handoff.view();
+        assert!(told.notice.unwrap().contains("Ben took you off Platform"));
+        assert!(told.folder_teams.is_empty());
+
+        // Replacing Stripe clears it from the list and reaches Ann, not Priya.
+        ben.handoff.replace(&stripe).unwrap();
+        copy(b"sk_test_stripe_2");
+        ben.handoff.keep_replacement().unwrap();
+        assert_eq!(ben.handoff.view().folder_teams[0].to_replace, ["OpenAI"]);
+        let value = |a: &App, label: &str| {
+            let core = a.handoff.lock();
+            let id = core.vault.find(label).unwrap();
+            core.vault.secret(id).unwrap().expose().to_vec()
+        };
+        let _ = ann.handoff.view();
+        assert_eq!(value(&ann, "Stripe"), b"sk_test_stripe_2");
+        let _ = priya.handoff.view();
+        assert_eq!(value(&priya, "Stripe"), b"sk_test_stripe_1", "she keeps only what she had");
+
+        for a in [ben, ann, priya] {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_dir_all(shared);

@@ -730,6 +730,8 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
 
 /** A team folder in Send a key: its row, then anyone asking to join it, for the keeper to add. */
 function FolderTeamRows({ team, run, onPick }: { team: FolderTeamView; run: Run; onPick: () => void }) {
+  // The person whose cross was clicked once; a second click removes them.
+  const [armed, setArmed] = useState<string | null>(null);
   const meta = team.waiting
     ? `Waiting for ${team.keeper} to add you`
     : team.members.length
@@ -749,6 +751,33 @@ function FolderTeamRows({ team, run, onPick }: { team: FolderTeamView; run: Run;
           </span>
         </button>
       </div>
+      {team.to_replace.length > 0 && (
+        <div className="warning">
+          <Icon name="alert" />
+          <div>
+            <b>Replace with the provider: {team.to_replace.join(", ")}</b>
+            <p>Someone who left still has these. Make new ones, then click Replace on each, and the team gets them.</p>
+          </div>
+        </div>
+      )}
+      {team.people.map((p) => (
+        <div key={p.id} className="key-row">
+          <span className="key-ico"><Icon name="user" /></span>
+          <span className="who">
+            <span className="nm">{p.name}</span>
+            <span className="meta mono">{p.computer}</span>
+          </span>
+          <button
+            className={`forget ${armed === p.id ? "sure" : ""}`}
+            aria-label={`Take ${p.name} off ${team.name}`}
+            title={`Take ${p.name} off ${team.name}. They get nothing new, and you see which keys to replace.`}
+            onClick={() => (armed === p.id ? void run(api.removeFromTeam(team.id, p.id)) : setArmed(p.id))}
+            onBlur={() => setArmed(null)}
+          >
+            {armed === p.id ? `Take off ${team.name}?` : <Icon name="close" />}
+          </button>
+        </div>
+      ))}
       {team.asking.map((p) => (
         <div key={p.id} className="key-row">
           <span className="key-ico on"><Icon name="user" /></span>

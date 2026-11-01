@@ -84,6 +84,10 @@ export interface FolderTeamView {
   asking: ContactView[];
   /** For a joiner: asked, and the keeper hasn't added you yet. */
   waiting: boolean;
+  /** For the keeper: people on the team, to remove. */
+  people: ContactView[];
+  /** For the keeper: team keys someone who left still has, to replace with the provider. */
+  to_replace: string[];
 }
 
 /** A team invite you opened, waiting for Join. */
@@ -186,6 +190,8 @@ export const api = {
   closeInvite: () => invoke<void>("close_invite"),
   addToTeam: (team: string, member: string) => invoke<void>("add_to_team", { team, member }),
   turnAway: (team: string, member: string) => invoke<void>("turn_away", { team, member }),
+  /** Take someone off a team folder you keep; what they had waits to be replaced. */
+  removeFromTeam: (team: string, member: string) => invoke<void>("remove_from_team", { team, member }),
   /** Share a saved key with a team folder you keep; members get it through the folder. */
   shareWithFolderTeam: (team: string, key: string) => invoke<void>("share_with_folder_team", { team, key }),
   /** Catch a new value for a key you added, keeping its name and allowed programs. */
