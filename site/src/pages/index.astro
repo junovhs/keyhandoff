@@ -251,6 +251,47 @@ const INCIDENTS = [
       </div>
     </section>
 
+    <section class="wrap" id="standin">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="shield" />Stand-ins and tripwires</span>
+        <h2>Your program only holds a stand-in. The real key exists only inside encryption.</h2>
+        <p class="sub">On Linux, start a program with <code>keyhandoff run</code> and it gets a stand-in shaped exactly like your key. The real key goes in only on an encrypted connection to the key&rsquo;s own server, after KeyHandoff checks that server&rsquo;s certificate itself.</p>
+      </div>
+      <div class="sw-stage rv" id="sw-stage" data-step="0">
+        <p class="duo-cap" aria-live="polite">
+          <span class="s0"><b>1</b>Your program gets a stand-in, not the key.</span>
+          <span class="s1"><b>2</b>The real key goes in only inside the encryption.</span>
+          <span class="s2"><b>3</b>A poisoned package tries to send the stand-in out.</span>
+          <span class="s3"><b>4</b>It&rsquo;s stopped on the spot, and your team is warned.</span>
+        </p>
+        <div class="sw" aria-hidden="true">
+          <svg class="sw-forks" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path class="f-good" d="M33 50 C 37 50, 37 27, 41 27" />
+            <path class="f-bad" d="M33 50 C 37 50, 37 73, 41 73" />
+          </svg>
+          <span class="sw-tunnel"></span>
+          <span class="sw-tunnel-lock"><Icon name="lock" size={18} /></span>
+          <span class="sw-tunnel-label">Encrypted to api.stripe.com</span>
+          <span class="sw-path"></span>
+          <span class="sw-wire"></span>
+          <span class="sw-wire-label">tripwire</span>
+          <div class="sw-prog">
+            <span class="sw-title"><Icon name="terminal" size={16} />report.py</span>
+            <code class="sw-cmd">keyhandoff run -- python report.py</code>
+            <span class="sw-env"><span class="k">STRIPE_SECRET_KEY=</span><span class="v">sk_live_Q7xaR2mE</span></span>
+            <span class="sw-tag">stand-in</span>
+          </div>
+          <div class="sw-node good"><span class="sw-ico"><Icon name="check" size={20} /></span><b>api.stripe.com</b><span class="sw-note">Got the real key</span></div>
+          <div class="sw-node bad"><span class="sw-ico"><Icon name="out" size={20} /></span><b>collect.example</b><span class="sw-note">Refused from now on</span></div>
+          <span class="sw-pkt to-good"><span class="pkt-standin">sk_live_Q7xaR2mE</span><span class="pkt-sealed"><Icon name="lock" size={14} />real key</span></span>
+          <span class="sw-pkt to-bad"><span class="pkt-standin">sk_live_Q7xaR2mE</span></span>
+          <span class="sw-stop"><Icon name="shield" size={18} />Stopped</span>
+          <span class="sw-alert"><Icon name="users" size={15} />Ann and Priya are warned</span>
+        </div>
+      </div>
+      <p class="limits rv"><a href="/docs/keyhandoff-run/">How stand-ins and tripwires work</a></p>
+    </section>
+
     <section class="wrap panel" id="team">
       <div class="head rv">
         <span class="eyebrow"><Icon name="users" />3 · Share it</span>
@@ -408,7 +449,6 @@ const INCIDENTS = [
       <h2>Get your keys out of the file.</h2>
       {release ? (
         <>
-          <p class="sub">KeyHandoff is in pre-release and hasn't had a security audit, so start with test keys.</p>
           <p class="release-meta">Version {release.version} · <time datetime={release.date}>{release.date}</time> · x86-64</p>
           <div class="downloads">
             {release.packages.map((pkg) => (
@@ -434,7 +474,7 @@ const INCIDENTS = [
         </>
       ) : (
         <>
-          <p class="sub">KeyHandoff is in pre-release, so start with test keys. Build it from source and try a handoff today.</p>
+          <p class="sub">Build it from source and try a handoff today.</p>
           <div class="cta">
             <a class="btn primary" href={GITHUB}>Get it on GitHub <Icon name="right" /></a>
             <a class="btn secondary" href="/docs/">Read the docs</a>

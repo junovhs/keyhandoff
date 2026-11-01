@@ -24,6 +24,9 @@ if (solo) runFrames(solo, [["0", 2200], ["1", 3000], ["2", 2400], ["3", 6400]], 
 const circle = document.getElementById("circle-stage");
 // Ben has the keys, invites Ann and Priya, they join and get them, he changes one, then Priya leaves.
 if (circle) runFrames(circle, [["0", 2600], ["1", 3000], ["2", 3600], ["3", 3600], ["4", 4800]], "4");
+const standin = document.getElementById("sw-stage");
+// The stand-in, the real key going in on the way to Stripe, a package sending the stand-in out, then the tripwire.
+if (standin) runFrames(standin, [["0", 2800], ["1", 3600], ["2", 2600], ["3", 4400]], "3");
 const duo = document.getElementById("duo");
 // An opening line, three steps in Ben's window, two in Ann's, then a closing line.
 if (duo) runFrames(duo, [["intro", 3600], ["0", 2600], ["1", 2400], ["2", 3400], ["3", 2800], ["4", 3000], ["outro", 4000]], "4");
