@@ -35,7 +35,7 @@ KeyHandoff is a small desktop app for handing someone an API key, or any other s
 Encrypting a key at rest is the easy part. The real exposure comes from people handling it: looking at it, copying it, pasting it into a chat, saving it in a `.env` file. KeyHandoff keeps custody of the key from the provider's page onward, so people and their tools handle it as little as possible.
 
 > [!NOTE]
-> **Pre-release.** KeyHandoff hasn't had a security audit yet. Use it with test keys for now.
+> **Every claim is tested.** [What KeyHandoff protects, and what it doesn't](docs/threats.md) links each guarantee to the test that checks it, and lists every attack we tried against it.
 
 <br>
 
