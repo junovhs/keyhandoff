@@ -97,18 +97,24 @@ static __thread int talking;
 static void hp_init(void);
 
 __attribute__((constructor)) static void hook_init(void) {
-    const char *value = getenv(ENV_NAME);
+    char *value = getenv(ENV_NAME);
     if (!value || strlen(value) < TOKEN_HEX + 2 || value[TOKEN_HEX] != ':' || strlen(value + TOKEN_HEX + 1) >= sizeof socket_path)
         return;
     memcpy(token, value, TOKEN_HEX);
     strcpy(socket_path, value + TOKEN_HEX + 1);
     snprintf(hook_env, sizeof hook_env, "%s=%s", ENV_NAME, value);
-    /* Node runs its own TLS; keyhandoff_node.cjs reads the token there and removes it. */
+    /* unsetenv only drops the pointer: the token would stay in the process's
+     * first environment block, which /proc/<pid>/environ shows to anything
+     * running as you. Overwrite it where it lies. */
+    memset(value, 'x', TOKEN_HEX);
+    /* Node runs its own TLS; keyhandoff_node.cjs reads the token there and
+     * removes it, from a copy outside that block. */
     char exe[4096];
     ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
     exe[n > 0 ? n : 0] = 0;
     const char *base = strrchr(exe, '/');
-    if (!(base && !strncmp(base + 1, "node", 4))) unsetenv(ENV_NAME);
+    if (base && !strncmp(base + 1, "node", 4)) setenv(ENV_NAME, hook_env + sizeof ENV_NAME, 1);
+    else unsetenv(ENV_NAME);
     hp_init();
     active = 1;
 }

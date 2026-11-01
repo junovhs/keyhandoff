@@ -90,6 +90,37 @@ Nothing legitimate sends a placeholder anywhere but its key's servers, so a plac
 - **Refusing a destination can be too broad or too narrow.** A name is refused by name, so a leak to a shared service (a paste site, a cloud storage host) refuses that whole service for your runs; and an attacker can use a new name next time. Rule 4.
 - **Anyone on the team can refuse a destination for everyone.** A teammate's computer, or malware on it, could warn about a service you need. The warning names who wrote it.
 
+### Attacks on placeholders
+
+An attacker running as you, from inside a program started by `keyhandoff run` (a malicious package, a prompt-injected agent's command) or beside it. **Stopped**: refused before anything leaves. **Worthless**: something leaves, but only a placeholder, dead once the run ends. **Gets the key**: it does; why that's out of scope is in the reason. Tests are in [`src-tauri/src/core.rs`](../src-tauri/src/core.rs) and [`eval/`](../eval/).
+
+| Attack | Outcome | Evidence or reason |
+|---|---|---|
+| Read the environment, `.env`, `/proc/<pid>/environ`, logs | Worthless | They hold the placeholder: `keyhandoff_run_swaps_the_key_in_only_for_its_verified_host` |
+| Send the placeholder to another server over TLS | Stopped, alerted | Same test; `a_leaked_placeholder_is_blocked_traced_and_refused_for_the_team` |
+| …in plain HTTP, or any internet socket | Stopped | `curl_plain` in the coverage matrix |
+| …base64 (up to three levels), hex, percent-encoded or reversed | Stopped | `attack_replays` (Nx triple base64, Shai-Hulud double base64) |
+| …in a DNS name | Stopped | `attack_replays` (agent DNS replay) |
+| …compressed, encrypted or otherwise re-encoded | Worthless | Not recognised; still only a placeholder (gzip and WebSocket cells in the matrix) |
+| …in two halves | Worthless | `attacks_on_placeholders_get_no_key` (split) |
+| Send it with a raw `syscall(SYS_write)`, past libc | Worthless | Same test (syscall): the bytes leave, the key doesn't |
+| Use a TLS stack the hook isn't in (Go, rustls, Java, static OpenSSL) or QUIC | Worthless | The swap never happens, so only the placeholder can leave; not stopped (Go cell in the matrix) |
+| Remove `LD_PRELOAD` and start itself again | Worthless | The new process has no hook, so it has only the placeholder |
+| Name the key's host in SNI to a server of its own | Stopped | The hook checks the certificate, not the name asked for: `keyhandoff_run_swaps_the_key_in_only_for_its_verified_host` |
+| Present a self-signed certificate for the key's host | Stopped | Same test |
+| Trust an attacker CA through `SSL_CERT_FILE` or the program's own TLS settings | Stopped | The hook verifies against the system's roots and the key's CA only: `attacks_on_placeholders_get_no_key` (certfile) |
+| Read the hook's token from `/proc/self/environ` and ask KeyHandoff for the key | Stopped | The hook overwrites the token where it lies at load (it was readable before EVAL-04): `attacks_on_placeholders_get_no_key` (environ) |
+| Use a made-up token, or a real one from a process the run didn't start | Stopped | KeyHandoff answers only processes descended from the runner: same test |
+| Read the token from a child the hook isn't loaded in (a static binary) | Gets the key | That child's environment keeps the token, and code in the run can ask with it. Out of scope as "code that attacks the hook", but noted: keep static binaries out of runs that hold placeholders |
+| Read the hook's memory, or the key during a swap | Gets the key | In-process code can read its own memory. Only moving the swap out of the process (an eBPF uprobe, which needs privileges) would stop this |
+| Use the key at its own server | Gets the use, not the key | Code in the program can call the key's API as you, as any program allowed the key could: `attack_replays` (last row) |
+| Race the swap (change the buffer while it's swapped) | Stopped | The key goes only into the hook's private copy, written to the verified connection |
+| Rename an AI agent's process | Prompt without the agent's name | Agent detection is by name, a warning; approval stays bound to the exact command |
+| Replace the hook file in the runtime folder | Out of scope | Anything running as you can replace KeyHandoff itself; the runner rewrites the file when its contents differ |
+| `ptrace` or read KeyHandoff's memory while it's unlocked | Out of scope | See below |
+
+No one outside the project has reviewed this table yet.
+
 ### Anything running as you, or as an administrator
 
 - **The vault is locked by your passphrase, not by hardware.** While KeyHandoff is locked or closed, a program running as you can read every profile file and still can't open a key without the passphrase or recovery code. Test: [`only_the_passphrase_or_recovery_code_opens_the_vault`](../src-tauri/src/store.rs). But a copy of the files can be attacked offline by guessing passphrases; Argon2id makes each guess slow, and five random words are out of reach, but a short or common passphrase isn't. A TPM PIN, where the computer has a TPM, rate-limits guessing; Windows Hello is planned. KeyHandoff only uses hardware the computer already has. See [architecture.md](architecture.md#key-storage).

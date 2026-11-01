@@ -2990,6 +2990,7 @@ while True:
                     .args(["server.py", host, &format!("{file}.pem"), &format!("{file}.key"), &format!("{file}.got")])
                     .current_dir(dir)
                     .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
                     .spawn()
                     .ok()?;
                 let mut line = String::new();
@@ -3766,6 +3767,124 @@ else:
         fs::write(eval.join("results/benchmarks.json"), serde_json::to_string_pretty(&serde_json::json!({ "environment": env, "modes": rows })).unwrap()).unwrap();
         println!("{md}");
         let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{profile}-keys.sock")));
+        let _ = fs::remove_dir_all(me.data);
+    }
+
+    /// EVAL-04's attacks that have a test (eval/attacks/attack.py, and two
+    /// asked straight of the key socket). Code in the program can't read the
+    /// hook's token from its own or a child's environment; trusting an
+    /// attacker CA through SSL_CERT_FILE doesn't make an attacker's server
+    /// the key's; a raw write(2) past libc, or a placeholder split in two,
+    /// gets out but carries only the placeholder; and a made-up token, or a
+    /// real token from a process the run didn't start, gets no key.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn attacks_on_placeholders_get_no_key() {
+        use crate::run::tests::{finished, start};
+        use std::process::{Command, Stdio};
+        const STRIPE: &[u8] = b"sk_test_51SyntheticAttackKey0123456789abcdXYZ";
+        if ["python3", "openssl", "setsid"].iter().any(|p| Command::new(p).arg("version").output().is_err()) {
+            eprintln!("skipped: needs python3, openssl and setsid");
+            return;
+        }
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        let dir = me.data.join("project");
+        fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let servers = TlsServers::start(&dir, &["api.stripe.test", "evil.test", "self:api.stripe.test"]).expect("test TLS servers");
+        // A plain TCP collector.
+        let mut plain = Command::new("python3")
+            .args(["-c", "import socket\ns=socket.socket();s.bind(('127.0.0.1',0));s.listen(4);print(s.getsockname()[1],flush=True)\nwhile True:\n  c,_=s.accept();d=b''\n  while True:\n    x=c.recv(4096)\n    if not x: break\n    d+=x\n  open('plain.got','ab').write(d)"])
+            .current_dir(&dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(plain.stdout.take().unwrap()), &mut line).unwrap();
+        let ports = serde_json::json!({ "api.stripe.test": servers.ports[0], "evil.test": servers.ports[1], "self:api.stripe.test": servers.ports[2], "plain": line.trim().parse::<u16>().unwrap() });
+        fs::write(dir.join("attack.json"), serde_json::json!({ "ca": servers.ca, "ports": ports }).to_string()).unwrap();
+        fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval/attacks/attack.py"), dir.join("attack.py")).unwrap();
+        fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        {
+            let mut core = h.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(servers.ca.clone()));
+        }
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        let attack = |cmd: &[&str]| {
+            let out = start(&dir, &profile, cmd, None);
+            answer_when_asked(&h, Answer::Once);
+            let (text, code) = finished(&out);
+            assert_eq!(code, 0, "{text}");
+            text
+        };
+        let read = |f: &str| fs::read(dir.join(f)).unwrap_or_default();
+        let has = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
+
+        // The token isn't in this process's environment block, or a child's.
+        let text = attack(&["python3", "attack.py", "environ"]);
+        assert!(text.contains("no token found") && !text.contains("asked with a stolen token"), "{text}");
+
+        // An attacker CA trusted through SSL_CERT_FILE: the hook verifies against its own roots.
+        let self_signed = dir.join("self_api.stripe.test.pem");
+        let text = attack(&["sh", "-c", &format!("SSL_CERT_FILE={} exec python3 attack.py certfile", self_signed.display())]);
+        assert!(text.contains("refused"), "{text}");
+        assert!(!has(&read("self_api.stripe.test.got"), STRIPE), "the attacker's server got the key");
+
+        // Past libc with a raw syscall, or in two halves: out, but only the placeholder.
+        let text = attack(&["python3", "attack.py", "syscall"]);
+        assert!(text.contains("raw write returned"), "{text}");
+        let text = attack(&["python3", "attack.py", "split"]);
+        assert!(text.contains("sent"), "{text}");
+        assert!(!has(&read("plain.got"), STRIPE) && !has(&read("evil.test.got"), STRIPE), "a stranger got the key");
+        assert!(!read("plain.got").is_empty(), "the raw write did go out (it's the placeholder)");
+
+        // Asking the key socket directly: a made-up token, or a real one from outside the run.
+        let sock = os::runtime_dir().join(format!("handoff-{profile}-keys.sock"));
+        let mut real = String::new();
+        let ask = |token: &str| {
+            let mut c = std::os::unix::net::UnixStream::connect(&sock).unwrap();
+            let q = serde_json::json!({ "swap": { "token": token, "placeholder": "x", "host": "api.stripe.test" } });
+            std::io::Write::write_all(&mut c, format!("{q}\n").as_bytes()).unwrap();
+            let mut r = String::new();
+            std::io::Read::read_to_string(&mut c, &mut r).unwrap();
+            r
+        };
+        assert!(ask(&"0".repeat(64)).starts_with("no "), "a made-up token");
+        // Hold a run open to have a live token, and ask with it from this test process.
+        let (tx, rx) = mpsc::channel();
+        let held = {
+            let (h, sock) = (h.clone(), sock.clone());
+            std::thread::spawn(move || {
+                let runner = Peer { pid: std::process::id(), program: std::env::current_exe().unwrap(), folder: None, command: None, args: vec![], agent: None };
+                let (_, token) = h.begin_run(&runner, &["Stripe".into()], vec![Secret::new(STRIPE.to_vec())]);
+                tx.send(token.unwrap()).unwrap();
+                let _ = sock;
+            })
+        };
+        real.push_str(&rx.recv().unwrap());
+        held.join().unwrap();
+        // From a process the run didn't start (detached, so not a child of this test).
+        let detached = dir.join("outsider.out");
+        Command::new("setsid")
+            .args(["-f", "sh", "-c", &format!("python3 -c \"import socket,json;c=socket.socket(socket.AF_UNIX);c.connect('{}');c.sendall((json.dumps({{'swap':{{'token':'{}','placeholder':'x','host':'api.stripe.test'}}}})+'\\n').encode());print(c.recv(100).decode())\" > {}", sock.display(), real, detached.display())])
+            .env_remove("CLAUDECODE")
+            .status()
+            .unwrap();
+        let reply = (0..300).find_map(|_| {
+            std::thread::sleep(Duration::from_millis(10));
+            fs::read_to_string(&detached).ok().filter(|s| !s.is_empty())
+        });
+        assert!(reply.as_deref().is_some_and(|r| r.starts_with("no not started by this run")), "{reply:?}");
+
+        let _ = plain.kill();
+        let _ = plain.wait();
+        drop(servers);
+        let _ = fs::remove_file(sock);
         let _ = fs::remove_dir_all(me.data);
     }
 
