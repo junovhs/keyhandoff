@@ -1,6 +1,6 @@
 # What KeyHandoff protects, and what it doesn't
 
-KeyHandoff is pre-release and has not had a security audit. This page lists what holds as written, and the gaps, so nobody has to find them on their own. Each claim links to the test that checks it or the design rule that requires it. Rules are in [docs/rules/keyhandoff.md](rules/keyhandoff.md).
+This page lists what KeyHandoff protects and where that protection stops, so nobody has to find the gaps on their own. Each claim links to the test that checks it or the design rule that requires it, and every attack we tried against placeholders is in [Attacks on placeholders](#attacks-on-placeholders), with its outcome. Rules are in [docs/rules/keyhandoff.md](rules/keyhandoff.md). The design is written up for peer review in [paper/draft.md](../paper/draft.md), and [eval/run.sh](../eval/run.sh) lets anyone rerun every measured result.
 
 ## What holds
 
