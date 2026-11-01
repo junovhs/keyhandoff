@@ -16,10 +16,13 @@
   --ease: cubic-bezier(.22, 1, .36, 1);
   color-scheme: dark;
 }
-/* Just you, Your code and Your team are full-width sections, a step lighter than the page,
-   each with a top edge and a soft light so they read as three. */
+/* Just you and Your team are full-width bands with Your code on the plain page between them,
+   so the rhythm goes band, page, band. Each band has its own light: Just you's comes from the
+   left beside its window, Your team's rises from below its two windows. */
 .wrap.panel { position: relative; }
-.wrap.panel::before { content: ""; position: absolute; inset: 0 calc(50% - 50vw); z-index: -1; border-top: 1px solid var(--line); background: radial-gradient(50% 240px at 50% 0, rgba(26, 109, 255, .12), transparent), linear-gradient(180deg, #0a1122, var(--ground)); }
+.wrap.panel::before { content: ""; position: absolute; inset: 0 calc(50% - 50vw); z-index: -1; border-block: 1px solid var(--line); }
+#solo.panel::before { background: radial-gradient(40% 70% at 22% 55%, rgba(26, 109, 255, .14), transparent), linear-gradient(180deg, #0a1122, #070c18); }
+#team.panel::before { background: radial-gradient(55% 60% at 50% 100%, rgba(90, 92, 255, .16), transparent), linear-gradient(180deg, #070c18, #0b1226); }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 100px; }
 body { margin: 0; background: var(--ground); color: var(--text); font: 17px/1.55 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
