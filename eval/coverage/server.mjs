@@ -23,7 +23,9 @@ function handle(req, res) {
         body = gunzipSync(body);
       } catch {}
     }
-    record({ proto: req.httpVersion === "2.0" ? "h2" : "h1", headers: req.headers, body: body.toString("latin1") });
+    const auth = req.headers.authorization ?? "";
+    const basic = auth.startsWith("Basic ") ? Buffer.from(auth.slice(6), "base64").toString("latin1") : undefined;
+    record({ proto: req.httpVersion === "2.0" ? "h2" : "h1", headers: req.headers, basic, body: body.toString("latin1") });
     res.writeHead(200, { "content-type": "text/plain" });
     res.end("ok");
   });

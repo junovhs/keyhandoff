@@ -174,7 +174,7 @@ fn base64(data: &[u8], alphabet: &[u8; 64]) -> Zeroizing<String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     const KEY: &[u8] = b"sk_test_51SyntheticKeyForMaskingTests0123";
@@ -191,6 +191,10 @@ mod tests {
 
     fn b64(data: &[u8]) -> String {
         base64(data, STANDARD).to_string()
+    }
+
+    pub(crate) fn base64_text(data: &[u8]) -> String {
+        super::base64(data, STANDARD).to_string()
     }
 
     #[test]

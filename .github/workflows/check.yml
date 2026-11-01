@@ -1,6 +1,7 @@
 # Tests on every push to main. Linux runs the whole suite and the coverage
 # matrix (eval/results/coverage.md): every cell the docs claim must be
-# protected, and no stranger may ever get a key. Windows builds the app and
+# protected, and no stranger may ever get a key; and the attack replays
+# (eval/results/replays.md): no real key leaves, and every send is stopped. Windows builds the app and
 # runs its tests, since placeholders and the TLS hook are Linux only so far.
 name: check
 
@@ -37,6 +38,9 @@ jobs:
         working-directory: src-tauri
       - name: coverage matrix
         run: cargo test --lib coverage_matrix -- --ignored --nocapture
+        working-directory: src-tauri
+      - name: attack replays
+        run: cargo test --lib attack_replays -- --ignored --nocapture
         working-directory: src-tauri
       - uses: actions/upload-artifact@v4
         if: always()

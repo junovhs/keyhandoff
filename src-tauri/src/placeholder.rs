@@ -84,6 +84,38 @@ pub fn placeholder(key: &[u8]) -> Option<Zeroizing<String>> {
     }
 }
 
+/// Whether `text` holds `needle`, as written or inside up to `depth` layers
+/// of base64 (as stealers encode what they take), at any byte offset.
+pub fn reveals(text: &[u8], needle: &[u8], depth: u32) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    if text.windows(needle.len()).any(|w| w == needle) {
+        return true;
+    }
+    if depth == 0 {
+        return false;
+    }
+    let is_b64 = |c: u8| c.is_ascii_alphanumeric() || c == b'+' || c == b'/' || c == b'=';
+    text.split(|&c| !is_b64(c))
+        .filter(|run| run.len() >= 16)
+        .any(|run| (0..4).any(|skip| reveals(&from_base64(&run[skip..]), needle, depth - 1)))
+}
+
+fn from_base64(run: &[u8]) -> Vec<u8> {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let (mut out, mut bits, mut held) = (Vec::with_capacity(run.len() * 3 / 4), 0u32, 0);
+    for &c in run.iter().take_while(|&&c| c != b'=') {
+        bits = bits << 6 | ALPHABET.iter().position(|&a| a == c).unwrap_or(0) as u32;
+        held += 6;
+        if held >= 8 {
+            held -= 8;
+            out.push((bits >> held) as u8);
+        }
+    }
+    out
+}
+
 fn prefix_len(key: &[u8]) -> usize {
     if let Some((prefix, _)) = KNOWN.iter().find(|(prefix, _)| key.starts_with(prefix.as_bytes())) {
         return prefix.len();
@@ -110,5 +142,7 @@ mod tests {
         assert!(placeholder("ключ".as_bytes()).is_none());
         assert_eq!(clean_host("https://API.Stripe.com/v1").as_deref(), Some("api.stripe.com"));
         assert_eq!(clean_host("localhost"), None);
+        let triple = (0..3).fold(b"{\"k\":\"sk_test_PLACEHOLDER123\"}".to_vec(), |t, _| crate::mask::tests::base64_text(&t).into_bytes());
+        assert!(reveals(&triple, b"sk_test_PLACEHOLDER123", 3) && !reveals(&triple, b"sk_test_PLACEHOLDER123", 2));
     }
 }

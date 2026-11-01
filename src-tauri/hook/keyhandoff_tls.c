@@ -8,7 +8,8 @@
  * real key, swaps it into a copy of the bytes being encrypted, writes them
  * and wipes the copy.
  *
- * A placeholder going anywhere else is a leak in the act, since nothing
+ * A placeholder going anywhere else, as written or encoded (base64 up to
+ * three levels deep, hex, percent-encoded, reversed), is a leak in the act, since nothing
  * legitimate sends it elsewhere: the write is refused before a byte leaves,
  * over TLS or a plain socket, and KeyHandoff is told where it was going. It
  * remembers that destination, and the hook refuses connections to it, and
@@ -50,6 +51,10 @@ typedef struct stack_st STACK;
 #define MAX_SWAPS 64
 #define MAX_HOSTS 512
 #define MAX_BLOCKED 128
+/* Encoded forms of a placeholder the tripwire knows: base64 (standard,
+ * three levels deep, at each byte offset; URL-safe, one level), hex,
+ * percent-encoded and reversed. */
+#define MAX_FORMS 64
 #define TLSEXT_NAMETYPE_host_name 0
 #define SSL_CTRL_MODE 33
 #define SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER 0x2L
@@ -66,6 +71,11 @@ struct swap {
     size_t len;
     char hosts[MAX_HOSTS];
     char *ca;
+    /* The first three forms are one level of standard base64, which the
+     * swap can also decode, swap and encode again (HTTP Basic auth). */
+    char *forms[MAX_FORMS];
+    size_t form_len[MAX_FORMS];
+    int nforms;
 };
 static struct swap swaps[MAX_SWAPS];
 static int swap_count = -1; /* -1: not asked yet */
@@ -160,6 +170,150 @@ static int ask(const char *line, char *out, size_t cap) {
     return (int)(end - out);
 }
 
+/* ---- Encoded forms ---- */
+
+static const char B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char B64URL[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+static size_t b64_encode(const unsigned char *in, size_t n, char *out, const char *alphabet, int pad) {
+    size_t o = 0;
+    for (size_t i = 0; i < n; i += 3) {
+        unsigned v = (unsigned)in[i] << 16 | (i + 1 < n ? (unsigned)in[i + 1] << 8 : 0) | (i + 2 < n ? in[i + 2] : 0);
+        size_t chars = n - i >= 3 ? 4 : n - i + 1;
+        for (size_t k = 0; k < 4; k++) {
+            if (k < chars) out[o++] = alphabet[v >> (18 - 6 * k) & 63];
+            else if (pad) out[o++] = '=';
+        }
+    }
+    return o;
+}
+
+static int b64_value(char c) {
+    const char *at = c ? strchr(B64, c) : 0;
+    return at ? (int)(at - B64) : -1;
+}
+
+/* Standard base64, padded or not; returns the length, or -1. */
+static long b64_decode(const char *in, size_t n, unsigned char *out) {
+    while (n && in[n - 1] == '=') n--;
+    if (n % 4 == 1) return -1;
+    size_t o = 0;
+    unsigned v = 0;
+    for (size_t i = 0; i < n; i++) {
+        int d = b64_value(in[i]);
+        if (d < 0) return -1;
+        v = v << 6 | (unsigned)d;
+        if (i % 4 == 3) {
+            out[o++] = (unsigned char)(v >> 16);
+            out[o++] = (unsigned char)(v >> 8);
+            out[o++] = (unsigned char)v;
+            v = 0;
+        }
+    }
+    if (n % 4 == 2) out[o++] = (unsigned char)(v >> 4);
+    if (n % 4 == 3) {
+        out[o++] = (unsigned char)(v >> 10);
+        out[o++] = (unsigned char)(v >> 2);
+    }
+    return (long)o;
+}
+
+static void add_form(struct swap *s, const char *form, size_t n) {
+    if (s->nforms >= MAX_FORMS || n < 12) return;
+    char *copy = malloc(n);
+    if (!copy) return;
+    memcpy(copy, form, n);
+    s->forms[s->nforms] = copy;
+    s->form_len[s->nforms++] = n;
+}
+
+/* The characters of `text`'s base64 that depend on nothing else, whatever
+ * comes before it (0, 1 or 2 bytes, mod 3) or after it. */
+static void add_base64(struct swap *s, const char *text, size_t n, const char *alphabet, int depth) {
+    char *padded = malloc(n + 2), *enc = malloc((n + 2) / 3 * 4 + 4);
+    if (!padded || !enc) {
+        free(padded);
+        free(enc);
+        return;
+    }
+    for (size_t offset = 0; offset < 3; offset++) {
+        memset(padded, 0, offset);
+        memcpy(padded + offset, text, n);
+        b64_encode((unsigned char *)padded, n + offset, enc, alphabet, 0);
+        size_t skip = (offset * 8 + 5) / 6, keep = (n + offset) * 8 / 6;
+        if (keep <= skip) continue;
+        int first = s->nforms;
+        add_form(s, enc + skip, keep - skip);
+        if (depth > 1 && s->nforms > first) add_base64(s, s->forms[first], s->form_len[first], alphabet, depth - 1);
+    }
+    free(padded);
+    free(enc);
+}
+
+static void add_forms(struct swap *s) {
+    const char *p = s->placeholder;
+    size_t n = s->len;
+    add_base64(s, p, n, B64, 1); /* the first three: one level, for the swap */
+    char *buf = malloc(n * 3 + 1);
+    if (!buf) return;
+    for (int upper = 0; upper < 2; upper++) {
+        for (size_t i = 0; i < n; i++) snprintf(buf + 2 * i, 3, upper ? "%02X" : "%02x", (unsigned char)p[i]);
+        add_form(s, buf, 2 * n);
+        for (size_t i = 0; i < n; i++) snprintf(buf + 3 * i, 4, upper ? "%%%02X" : "%%%02x", (unsigned char)p[i]);
+        add_form(s, buf, 3 * n);
+    }
+    for (size_t i = 0; i < n; i++) buf[i] = p[n - 1 - i];
+    add_form(s, buf, n);
+    free(buf);
+    for (int i = 0, levels = s->nforms; i < 3 && i < levels; i++) add_base64(s, s->forms[i], s->form_len[i], B64, 2);
+    add_base64(s, p, n, B64URL, 1);
+}
+
+/* 1: the placeholder as written; 2: in one level of standard base64; 3: in
+ * another form; 0: none of them. */
+static int found(const struct swap *s, const void *buf, size_t len) {
+    if (!buf) return 0;
+    if (memmem(buf, len, s->placeholder, s->len)) return 1;
+    for (int i = 0; i < s->nforms; i++)
+        if (memmem(buf, len, s->forms[i], s->form_len[i])) return i < 3 ? 2 : 3;
+    return 0;
+}
+
+static int is_b64_char(unsigned char c) {
+    return c == '=' || b64_value((char)c) >= 0;
+}
+
+/* Swap the key into every base64 run in `buf` that decodes to text holding
+ * the placeholder, encoding it again the same length. */
+static void swap_base64(unsigned char *buf, size_t n, const struct swap *s, const char *key) {
+    for (int f = 0; f < 3 && f < s->nforms; f++) {
+        for (unsigned char *at = buf; (at = memmem(at, n - (size_t)(at - buf), s->forms[f], s->form_len[f]));) {
+            size_t start = (size_t)(at - buf), end = start + s->form_len[f];
+            while (start && is_b64_char(buf[start - 1]) && buf[start - 1] != '=') start--;
+            while (end < n && is_b64_char(buf[end])) end++;
+            size_t run = end - start;
+            unsigned char *plain = malloc(run);
+            char *enc = malloc(run + 4);
+            long pn = plain && enc ? b64_decode((char *)buf + start, run, plain) : -1;
+            if (pn > 0) {
+                int changed = 0;
+                for (unsigned char *p = plain; (p = memmem(p, (size_t)pn - (size_t)(p - plain), s->placeholder, s->len)); p += s->len) {
+                    memcpy(p, key, s->len);
+                    changed = 1;
+                }
+                size_t en = b64_encode(plain, (size_t)pn, enc, B64, buf[end - 1] == '=');
+                if (changed && en == run) memcpy(buf + start, enc, run);
+                explicit_bzero(plain, (size_t)pn);
+                explicit_bzero(enc, en);
+            }
+            free(plain);
+            free(enc);
+            at = buf + end;
+            if (end >= n) break;
+        }
+    }
+}
+
 /* The run's placeholders, asked for once: "placeholder\thost,host\tca" per
  * line, and destinations to refuse, "!destination" per line. */
 static void load_swaps(void) {
@@ -193,7 +347,10 @@ static void load_swaps(void) {
         s->len = strlen(line);
         snprintf(s->hosts, sizeof s->hosts, "%s", hosts);
         s->ca = ca && *ca ? strdup(ca) : 0;
-        if (s->placeholder && s->len) swap_count++;
+        if (s->placeholder && s->len) {
+            add_forms(s);
+            swap_count++;
+        }
     }
     free(reply);
 }
@@ -234,7 +391,7 @@ static void report(const struct swap *s, const char *destination) {
 /* The first placeholder in `buf`, if any. */
 static const struct swap *placeholder_in(const void *buf, size_t len) {
     for (int i = 0; buf && i < swap_count; i++)
-        if (memmem(buf, len, swaps[i].placeholder, swaps[i].len)) return &swaps[i];
+        if (found(&swaps[i], buf, len)) return &swaps[i];
     return 0;
 }
 
@@ -572,7 +729,7 @@ static int swap_in(SSL *ssl, const char *destination, unsigned char *text, size_
     int changed = 0;
     for (int i = 0; i < swap_count; i++) {
         const struct swap *s = &swaps[i];
-        if (!memmem(text, n, s->placeholder, s->len)) continue;
+        if (!found(s, text, n)) continue;
         int state = decide(ssl, destination, i, v);
         if (state == ELSEWHERE) {
             *leak = i;
@@ -580,6 +737,7 @@ static int swap_in(SSL *ssl, const char *destination, unsigned char *text, size_
         }
         if (state != SWAP) continue;
         for (unsigned char *at = text; (at = memmem(at, n - (size_t)(at - text), s->placeholder, s->len)); at += s->len) memcpy(at, v[i].key, s->len);
+        swap_base64(text, n, s, v[i].key);
         changed = 1;
     }
     return changed;
@@ -774,7 +932,7 @@ static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy, s
         int changed = 0;
         for (int i = 0; i < swap_count && leak < 0; i++) {
             const struct swap *s = &swaps[i];
-            if (!memmem(work, n, s->placeholder, s->len)) continue;
+            if (!found(s, work, n)) continue;
             int state = decide(ssl, destination, i, v);
             if (state == ELSEWHERE) leak = i;
             if (state != SWAP) continue;
@@ -784,6 +942,7 @@ static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy, s
                 work = (unsigned char *)*copy;
             }
             for (unsigned char *at = work; (at = memmem(at, n - (size_t)(at - work), s->placeholder, s->len)); at += s->len) memcpy(at, v[i].key, s->len);
+            swap_base64(work, n, s, v[i].key);
             changed = 1;
         }
         (void)changed;
@@ -943,12 +1102,52 @@ int connect(int fd, const struct sockaddr *to, socklen_t len) {
     return real_connect(fd, to, len);
 }
 
+/* A name that carries a placeholder (a DNS lookup can leak it on its own),
+ * as written in any case or encoded: the domain it would reach, past the
+ * labels holding it. */
+static const struct swap *placeholder_in_name(const char *node, const char **domain) {
+    size_t n = strlen(node);
+    char *lower = malloc(n + 1);
+    if (!lower) return 0;
+    for (size_t i = 0; i <= n; i++) lower[i] = node[i] >= 'A' && node[i] <= 'Z' ? (char)(node[i] + 32) : node[i];
+    const struct swap *hit = 0;
+    for (int i = 0; i < swap_count && !hit; i++) {
+        char *ph = malloc(swaps[i].len + 1);
+        if (!ph) break;
+        for (size_t k = 0; k <= swaps[i].len; k++) {
+            char c = k < swaps[i].len ? swaps[i].placeholder[k] : 0;
+            ph[k] = c >= 'A' && c <= 'Z' ? (char)(c + 32) : c;
+        }
+        /* DNS labels hold 63 characters, so a long placeholder may be cut: 24 is plenty to know it. */
+        size_t need = swaps[i].len < 24 ? swaps[i].len : 24;
+        ph[need] = 0;
+        if (strstr(lower, ph) || found(&swaps[i], node, n)) hit = &swaps[i];
+        free(ph);
+    }
+    free(lower);
+    if (hit) {
+        /* The last two labels: where the lookup ends up. */
+        const char *d = node + n;
+        int dots = 0;
+        while (d > node && dots < 2)
+            if (*--d == '.') dots++;
+        *domain = dots == 2 ? d + 1 : node;
+    }
+    return hit;
+}
+
 int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
     REAL(int, getaddrinfo, (const char *, const char *, const struct addrinfo *, struct addrinfo **));
     if (active && !talking && node) {
         ensure_loaded();
         if (is_blocked(node)) {
             say("refused a connection to", node);
+            return EAI_NONAME;
+        }
+        const char *domain = node;
+        const struct swap *s = placeholder_in_name(node, &domain);
+        if (s) {
+            report(s, domain);
             return EAI_NONAME;
         }
     }

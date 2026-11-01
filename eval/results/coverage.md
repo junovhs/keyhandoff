@@ -12,6 +12,7 @@ The same keyed request, under `keyhandoff run`, to a server verified as the key'
 | Python | OpenSSL (system) | WebSocket upgrade, header | key | nothing | protected (claimed) |
 | Python | OpenSSL (system) | WebSocket message (masked) | placeholder | placeholder | key safe, not protected |
 | curl | OpenSSL (system) | HTTP/1.1, header | key | nothing | protected (claimed) |
+| curl | OpenSSL (system) | HTTP/1.1, Basic auth (base64) | key | nothing | protected (claimed) |
 | curl | OpenSSL (system), nghttp2 | HTTP/2, header (HPACK) | key | nothing | protected (claimed) |
 | curl | OpenSSL (system), nghttp2 | HTTP/2, body | key | the request, without key or placeholder | protected (claimed) |
 | curl | none | plain HTTP to a stranger | - | nothing | protected (claimed) |
