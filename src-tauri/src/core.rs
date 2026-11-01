@@ -113,6 +113,8 @@ struct Core {
     folder_teams: Vec<FolderTeam>,
     /// An invite just opened, waiting for Join, and the folder it was opened from.
     invited: Option<(Invite, Option<PathBuf>)>,
+    /// The key Safe Copy is catching a new value for, when replacing one.
+    replacing: Option<[u8; 16]>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -156,6 +158,8 @@ pub struct SafeView {
     pub apps: Vec<String>,
     /// Something read the clipboard bait while Safe Copy listened.
     pub read: bool,
+    /// The key a new value is being caught for, when replacing one.
+    pub replacing: Option<String>,
 }
 
 /// A program asking for kept keys, waiting for Allow.
@@ -281,6 +285,7 @@ impl Handoff {
             teams,
             folder_teams,
             invited: None,
+            replacing: None,
             approvals,
             program: None,
             asks: 0,
@@ -429,7 +434,7 @@ impl Handoff {
             folder: folder.to_path_buf(),
             keeper: *core.identity.public().as_bytes(),
             keeper_name: core.settings.name.clone(),
-            role: Role::Keeper { members: Vec::new(), declined: Vec::new(), version: 0 },
+            role: Role::Keeper { members: Vec::new(), declined: Vec::new(), version: 0, keys: Vec::new() },
         };
         core.folder_teams.push(team);
         core.save_folder_teams()?;
@@ -457,7 +462,7 @@ impl Handoff {
             folder,
             keeper: *invite.keeper().as_bytes(),
             keeper_name: invite.keeper_name().to_string(),
-            role: Role::Member { lock: *lock.to_bytes(), version: 0, members: Vec::new() },
+            role: Role::Member { lock: *lock.to_bytes(), version: 0, members: Vec::new(), keys: Vec::new() },
         });
         core.save_folder_teams()?;
         core.invited = None;
@@ -468,6 +473,28 @@ impl Handoff {
     /// Put away the invite just opened without joining.
     pub fn close_invite(&self) {
         self.lock().invited = None;
+    }
+
+    /// Share a key you hold with a team you keep: it goes into the next
+    /// version, and members get it through the folder.
+    pub fn share_with_folder_team(&self, team_id: &str, key_id: &str) -> Result<(), String> {
+        let mut core = self.lock();
+        let id = parse_id(key_id)?;
+        let index = core.keeping(team_id)?;
+        let label = core.vault.items().iter().find(|i| i.id == id).map(|i| i.label.clone()).ok_or("That key is no longer here.")?;
+        let name = core.folder_teams[index].name.clone();
+        let Role::Keeper { keys, members, .. } = &mut core.folder_teams[index].role else { unreachable!("keeping") };
+        if members.is_empty() {
+            return Err(format!("No one is on {name} yet. Add people when they ask to join."));
+        }
+        if !keys.contains(&id) {
+            keys.push(id);
+        }
+        core.vault.set_team(id, &name);
+        core.store.save_vault(&core.vault)?;
+        core.write_team(index)?;
+        core.notice = Some(format!("{label} is shared with {name}. Everyone on it gets it through the folder."));
+        Ok(())
     }
 
     /// The keeper adds someone who asked to join: the next version of the
@@ -556,7 +583,55 @@ impl Handoff {
 
     /// Add: arm Safe Copy for a key of your own.
     pub fn add(&self) -> Result<(), String> {
+        self.lock().replacing = None;
         self.arm()
+    }
+
+    /// Catch a new value for a key you added yourself, for when you rotate it
+    /// with the provider. It keeps its name and the programs allowed to use it.
+    pub fn replace(&self, key_id: &str) -> Result<(), String> {
+        let id = parse_id(key_id)?;
+        {
+            let core = self.lock();
+            let item = core.vault.items().iter().find(|i| i.id == id).ok_or("That key is no longer here.")?;
+            if item.from.is_some() {
+                return Err(format!("{} came from {}. They replace it, and you get the new one.", item.label, item.from.as_deref().unwrap_or("someone")));
+            }
+        }
+        self.arm()?;
+        self.lock().replacing = Some(id);
+        Ok(())
+    }
+
+    /// Put the caught value in the key being replaced. Teams you keep that
+    /// share it get the new version through their folders.
+    pub fn keep_replacement(&self) -> Result<(), String> {
+        let mut core = self.lock();
+        let id = core.replacing.ok_or("There is no key being replaced.")?;
+        let Safe::Caught { secret, .. } = &core.safe else {
+            return Err("There is no caught key to keep.".into());
+        };
+        let secret = Secret::new(secret.expose().to_vec());
+        if !core.vault.replace(id, &secret) {
+            return Err("That key is no longer here.".into());
+        }
+        core.store.save_vault(&core.vault)?;
+        let label = core.vault.items().iter().find(|i| i.id == id).map(|i| i.label.clone()).unwrap_or_default();
+        let teams: Vec<usize> = (0..core.folder_teams.len())
+            .filter(|&i| matches!(&core.folder_teams[i].role, Role::Keeper { keys, .. } if keys.contains(&id)))
+            .collect();
+        for &i in &teams {
+            core.write_team(i)?;
+        }
+        core.safe = Safe::Off;
+        core.replacing = None;
+        let reach = match teams.as_slice() {
+            [] => String::new(),
+            [i] => format!(" {} gets it through the folder.", core.folder_teams[*i].name),
+            _ => " Your teams get it through their folders.".into(),
+        };
+        core.notice = Some(format!("{label} is replaced. Programs using it get the new key.{reach}"));
+        Ok(())
     }
 
     /// Arm again after a timeout or failure.
@@ -863,6 +938,7 @@ impl Core {
             _ => {}
         }
         self.generation += 1;
+        self.replacing = None;
     }
 
     /// Open a sealed key: the one-time key is destroyed and saved first
@@ -914,10 +990,18 @@ impl Core {
     /// Write the next version of a team you keep into its folder.
     fn write_team(&mut self, index: usize) -> Result<(), String> {
         let team = &self.folder_teams[index];
-        let Role::Keeper { members, version, .. } = &team.role else { return Err("Only the team's keeper can change it.".into()) };
+        let Role::Keeper { members, version, keys, .. } = &team.role else { return Err("Only the team's keeper can change it.".into()) };
         let memberships: Vec<Membership> = members.iter().filter_map(|m| Membership::parse(m).ok()).collect();
         let next = version + 1;
-        let state = seal_team(&self.identity, team.id, &team.name, next, &memberships, &[], now()).map_err(|e| e.to_string())?;
+        // A key forgotten from the vault since it was shared simply leaves the team.
+        let payloads: Vec<Payload> = keys
+            .iter()
+            .filter_map(|id| {
+                let item = self.vault.items().iter().find(|i| i.id == *id)?;
+                Some(Payload { label: item.label.clone(), note: self.settings.name.clone(), secret: self.vault.secret(*id)? })
+            })
+            .collect();
+        let state = seal_team(&self.identity, team.id, &team.name, next, &memberships, &payloads, now()).map_err(|e| e.to_string())?;
         folder::write_state(&team.folder, &state)?;
         if let Role::Keeper { version, .. } = &mut self.folder_teams[index].role {
             *version = next;
@@ -929,21 +1013,28 @@ impl Core {
     /// version from anyone but the pinned keeper, or not newer, is ignored.
     fn read_folders(&mut self) -> Result<(), String> {
         let mut changed = false;
+        let mut news = Vec::new();
         for team in &mut self.folder_teams {
-            let Role::Member { lock, version, members } = &mut team.role else { continue };
+            let Role::Member { lock, version, members, keys } = &mut team.role else { continue };
             let Some(state) = folder::state(&team.folder) else { continue };
             if state.team_id() != team.id || *state.keeper().as_bytes() != team.keeper || state.version() <= *version {
                 continue;
             }
-            let lock = TeamLock::from_bytes(lock);
-            if state.open(&lock).is_ok() {
-                *version = state.version();
-                *members = state.members().iter().map(|m| m.name.clone()).collect();
-                team.name = state.team().to_string();
-                changed = true;
-            }
+            let Ok(payloads) = state.open(&TeamLock::from_bytes(lock)) else { continue };
+            *version = state.version();
+            *members = state.members().iter().map(|m| m.name.clone()).collect();
+            team.name = state.team().to_string();
+            news.extend(take_team_keys(&mut self.vault, team.name.as_str(), &team.keeper_name, &state.keeper().fingerprint(), keys, payloads, self.settings.keep));
+            changed = true;
         }
-        if changed { self.save_folder_teams() } else { Ok(()) }
+        if !changed {
+            return Ok(());
+        }
+        self.store.save_vault(&self.vault)?;
+        if !news.is_empty() {
+            self.notice = Some(news.join(" "));
+        }
+        self.save_folder_teams()
     }
 
     fn save_folder_teams(&self) -> Result<(), String> {
@@ -1218,7 +1309,18 @@ impl Core {
     }
 
     fn safe_view(&self) -> SafeView {
-        let base = |state| SafeView { state, for_name: None, for_team: false, ends_at: 0, file_name: None, message: None, apps: Vec::new(), read: false };
+        let replacing = self.replacing.and_then(|id| self.vault.items().iter().find(|i| i.id == id)).map(|i| i.label.clone());
+        let base = |state| SafeView {
+            state,
+            for_name: None,
+            for_team: false,
+            ends_at: 0,
+            file_name: None,
+            message: None,
+            apps: Vec::new(),
+            read: false,
+            replacing: replacing.clone(),
+        };
         match &self.safe {
             Safe::Off => base("off"),
             Safe::Listening { ends_at, apps, read, .. } => {
@@ -1248,6 +1350,51 @@ fn key_view(item: &Item) -> KeyView {
         keep: item.keep,
         team: item.team.clone(),
     }
+}
+
+/// Bring a team version's keys into the vault: new ones are added under the
+/// team, changed ones are replaced in place (so pointers and allowed programs
+/// keep working), and ones the keeper stopped sharing are removed. Returns
+/// what to tell the person.
+fn take_team_keys(
+    vault: &mut Vault,
+    team: &str,
+    keeper: &str,
+    sender: &str,
+    held: &mut Vec<(String, [u8; 16])>,
+    payloads: Vec<Payload>,
+    keep: Keep,
+) -> Vec<String> {
+    let mut news = Vec::new();
+    let mut added = 0;
+    let mut next = Vec::new();
+    for p in &payloads {
+        match held.iter().find(|(label, id)| *label == p.label && vault.items().iter().any(|i| i.id == *id)) {
+            Some((_, id)) => {
+                if vault.secret(*id).is_none_or(|s| s.expose() != p.secret.expose()) {
+                    vault.replace(*id, &p.secret);
+                    news.push(format!("{} was updated by {keeper}.", p.label));
+                }
+                next.push((p.label.clone(), *id));
+            }
+            None => {
+                let id = vault.add(&p.label, Some(keeper.to_string()), Some(sender.to_string()), &p.secret, keep, now());
+                vault.set_team(id, team);
+                next.push((p.label.clone(), id));
+                added += 1;
+            }
+        }
+    }
+    for (label, id) in held.iter() {
+        if !next.iter().any(|(_, kept)| kept == id) && vault.remove(*id) {
+            news.push(format!("{keeper} stopped sharing {label} with {team}."));
+        }
+    }
+    if added > 0 {
+        news.insert(0, format!("{added} {team} {} from {keeper} {} in your keys.", if added == 1 { "key" } else { "keys" }, if added == 1 { "is" } else { "are" }));
+    }
+    *held = next;
+    news
 }
 
 fn now() -> u64 {
@@ -1619,6 +1766,53 @@ mod tests {
         assert_eq!(ann.handoff.view().folder_teams[0].members, ["Ann", "Priya"]);
 
         for a in [ben, ann, priya] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        let _ = fs::remove_dir_all(shared);
+    }
+
+    #[test]
+    fn a_replaced_team_key_reaches_members_and_their_programs_keep_working() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ben, ann) = (app("Ben"), app("Ann"));
+        let shared = temp("shared");
+        fs::create_dir_all(&shared).unwrap();
+        let team = ben.handoff.make_folder_team("Platform", &shared).unwrap();
+        ann.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+        ann.handoff.join_team(None).unwrap();
+        let asking = ben.handoff.view().folder_teams[0].asking[0].id.clone();
+        ben.handoff.add_to_team(&team, &asking).unwrap();
+        let stripe = hex(&ben.handoff.lock().vault.add("Stripe", None, None, &Secret::new(b"sk_test_old".to_vec()), Keep::Forever, now()));
+        ben.handoff.share_with_folder_team(&team, &stripe).unwrap();
+
+        // Ann's app picks Stripe up from the folder; her script reads handoff:Stripe.
+        let keys = ann.handoff.view().keys;
+        let got = keys.iter().find(|k| k.label == "Stripe").expect("Stripe arrived");
+        assert_eq!((got.from.as_deref(), got.team.as_deref()), (Some("Ben"), Some("Platform")));
+        let h = ann.handoff.clone();
+        let script = peer("/usr/bin/python3", "/home/ann/report");
+        let first = {
+            let (h, p) = (h.clone(), script.clone());
+            std::thread::spawn(move || h.give(&p, &["Stripe".into()]).map(|s| s[0].expose().to_vec()))
+        };
+        answer_when_asked(&h, Answer::Always);
+        assert_eq!(first.join().unwrap().unwrap(), b"sk_test_old");
+        let old_state = fs::read(shared.join("team.handoff")).unwrap();
+
+        // Ben rotates Stripe: Safe Copy catches the new value, and that's all anyone does.
+        ben.handoff.replace(&stripe).unwrap();
+        copy(b"sk_test_new");
+        ben.handoff.keep_replacement().unwrap();
+        assert!(ann.handoff.view().notice.unwrap().contains("Stripe was updated by Ben"));
+        assert_eq!(h.give(&script, &["Stripe".into()]).unwrap()[0].expose(), b"sk_test_new", "same program, no prompt, new key");
+
+        // An older version dropped back into the folder doesn't roll it back.
+        fs::write(shared.join("team.handoff"), &old_state).unwrap();
+        let _ = ann.handoff.view();
+        assert_eq!(h.give(&script, &["Stripe".into()]).unwrap()[0].expose(), b"sk_test_new");
+        assert!(!files_contain(&shared, b"sk_test_new") && !files_contain(&shared, b"sk_test_old"), "the folder holds no plaintext");
+
+        for a in [ben, ann] {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_dir_all(shared);

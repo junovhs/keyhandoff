@@ -29,6 +29,7 @@ function safe(state: SafeState, forName: string | null = "Ann", apps: string[] =
     message: null,
     apps,
     read,
+    replacing: null,
   };
 }
 
@@ -78,6 +79,11 @@ const SCENES: Record<string, Partial<View>> = {
   "folder-new": { name: "Ben", contacts: [], teams: [] },
   "folder-asking": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, asking: [ANN, CONTACTS[1]] }] },
   "folder-kept": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "folder-share": { name: "Ben", contacts: [], teams: [], keys: KEYS.map((k) => ({ ...k, from: null })), folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "replacing": { name: "Ben", safe: { ...safe("listening", null), replacing: "Stripe (billing)" } },
+  "replace-caught": { name: "Ben", safe: { ...safe("caught", null), replacing: "Stripe (billing)" } },
+  "home-replaced": { name: "Ben", notice: "Stripe (billing) is replaced. Programs using it get the new key. Platform gets it through the folder." },
+  "home-updated": { notice: "Stripe (billing) was updated by Ben." },
   "folder-waiting": { keys: [], contacts: [], teams: [], folder_teams: [{ ...KEPT, folder: "/home/ann/Dropbox/Platform", keeping: false, waiting: true }] },
   "listening-you": { safe: safe("listening", null) },
   "caught-you": { safe: safe("caught", null) },

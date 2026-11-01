@@ -33,6 +33,8 @@ Ben can keep sending Ann keys until her card's locks run out; then he asks for a
 
 **Teams.** In **Send a key**, **New team** groups some of your contacts under a name. Sending a saved key to a team seals it to every member in one file, and files your key under the team. **Welcome** on a member sends them every key you hold that was shared with the team, so someone new gets them all. There's no server, so a team lives on each person's computer: anyone can set up the same team to share with it, and everyone on it needs to have sent you their card.
 
+**Team folders.** A team can also live in a folder everyone already syncs: Dropbox, Google Drive, OneDrive, a repo or a network share. **New team → Keep it in a shared folder** puts an invite there; people open it and click **Join**, and you **Add** them. Keys you share with the team reach everyone through the folder, and **Replace** on a key you rotated gives everyone the new value under the same name, so their `.env` pointers and programs keep working. KeyHandoff only reads and writes the folder; everything in it is sealed.
+
 To keep a key of your own, click **Add a key**, copy the key on the provider's page and name it. No files are involved. KeyHandoff has no way to show a key on screen.
 
 ## Locking

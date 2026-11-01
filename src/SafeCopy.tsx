@@ -28,7 +28,7 @@ export function SafeCopy({ view }: { view: View }) {
   const run = async (p: Promise<unknown>) => setError(await attempt(p));
   const missed = state === "timeout" || state === "failed";
   const stage = {
-    listening: { mark: "none", title: "Copy your key", sub: <Countdown endsAt={safe.ends_at} /> },
+    listening: { mark: "none", title: safe.replacing ? `Copy the new ${safe.replacing} key` : "Copy your key", sub: <Countdown endsAt={safe.ends_at} /> },
     caught: { mark: "check", title: "Caught", sub: "Clipboard wiped." },
     sealed: {
       mark: "lock",
@@ -141,6 +141,21 @@ function andList(names: string[]): string {
 
 /** Caught and wiped. Name it, then pick a keep-time. */
 function Caught({ view, run }: { view: View; run: Run }) {
+  if (view.safe.replacing) return <Replacing name={view.safe.replacing} run={run} />;
+  return <Naming view={view} run={run} />;
+}
+
+/** Caught while replacing: the new value goes into the key, under its name. */
+function Replacing({ name, run }: { name: string; run: Run }) {
+  return (
+    <>
+      <p className="help center">Programs and .env lines that use {name} get the new key.</p>
+      <button className="btn primary" onClick={() => void run(api.keepReplacement())}>Replace {name}</button>
+    </>
+  );
+}
+
+function Naming({ view, run }: { view: View; run: Run }) {
   // It lands in your vault, where names are unique.
   const [label, setLabel] = useState(() => freeName("API key", view.keys));
   const input = useRef<HTMLInputElement>(null);

@@ -121,6 +121,18 @@ impl Vault {
         id
     }
 
+    /// Put a new value in an existing item: same id, so programs allowed to
+    /// use it still can, and same name, so `.env` pointers still find it.
+    pub fn replace(&mut self, id: [u8; 16], secret: &Secret) -> bool {
+        let cipher = self.cipher();
+        let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return false };
+        OsRng.fill_bytes(&mut item.nonce);
+        item.sealed = cipher
+            .encrypt(Nonce::from_slice(&item.nonce), Payload { msg: secret.expose(), aad: &item.id })
+            .expect("ChaCha20-Poly1305 encryption cannot fail for in-memory data");
+        true
+    }
+
     /// File a kept key under a team.
     pub fn set_team(&mut self, id: [u8; 16], team: &str) {
         if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {

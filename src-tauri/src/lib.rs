@@ -291,6 +291,21 @@ fn add_to_team(app: AppHandle, h: H, team: String, member: String) -> Result<(),
 }
 
 #[tauri::command]
+fn share_with_folder_team(app: AppHandle, h: H, team: String, key: String) -> Result<(), String> {
+    done(&app, h.share_with_folder_team(&team, &key))
+}
+
+#[tauri::command]
+fn replace(app: AppHandle, h: H, key: String) -> Result<(), String> {
+    done(&app, h.replace(&key))
+}
+
+#[tauri::command]
+fn keep_replacement(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.keep_replacement())
+}
+
+#[tauri::command]
 fn turn_away(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
     done(&app, h.turn_away(&team, &member))
 }
@@ -484,7 +499,7 @@ pub fn run() {
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, turn_away, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, turn_away, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {

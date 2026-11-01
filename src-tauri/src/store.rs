@@ -96,11 +96,24 @@ pub struct FolderTeam {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Role {
-    /// You keep it: the memberships you added, the people you turned away and
-    /// the last version written.
-    Keeper { members: Vec<Vec<u8>>, declined: Vec<[u8; 32]>, version: u64 },
-    /// You joined: your team lock, the last version you opened and who was on it.
-    Member { lock: [u8; 32], version: u64, members: Vec<String> },
+    /// You keep it: the memberships you added, the people you turned away,
+    /// the last version written and the vault items shared with the team.
+    Keeper {
+        members: Vec<Vec<u8>>,
+        declined: Vec<[u8; 32]>,
+        version: u64,
+        #[serde(default)]
+        keys: Vec<[u8; 16]>,
+    },
+    /// You joined: your team lock, the last version you opened, who was on it,
+    /// and each team key's name with the vault item that holds your copy.
+    Member {
+        lock: [u8; 32],
+        version: u64,
+        members: Vec<String>,
+        #[serde(default)]
+        keys: Vec<(String, [u8; 16])>,
+    },
 }
 
 pub struct Store {

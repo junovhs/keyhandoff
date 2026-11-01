@@ -217,6 +217,24 @@ export const docs = defineDocs({
                 { kind: "p", text: "There's no server, so a team lives on each person's computer. Anyone can set up the same team to share with it. Taking someone off a team stops new keys, but keys they already have stay with them: replace those with the provider." },
               ],
             },
+            {
+              id: "team-folders",
+              title: "Team folders",
+              question: "How do I keep a team's keys in sync with KeyHandoff?",
+              answer: "Keep the team in a folder everyone already syncs, like Dropbox, Google Drive, OneDrive, a repo or a network share. Members join from the invite in the folder, team keys reach them through it, and when you replace a key, everyone gets the new one and their programs keep working.",
+              blocks: [
+                {
+                  kind: "steps",
+                  items: [
+                    { title: "Make the team", text: "In **Send a key**, click **New team**, then **Keep it in a shared folder** and pick the folder. KeyHandoff puts `invite.handoff` in it." },
+                    { title: "People join", text: "Each person opens `invite.handoff` in their copy of the folder and clicks **Join**. You see **Ann wants to join** in Send a key, with her computer's fingerprint; click **Add**." },
+                    { title: "Share keys", text: "Pick the team in Send a key, then a saved key. Everyone on the team gets it the next time their KeyHandoff sees the folder." },
+                    { title: "Rotate", text: "Replaced a key with the provider? Click **Replace** on it and copy the new value. Everyone's copy updates under the same name, so `.env` pointers and allowed programs keep working." },
+                  ],
+                },
+                { kind: "p", text: "KeyHandoff never syncs anything itself; the folder's own app does. Everything in the folder is sealed: who's on the team and when it changed is visible, never the keys or their names. Only the person who made the team can add people or change its keys, and nobody joins until they're added." },
+              ],
+            },
           ],
         },
         {

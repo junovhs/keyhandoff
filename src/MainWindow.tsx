@@ -266,6 +266,11 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
                 {k.team ? ` · ${k.team}` : ""} · {lifetime(k)}
               </span>
             </span>
+            {k.from === null && (
+              <button className="use" onClick={() => void run(api.replace(k.id))} title="Rotated it with the provider? Catch the new value. Programs using it keep working.">
+                Replace
+              </button>
+            )}
             <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
               Copy .env line
             </button>
@@ -590,7 +595,8 @@ const runningLow = (c: ContactView) => c.sends_left <= LOW_SENDS;
 const sendsLeft = (c: ContactView) => (c.sends_left === 0 ? "card used up" : `${c.sends_left} ${c.sends_left === 1 ? "send" : "sends"} left`);
 
 /** Who Send a key sends to: a contact or a team. */
-type To = { team: boolean; id: string; name: string };
+/** `folder`: a team folder you keep; the key goes into its next version. */
+type To = { team: boolean; id: string; name: string; folder?: boolean };
 
 /** Send a key: pick a person or a team (unless `start` picked one), then one of your saved keys. */
 function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run; start: To | null; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
@@ -602,7 +608,9 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
   const { contacts, teams } = view;
   if (to) {
     const send = (key: KeyView) =>
-      void run(to.team ? api.sendKeptToTeam(to.id, key.id) : api.sendKept(to.id, key.id)).then(onClose);
+      void run(
+        to.folder ? api.shareWithFolderTeam(to.id, key.id) : to.team ? api.sendKeptToTeam(to.id, key.id) : api.sendKept(to.id, key.id),
+      ).then(onClose);
     return (
       <div className="sheet" ref={sheet}>
         <div className="hero">
@@ -644,7 +652,7 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <div className="keys">
           <span className="label">Team folders</span>
           {view.folder_teams.map((t) => (
-            <FolderTeamRows key={t.id} team={t} run={run} />
+            <FolderTeamRows key={t.id} team={t} run={run} onPick={() => setTo({ team: true, folder: true, id: t.id, name: t.name })} />
           ))}
         </div>
       )}
@@ -721,7 +729,7 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
 }
 
 /** A team folder in Send a key: its row, then anyone asking to join it, for the keeper to add. */
-function FolderTeamRows({ team, run }: { team: FolderTeamView; run: Run }) {
+function FolderTeamRows({ team, run, onPick }: { team: FolderTeamView; run: Run; onPick: () => void }) {
   const meta = team.waiting
     ? `Waiting for ${team.keeper} to add you`
     : team.members.length
@@ -732,11 +740,14 @@ function FolderTeamRows({ team, run }: { team: FolderTeamView; run: Run }) {
   return (
     <>
       <div className="key-row" title={team.folder}>
-        <span className="key-ico"><Icon name="users" /></span>
-        <span className="who">
-          <span className="nm">{team.name}</span>
-          <span className="meta">{meta}</span>
-        </span>
+        {/* The keeper picks the team to share a key with it; members can't. */}
+        <button className="who contact" disabled={!team.keeping || team.members.length === 0} onClick={onPick}>
+          <span className="key-ico"><Icon name="users" /></span>
+          <span className="who">
+            <span className="nm">{team.name}</span>
+            <span className="meta">{meta}</span>
+          </span>
+        </button>
       </div>
       {team.asking.map((p) => (
         <div key={p.id} className="key-row">

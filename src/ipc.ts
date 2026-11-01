@@ -33,6 +33,8 @@ export interface SafeView {
   apps: string[];
   /** Something read the clipboard bait while Safe Copy listened. */
   read: boolean;
+  /** The key a new value is being caught for, when replacing one. */
+  replacing: string | null;
 }
 
 /** A program asking for kept keys, waiting for Allow. */
@@ -184,6 +186,11 @@ export const api = {
   closeInvite: () => invoke<void>("close_invite"),
   addToTeam: (team: string, member: string) => invoke<void>("add_to_team", { team, member }),
   turnAway: (team: string, member: string) => invoke<void>("turn_away", { team, member }),
+  /** Share a saved key with a team folder you keep; members get it through the folder. */
+  shareWithFolderTeam: (team: string, key: string) => invoke<void>("share_with_folder_team", { team, key }),
+  /** Catch a new value for a key you added, keeping its name and allowed programs. */
+  replace: (key: string) => invoke<void>("replace", { key }),
+  keepReplacement: () => invoke<void>("keep_replacement"),
   /** Forget a contact and take them off your teams. */
   forgetContact: (id: string) => invoke<void>("forget_contact", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */
