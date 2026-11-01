@@ -48,7 +48,7 @@ fn peer(pipe: HANDLE) -> Option<Peer> {
     let command = super::super::display_command(argv.iter().map(String::as_str));
     // SAFETY: we own the handle.
     let _ = unsafe { CloseHandle(process) };
-    Some(Peer { pid, program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: agent(pid) })
+    Some(Peer { pid, program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: None })
 }
 
 /// The AI coding agent among `pid` and the processes that started it, by

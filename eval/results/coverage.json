@@ -1,11 +1,11 @@
 {
   "cells": [
     {
-      "added_ms": 41.487,
+      "added_ms": 42.446,
       "claimed": true,
       "client": "Python http.client",
-      "direct_ms": 4.671,
-      "hooked_ms": 46.158,
+      "direct_ms": 3.627,
+      "hooked_ms": 46.073,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -14,11 +14,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": -37.996,
+      "added_ms": -39.095,
       "claimed": true,
       "client": "Python requests",
-      "direct_ms": 46.023,
-      "hooked_ms": 8.027,
+      "direct_ms": 46.202,
+      "hooked_ms": 7.107,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -27,11 +27,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": -38.481,
+      "added_ms": -40.800999999999995,
       "claimed": true,
       "client": "Python httpx",
-      "direct_ms": 78.078,
-      "hooked_ms": 39.597,
+      "direct_ms": 80.38,
+      "hooked_ms": 39.579,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -40,11 +40,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 41.168,
+      "added_ms": 40.515,
       "claimed": true,
       "client": "Python",
-      "direct_ms": 4.194,
-      "hooked_ms": 45.362,
+      "direct_ms": 4.182,
+      "hooked_ms": 44.697,
       "protocol": "HTTP/1.1, chunked body",
       "result": "protected",
       "server_got": "key",
@@ -53,11 +53,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 0.7410000000000005,
+      "added_ms": 0.4510000000000005,
       "claimed": false,
       "client": "Python",
-      "direct_ms": 4.122,
-      "hooked_ms": 4.863,
+      "direct_ms": 4.162,
+      "hooked_ms": 4.613,
       "protocol": "HTTP/1.1, gzip body",
       "result": "key safe, not protected",
       "server_got": "placeholder",
@@ -66,11 +66,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 2.7070000000000003,
+      "added_ms": 1.2600000000000007,
       "claimed": true,
       "client": "Python",
-      "direct_ms": 3.326,
-      "hooked_ms": 6.033,
+      "direct_ms": 4.35,
+      "hooked_ms": 5.61,
       "protocol": "WebSocket upgrade, header",
       "result": "protected",
       "server_got": "key",
@@ -79,11 +79,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 0.8270000000000004,
+      "added_ms": -0.13200000000000056,
       "claimed": false,
       "client": "Python",
-      "direct_ms": 3.791,
-      "hooked_ms": 4.618,
+      "direct_ms": 4.192,
+      "hooked_ms": 4.06,
       "protocol": "WebSocket message (masked)",
       "result": "key safe, not protected",
       "server_got": "placeholder",
@@ -92,11 +92,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": -37.845,
+      "added_ms": -38.407,
       "claimed": true,
       "client": "curl",
-      "direct_ms": 44.782,
-      "hooked_ms": 6.937,
+      "direct_ms": 44.821,
+      "hooked_ms": 6.414,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -105,11 +105,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 3.335,
+      "added_ms": 2.4589999999999996,
       "claimed": true,
       "client": "curl",
-      "direct_ms": 5.758,
-      "hooked_ms": 9.093,
+      "direct_ms": 5.589,
+      "hooked_ms": 8.048,
       "protocol": "HTTP/1.1, Basic auth (base64)",
       "result": "protected",
       "server_got": "key",
@@ -118,11 +118,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 2.628,
+      "added_ms": 0.9080000000000004,
       "claimed": true,
       "client": "curl",
-      "direct_ms": 4.843,
-      "hooked_ms": 7.471,
+      "direct_ms": 5.281,
+      "hooked_ms": 6.189,
       "protocol": "HTTP/2, header (HPACK)",
       "result": "protected",
       "server_got": "key",
@@ -131,11 +131,11 @@
       "tls": "OpenSSL (system), nghttp2"
     },
     {
-      "added_ms": 2.7520000000000007,
+      "added_ms": 1.2679999999999998,
       "claimed": true,
       "client": "curl",
-      "direct_ms": 5.333,
-      "hooked_ms": 8.085,
+      "direct_ms": 5.151,
+      "hooked_ms": 6.419,
       "protocol": "HTTP/2, body",
       "result": "protected",
       "server_got": "key",
@@ -157,11 +157,11 @@
       "tls": "none"
     },
     {
-      "added_ms": 1.6500000000000004,
+      "added_ms": 1.1929999999999996,
       "claimed": true,
       "client": "Ruby Net::HTTP",
-      "direct_ms": 5.834,
-      "hooked_ms": 7.484,
+      "direct_ms": 5.956,
+      "hooked_ms": 7.149,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -170,11 +170,11 @@
       "tls": "OpenSSL (system)"
     },
     {
-      "added_ms": 26.359,
+      "added_ms": 25.753,
       "claimed": true,
       "client": "Node.js https",
-      "direct_ms": 34.579,
-      "hooked_ms": 60.938,
+      "direct_ms": 34.591,
+      "hooked_ms": 60.344,
       "protocol": "HTTP/1.1, header",
       "result": "protected",
       "server_got": "key",
@@ -183,11 +183,11 @@
       "tls": "OpenSSL (built into Node)"
     },
     {
-      "added_ms": -0.402000000000001,
+      "added_ms": 0.0,
       "claimed": false,
       "client": "Go net/http",
-      "direct_ms": 42.967,
-      "hooked_ms": 42.565,
+      "direct_ms": 43.068,
+      "hooked_ms": 43.068,
       "protocol": "HTTP/1.1, header",
       "result": "key safe, not protected",
       "server_got": "placeholder",

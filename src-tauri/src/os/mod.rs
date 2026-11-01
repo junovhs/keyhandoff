@@ -86,6 +86,8 @@ pub struct Peer {
     /// `keyhandoff run` it's what really runs.
     pub args: Vec<String>,
     /// The AI coding agent among the processes that started it, if one is.
+    /// Found only for a request for keys (`os::agent`), not for every
+    /// connection, since the hook's swaps don't need it.
     pub agent: Option<String>,
 }
 

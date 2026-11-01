@@ -94,3 +94,7 @@ pub fn connect_keys(_profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStr
 pub fn descends_from(_pid: u32, _ancestor: u32) -> bool {
     false
 }
+
+pub fn agent(_pid: u32) -> Option<String> {
+    None
+}

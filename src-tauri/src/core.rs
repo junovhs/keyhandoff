@@ -3650,6 +3650,125 @@ else:
         let _ = fs::remove_dir_all(ben.data);
     }
 
+    /// EVAL-03's benchmarks: the TLS hook's cost. Over one keep-alive TLS
+    /// connection, 2000 small requests and a 64 MiB upload, with the key in
+    /// the environment and no hook ("direct") and under `keyhandoff run`
+    /// ("hooked"), each with the key in a header ("keyed": every request is
+    /// verified and swapped) and without ("plain": the hook only scans).
+    /// Rounds alternate to spread drift. Writes `eval/results/benchmarks.md`
+    /// and `.json`. Run with `cargo test --release --lib hook_benchmarks --
+    /// --ignored --nocapture` (the app side answers swaps, so build it
+    /// optimised).
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore]
+    fn hook_benchmarks() {
+        use crate::run::tests::{finished, start};
+        use std::process::{Command, Stdio};
+        const STRIPE: &[u8] = b"sk_test_51SyntheticBenchKey0123456789abcdeXYZ";
+        const ROUNDS: usize = 9;
+        let (n, mb) = ("2000", "64");
+        let me = app("Bench");
+        let h = me.handoff.clone();
+        let dir = me.data.join("bench");
+        fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval");
+        for f in ["client.py", "server.py"] {
+            fs::copy(eval.join("bench").join(f), dir.join(f)).unwrap();
+        }
+        let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
+        sh("openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
+        sh("openssl req -newkey rsa:2048 -nodes -keyout s.key -out s.csr -subj /CN=api.stripe.test && printf 'subjectAltName=DNS:api.stripe.test' > s.ext && openssl x509 -req -in s.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out s.pem -days 2 -extfile s.ext");
+        let mut server = Command::new("python3").args(["server.py", "s.pem", "s.key"]).current_dir(&dir).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(server.stdout.take().unwrap()), &mut line).unwrap();
+        fs::write(dir.join("bench.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "port": line.trim().parse::<u16>().unwrap() }).to_string()).unwrap();
+        fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        // The baseline runs the same way (detached, through the runner) from a
+        // folder with no pointers, so no hook loads and the key is set directly.
+        let plain_dir = dir.join("direct");
+        fs::create_dir_all(&plain_dir).unwrap();
+        for f in ["client.py", "bench.json"] {
+            fs::copy(dir.join(f), plain_dir.join(f)).unwrap();
+        }
+        {
+            let mut core = h.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(dir.join("ca.pem")));
+        }
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        let answering = Arc::new(AtomicBool::new(true));
+        let answerer = {
+            let (h, on) = (h.clone(), answering.clone());
+            std::thread::spawn(move || {
+                while on.load(Ordering::SeqCst) {
+                    // Not view(): building the whole window under the lock would slow the swaps measured.
+                    if h.lock().program.is_some() {
+                        let _ = h.answer(Answer::Always);
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            })
+        };
+        let parse = |out: &str| -> serde_json::Value { serde_json::from_str(out.lines().find(|l| l.starts_with('{')).unwrap_or_else(|| panic!("{out}"))).unwrap() };
+        let mut samples: std::collections::BTreeMap<String, Vec<serde_json::Value>> = Default::default();
+        for _ in 0..ROUNDS {
+            for mode in ["keyed", "plain"] {
+                let direct = format!("STRIPE_API_KEY={} exec python3 client.py {mode} {n} {mb}", std::str::from_utf8(STRIPE).unwrap());
+                let (out, code) = finished(&start(&plain_dir, &profile, &["sh", "-c", &direct], None));
+                assert_eq!(code, 0, "{out}");
+                samples.entry(format!("direct {mode}")).or_default().push(parse(&out));
+                let (out, code) = finished(&start(&dir, &profile, &["python3", "client.py", mode, n, mb], None));
+                assert_eq!(code, 0, "{out}");
+                samples.entry(format!("hooked {mode}")).or_default().push(parse(&out));
+            }
+        }
+        answering.store(false, Ordering::SeqCst);
+        answerer.join().unwrap();
+        let _ = server.kill();
+        let _ = server.wait();
+        let mid = |v: &[serde_json::Value], k: &str| {
+            let mut xs: Vec<f64> = v.iter().map(|s| s[k].as_f64().unwrap()).collect();
+            xs.sort_by(f64::total_cmp);
+            (xs[xs.len() / 2], xs[0], xs[xs.len() - 1])
+        };
+        let mut md = format!(
+            "# Hook overhead\n\nOne keep-alive TLS connection to a local server (Python client, system OpenSSL), {n} small requests after 50 warm-up ones, then a {mb} MiB upload in 64 KiB writes. **Direct**: the key in the environment, no hook, started the same way (detached, through the runner, from a folder without pointers). **Hooked**: under `keyhandoff run`. **Keyed**: the key in an `Authorization` header, so under the hook every request is checked against the certificate and the key fetched from KeyHandoff and swapped in. **Plain**: no key, so the hook only looks. Each figure is the median over {ROUNDS} alternating rounds, with the range across rounds.\n\n| Mode | Median per request (µs) | p95 (µs) | Mean ± sd within a round (µs) | Upload (MiB/s) |\n|---|---|---|---|---|\n"
+        );
+        let mut rows = serde_json::Map::new();
+        for (mode, v) in &samples {
+            let (med, lo, hi) = mid(v, "median_us");
+            let (p95, _, _) = mid(v, "p95_us");
+            let (mean, _, _) = mid(v, "mean_us");
+            let (sd, _, _) = mid(v, "stdev_us");
+            let (up, ulo, uhi) = mid(v, "upload_mb_s");
+            md += &format!("| {mode} | {med:.0} ({lo:.0}–{hi:.0}) | {p95:.0} | {mean:.0} ± {sd:.0} | {up:.0} ({ulo:.0}–{uhi:.0}) |\n");
+            rows.insert(mode.clone(), serde_json::json!({ "median_us": med, "range_us": [lo, hi], "p95_us": p95, "mean_us": mean, "stdev_us": sd, "upload_mb_s": up, "upload_range": [ulo, uhi], "rounds": v }));
+        }
+        let added = |m: &str| mid(&samples[&format!("hooked {m}")], "median_us").0 - mid(&samples[&format!("direct {m}")], "median_us").0;
+        let slowdown = |m: &str| 1.0 - mid(&samples[&format!("hooked {m}")], "upload_mb_s").0 / mid(&samples[&format!("direct {m}")], "upload_mb_s").0;
+        md += &format!(
+            "\nAdded per request: **{:.0} µs** when the key is swapped in (keyed), **{:.0} µs** when there's nothing to swap (plain). Upload throughput under the hook: {:+.1}% (keyed run), {:+.1}% (plain run).\n",
+            added("keyed"),
+            added("plain"),
+            -100.0 * slowdown("keyed"),
+            -100.0 * slowdown("plain")
+        );
+        let version = |p: &str, a: &str| Command::new(p).arg(a).output().ok().map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string()).unwrap_or_default();
+        let cpu = fs::read_to_string("/proc/cpuinfo").ok().and_then(|c| c.lines().find(|l| l.starts_with("model name")).map(|l| l.split(':').nth(1).unwrap_or("").trim().to_string()));
+        let env = serde_json::json!({ "cpu": cpu, "kernel": version("uname", "-r"), "openssl": version("openssl", "version"), "python": version("python3", "--version"), "build": if cfg!(debug_assertions) { "debug" } else { "release" } });
+        md += &format!("\nNot compared here: `op run` and placeholder proxies (neither installed on this machine). Environment: {}\n\nRegenerate: `cd src-tauri && cargo test --release --lib hook_benchmarks -- --ignored --nocapture`.\n", serde_json::to_string(&env).unwrap());
+        fs::create_dir_all(eval.join("results")).unwrap();
+        fs::write(eval.join("results/benchmarks.md"), &md).unwrap();
+        fs::write(eval.join("results/benchmarks.json"), serde_json::to_string_pretty(&serde_json::json!({ "environment": env, "modes": rows })).unwrap()).unwrap();
+        println!("{md}");
+        let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{profile}-keys.sock")));
+        let _ = fs::remove_dir_all(me.data);
+    }
+
     #[test]
     fn helpers() {
         assert_eq!(file_name("Key for", "a/b:c."), "Key for a_b_c.handoff");

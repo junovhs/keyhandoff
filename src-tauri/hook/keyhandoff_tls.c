@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <spawn.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,7 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 typedef struct ssl_st SSL;
@@ -76,6 +78,13 @@ struct swap {
     char *forms[MAX_FORMS];
     size_t form_len[MAX_FORMS];
     int nforms;
+    /* Four-byte windows, hashed to one bit each in a 2^20-bit table: where
+     * the placeholder or a form starts, and anywhere inside one. Every
+     * pattern is at least `shortest` bytes, so a scan probes every
+     * (`shortest` - 3)th position against `inner` and compares in full only
+     * near a hit. */
+    unsigned char *starts, *inner;
+    size_t longest, shortest;
 };
 static struct swap swaps[MAX_SWAPS];
 static int swap_count = -1; /* -1: not asked yet */
@@ -269,14 +278,74 @@ static void add_forms(struct swap *s) {
     add_base64(s, p, n, B64URL, 1);
 }
 
+#define WINDOW_BITS 20
+
+static unsigned window(const unsigned char *p) {
+    uint32_t v;
+    memcpy(&v, p, 4);
+    return (v * 2654435761u) >> (32 - WINDOW_BITS);
+}
+
+static void mark(unsigned char *bits, const char *p) {
+    unsigned at = window((const unsigned char *)p);
+    bits[at >> 3] |= (unsigned char)(1u << (at & 7));
+}
+
+static int marked(const unsigned char *bits, const unsigned char *p) {
+    unsigned at = window(p);
+    return bits[at >> 3] & (1u << (at & 7));
+}
+
+static void index_starts(struct swap *s) {
+    s->starts = calloc((1u << WINDOW_BITS) / 8, 1);
+    s->inner = calloc((1u << WINDOW_BITS) / 8, 1);
+    if (!s->starts || !s->inner) {
+        free(s->starts);
+        free(s->inner);
+        s->starts = s->inner = 0;
+        return;
+    }
+    s->longest = s->shortest = s->len;
+    for (int f = -1; f < s->nforms; f++) {
+        const char *p = f < 0 ? s->placeholder : s->forms[f];
+        size_t n = f < 0 ? s->len : s->form_len[f];
+        if (n > s->longest) s->longest = n;
+        if (n < s->shortest) s->shortest = n;
+        mark(s->starts, p);
+        for (size_t k = 0; k + 4 <= n; k++) mark(s->inner, p + k);
+    }
+}
+
 /* 1: the placeholder as written; 2: in one level of standard base64; 3: in
  * another form; 0: none of them. */
 static int found(const struct swap *s, const void *buf, size_t len) {
-    if (!buf) return 0;
-    if (memmem(buf, len, s->placeholder, s->len)) return 1;
-    for (int i = 0; i < s->nforms; i++)
-        if (memmem(buf, len, s->forms[i], s->form_len[i])) return i < 3 ? 2 : 3;
-    return 0;
+    const unsigned char *b = buf;
+    if (!b) return 0;
+    if (!s->starts || s->len < 12 || len < 12) {
+        if (memmem(buf, len, s->placeholder, s->len)) return 1;
+        for (int i = 0; i < s->nforms; i++)
+            if (memmem(buf, len, s->forms[i], s->form_len[i])) return i < 3 ? 2 : 3;
+        return 0;
+    }
+    int best = 0;
+    size_t checked = 0; /* starts before this were already compared */
+    for (size_t probe = 0; probe + 4 <= len; probe += s->shortest - 3) {
+        if (!marked(s->inner, b + probe)) continue;
+        /* A pattern holding this window starts at most `longest` - 4 bytes earlier. */
+        size_t from = probe + 4 > s->longest ? probe + 4 - s->longest : 0;
+        if (from < checked) from = checked;
+        for (size_t i = from; i <= probe; i++) {
+            if (!marked(s->starts, b + i)) continue;
+            size_t left = len - i;
+            if (s->len <= left && !memcmp(b + i, s->placeholder, s->len)) return 1;
+            for (int f = 0; f < s->nforms; f++) {
+                int kind = f < 3 ? 2 : 3;
+                if ((!best || kind < best) && s->form_len[f] <= left && !memcmp(b + i, s->forms[f], s->form_len[f])) best = kind;
+            }
+        }
+        checked = probe + 1;
+    }
+    return best;
 }
 
 static int is_b64_char(unsigned char c) {
@@ -349,6 +418,7 @@ static void load_swaps(void) {
         s->ca = ca && *ca ? strdup(ca) : 0;
         if (s->placeholder && s->len) {
             add_forms(s);
+            index_starts(s);
             swap_count++;
         }
     }
@@ -708,12 +778,81 @@ struct verdict {
     char *key;
 };
 
+/* Verdicts already reached, so a keep-alive connection's certificate chain
+ * isn't verified again on every request. An entry holds for the same
+ * connection object showing the same leaf certificate (by its signature,
+ * which no other certificate has), for at most a minute: a reused object
+ * talking to another server shows another certificate and misses. */
+#define VERDICTS 64
+struct cached {
+    SSL *ssl;
+    int swap;
+    unsigned char leaf[512];
+    int leaf_n;
+    time_t at;
+    char host[256]; /* empty: not verified for this key */
+};
+static struct cached verdicts[VERDICTS];
+static int verdict_next;
+static pthread_mutex_t verdict_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* The leaf certificate's signature bytes, as its identity; their length, or 0. */
+static int leaf_id(SSL *ssl, unsigned char out[512]) {
+    REAL(X509 *, SSL_get1_peer_certificate, (const SSL *));
+    REAL(X509 *, SSL_get_peer_certificate, (const SSL *));
+    REAL(void, X509_get0_signature, (const void **, const void **, const X509 *));
+    REAL(int, ASN1_STRING_length, (const void *));
+    REAL(const unsigned char *, ASN1_STRING_get0_data, (const void *));
+    REAL(void, X509_free, (X509 *));
+    X509 *(*peer_cert)(const SSL *) = real_SSL_get1_peer_certificate ? real_SSL_get1_peer_certificate : real_SSL_get_peer_certificate;
+    if (!peer_cert || !real_X509_get0_signature || !real_ASN1_STRING_length || !real_ASN1_STRING_get0_data || !real_X509_free) return 0;
+    X509 *leaf = peer_cert(ssl);
+    if (!leaf) return 0;
+    const void *sig = 0, *alg = 0;
+    real_X509_get0_signature(&sig, &alg, leaf);
+    int n = sig ? real_ASN1_STRING_length(sig) : 0;
+    if (n <= 0 || n > 512) n = 0;
+    else memcpy(out, real_ASN1_STRING_get0_data(sig), (size_t)n);
+    real_X509_free(leaf);
+    return n;
+}
+
+/* Whether this connection is verified for swap `i`'s key, through the cache. */
+static int verified_cached(SSL *ssl, int i, char *host, size_t cap) {
+    const struct swap *s = &swaps[i];
+    unsigned char leaf[512];
+    int leaf_n = leaf_id(ssl, leaf);
+    if (!leaf_n) return verified(ssl, s->hosts, s->ca, host, cap);
+    time_t now = time(0);
+    pthread_mutex_lock(&verdict_lock);
+    for (int k = 0; k < VERDICTS; k++) {
+        struct cached *c = &verdicts[k];
+        if (c->ssl == ssl && c->swap == i && now - c->at < 60 && c->leaf_n == leaf_n && !memcmp(c->leaf, leaf, (size_t)leaf_n)) {
+            snprintf(host, cap, "%s", c->host);
+            pthread_mutex_unlock(&verdict_lock);
+            return *host != 0;
+        }
+    }
+    pthread_mutex_unlock(&verdict_lock);
+    int ok = verified(ssl, s->hosts, s->ca, host, cap);
+    pthread_mutex_lock(&verdict_lock);
+    struct cached *c = &verdicts[verdict_next++ % VERDICTS];
+    c->ssl = ssl;
+    c->swap = i;
+    memcpy(c->leaf, leaf, (size_t)leaf_n);
+    c->leaf_n = leaf_n;
+    c->at = now;
+    snprintf(c->host, sizeof c->host, "%s", ok ? host : "");
+    pthread_mutex_unlock(&verdict_lock);
+    return ok;
+}
+
 static int decide(SSL *ssl, const char *destination, int i, struct verdict *v) {
     if (v[i].state == UNDECIDED) {
         const struct swap *s = &swaps[i];
         char host[256];
         v[i].state = ELSEWHERE;
-        if (!tls_blocked(ssl, destination) && verified(ssl, s->hosts, s->ca, host, sizeof host)) {
+        if (!tls_blocked(ssl, destination) && verified_cached(ssl, i, host, sizeof host)) {
             v[i].state = NO_KEY; /* the right server, but the run is over: the placeholder goes */
             v[i].key = malloc(s->len);
             if (v[i].key && fetch(s, host, v[i].key)) v[i].state = SWAP;

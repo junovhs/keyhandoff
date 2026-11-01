@@ -40,7 +40,7 @@ fn peer(stream: &UnixStream) -> Option<Peer> {
     let argv = args(cred.pid);
     let command = super::super::display_command(argv.iter().map(String::as_str));
     let args = argv.into_iter().skip(1).collect();
-    Some(Peer { pid: cred.pid as u32, program, folder: fs::read_link(proc.join("cwd")).ok(), command, args, agent: agent(cred.pid) })
+    Some(Peer { pid: cred.pid as u32, program, folder: fs::read_link(proc.join("cwd")).ok(), command, args, agent: None })
 }
 
 fn args(pid: i32) -> Vec<String> {
@@ -52,7 +52,8 @@ fn args(pid: i32) -> Vec<String> {
 /// one's name, executable and first two arguments are checked, and Claude
 /// Code's `CLAUDECODE` marker in the environment. A renamed agent isn't
 /// found, so this is a warning; binding approvals to the command is what holds.
-pub fn agent(pid: i32) -> Option<String> {
+pub fn agent(pid: u32) -> Option<String> {
+    let pid = pid as i32;
     let environ = fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
     if environ.split(|&b| b == 0).any(|v| v == b"CLAUDECODE=1") {
         return Some("Claude Code".into());

@@ -163,6 +163,11 @@ fn answer(
 ) -> Zeroizing<Vec<u8>> {
     let ran;
     let is_run = run.is_some() && placeholders;
+    let mut asking = peer.clone();
+    if asking.pid != 0 {
+        asking.agent = crate::os::agent(asking.pid);
+    }
+    let peer = &asking;
     let peer = match run {
         None => peer,
         Some(argv) => match running(peer, argv) {

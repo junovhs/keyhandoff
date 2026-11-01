@@ -73,6 +73,8 @@ When a key's servers are known (**Only for api.stripe.com** on its row, filled i
 - **Other encodings aren't seen.** A placeholder in a compressed body, a WebSocket message (clients mask every byte), or split across two writes goes out as the placeholder: the request fails, and it isn't caught going elsewhere. HTTP/3 doesn't use `SSL_write` at all.
 - **The coverage matrix** ([eval/results/coverage.md](../eval/results/coverage.md)) runs the same keyed request through each client and protocol, to the key's server and to a stranger, and CI fails if a claimed cell isn't protected or a stranger ever gets the key.
 
+- **What it costs.** A request the hook swaps the key into takes about a quarter of a millisecond longer (one round trip to KeyHandoff for the key; the certificate check is cached per connection); a request with nothing to swap, about 2 µs; bulk uploads run within measurement noise of no hook. See [eval/results/benchmarks.md](../eval/results/benchmarks.md).
+
 ### Tripwires
 
 Nothing legitimate sends a placeholder anywhere but its key's servers, so a placeholder headed elsewhere is a leak in the act.
