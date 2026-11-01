@@ -8,6 +8,7 @@ import Tile from "../components/Tile.astro";
 import AppIcon from "../components/AppIcon.astro";
 import AppPages from "../components/AppPages.astro";
 import AppGlyph from "../components/AppGlyph.astro";
+import { Crown, KeyRound, UserRound, Vault } from "@lucide/astro";
 import appCss from "../../../src/styles.css?raw";
 import { scopeAppCss } from "../lib/app-css.mjs";
 import { getLatestRelease, formatSize, ALL_RELEASES } from "../lib/releases.mjs";
@@ -393,27 +394,27 @@ const INCIDENTS = [
       </div>
       <div class="lc-stage rv" id="circle-stage" data-step="0">
         <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>Ben has the team&rsquo;s keys.</span>
+          <span class="s0"><b>1</b>Ben makes a team, so he&rsquo;s its keeper.</span>
           <span class="s1"><b>2</b>He invites Ann and Priya.</span>
           <span class="s2"><b>3</b>They join, and the keys follow.</span>
           <span class="s3"><b>4</b>Change a key once. Everyone gets it.</span>
-          <span class="s4"><b>5</b>Someone leaves? Their copies stop working.</span>
+          <span class="s4"><b>5</b>Ben removes Priya, and her copies stop working.</span>
         </p>
         <div class="ob" aria-hidden="true">
           <div class="ob-plane">
             <span class="ob-ring"></span>
             <svg class="ob-spokes" viewBox="0 0 560 560">
-              <line class="sp-ben" x1="280" y1="280" x2="63" y2="405" />
-              <line class="sp-ann" x1="280" y1="280" x2="471" y2="119" />
-              <line class="sp-priya" x1="280" y1="280" x2="471" y2="441" />
+              <line class="sp-ben" x1="280" y1="280" x2="280" y2="530" />
+              <line class="sp-ann" x1="280" y1="280" x2="63" y2="155" />
+              <line class="sp-priya" x1="280" y1="280" x2="497" y2="155" />
             </svg>
             <span class="ob-wave"></span>
             <span class="ob-spark spk-a"></span><span class="ob-spark spk-p"></span>
             <span class="ob-bolt bolt-a"></span><span class="ob-bolt bolt-p"></span><span class="ob-bolt bolt-b"></span>
-            <span class="ob-up ob-mem ann" style="--x:471px; --y:119px"><span class="nm">Ann</span><b>A<span class="ob-badge"><Icon name="key" size={14} /></span></b></span>
-            <span class="ob-up ob-core" style="--x:280px; --y:280px"><span class="ob-keys"><i><Icon name="key" size=14 /></i><i><Icon name="key" size=14 /></i><i><Icon name="key" size=14 /></i></span><i><Icon name="lock" size=34 /></i><span class="nm">Team vault</span></span>
-            <span class="ob-up ob-mem ben" style="--x:63px; --y:405px"><span class="nm">Ben</span><b>B<span class="ob-badge"><Icon name="key" size={14} /></span></b></span>
-            <span class="ob-up ob-mem priya" style="--x:471px; --y:441px"><span class="nm">Priya</span><b>P<span class="ob-badge"><Icon name="key" size={14} /></span></b></span>
+            <span class="ob-up ob-mem ann" style="--x:63px; --y:155px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Ann</span><span class="ob-invited">Invited</span></span>
+            <span class="ob-up ob-mem priya" style="--x:497px; --y:155px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Priya</span><span class="ob-invited">Invited</span></span>
+            <span class="ob-up ob-vault" style="--x:280px; --y:280px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><Vault size=88 stroke-width=1.5 /><span class="nm">Team vault</span></span>
+            <span class="ob-up ob-mem ben" style="--x:280px; --y:530px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Ben <span class="ob-role"><Crown size=12 stroke-width=2.25 />Keeper</span></span></span>
           </div>
         </div>
       </div>
