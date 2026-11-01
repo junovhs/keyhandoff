@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Host Grotesk"; src: url(FONTS/host-grotesk-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url(FONTS/geist-mono-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+  html, body { margin: 0; width: 1280px; height: 400px; overflow: hidden; }
+  body { position: relative; display: flex; align-items: center; gap: 56px; padding: 0 110px; box-sizing: border-box; color: #fff; font-family: "Host Grotesk", sans-serif;
+    background: radial-gradient(700px 380px at 82% 50%, rgba(26, 109, 255, .28), transparent 70%), radial-gradient(500px 300px at 12% 110%, rgba(26, 109, 255, .14), transparent 70%), #03060e; }
+  body::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(#182030 1px, transparent 1px), linear-gradient(90deg, #182030 1px, transparent 1px); background-size: 40px 40px; opacity: .35;
+    mask-image: radial-gradient(800px 360px at 70% 50%, #000, transparent 75%); }
+  .mark { position: relative; display: grid; place-items: center; width: 180px; height: 180px; border-radius: 40px; background: linear-gradient(100deg, #1a6dff, #2b82ff); box-shadow: 0 0 90px rgba(26, 109, 255, .55), inset 0 1px 0 rgba(255, 255, 255, .25); flex: none; }
+  .mark svg { fill: #fff; }
+  .words { position: relative; }
+  h1 { margin: 0; font-size: 96px; font-weight: 700; letter-spacing: -.045em; line-height: 1; }
+  p { margin: 18px 0 0; max-width: 820px; font-size: 32px; font-weight: 500; letter-spacing: -.02em; color: #a7b0c0; }
+  p b { color: #fff; font-weight: 600; }
+  .env { display: inline-block; margin-top: 30px; font: 500 19px "Geist Mono", monospace; color: #6aa2ff; padding: 10px 16px; border: 1px solid #2c3648; border-radius: 12px; background: rgba(8, 12, 22, .85); }
+  .env s { color: #ff6b57; text-decoration-thickness: 2px; }
+</style>
+<div class="mark"><svg viewBox="28 8 64 104" height="112" width="69"><path fill-rule="evenodd" d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z"/></svg></div>
+<div class="words">
+  <h1>KeyHandoff</h1>
+  <p><b>API keys, hands off.</b> Share and use secrets without anyone ever seeing them.</p>
+  <div class="env">STRIPE_KEY=<s>sk_live_51Hq…</s> handoff:Stripe</div>
+</div>
