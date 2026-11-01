@@ -76,8 +76,10 @@ p code, h3 code, li code { font-size: .88em; color: var(--text); background: var
 .hero { display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr); gap: 80px 56px; align-items: center; padding: 72px 0 64px; }
 .hero-copy { display: flex; flex-direction: column; gap: 20px; align-items: flex-start; min-width: 0; }
 .hero-copy .cta { margin-top: 12px; }
-h1 { margin: 0; font-size: clamp(40px, 5.2vw, 66px); line-height: 1.08; font-weight: 600; letter-spacing: -.035em; text-wrap: balance; }
+h1 { margin: 0; font-size: clamp(40px, 6.1vw, 72px); line-height: 1.24; font-weight: 600; letter-spacing: -.035em; white-space: nowrap; }
+h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spacing: -.03em; color: var(--exposed); background: var(--exposed-bg); border: 1px solid rgba(255, 107, 87, .75); border-radius: 12px; display: inline-block; line-height: 1; padding: .03em .14em .09em; margin: 0 .04em; vertical-align: baseline; }
 .lede { margin: 0; max-width: 46ch; text-wrap: pretty; font-size: 19px; color: var(--text-2); }
+.lede strong { display: block; margin-bottom: 4px; font-weight: 600; color: var(--text); }
 .cta { display: flex; gap: 12px; flex-wrap: wrap; }
 .trust { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 28px; font-size: 16px; color: #d6dbe5; }
 .trust li { display: flex; align-items: center; gap: 12px; padding-right: 28px; border-right: 1px solid var(--line); }
@@ -397,7 +399,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 
 @media (max-width: 1020px) {
   .wrap { width: calc(100% - 56px); }
-  h1 { font-size: 7vw; }
+  h1 { font-size: 8vw; }
   .hide-s { display: none; }
   .hero, .split { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .hero { padding-top: 28px; }
@@ -420,7 +422,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 @media (max-width: 560px) {
   body { font-size: 16px; }
   .wrap { width: calc(100% - 32px); }
-  h1 { font-size: 10vw; }
+  h1 { font-size: 11.2vw; }
   .nav-in { gap: 14px; height: 72px; }
   .lockup { gap: 10px; }
   .lockup .logo { height: 40px; width: auto; }
