@@ -74,6 +74,18 @@ export interface TeamView {
   keys: number;
 }
 
+/** Adding someone nearby. */
+export interface PairingView {
+  /** When it stops by itself, in Unix milliseconds. */
+  ends_at: number;
+  /** People nearby who are adding people too; id is their computer. */
+  people: ContactView[];
+  /** The person you're swapping cards with. */
+  with: string | null;
+  /** The code to compare with theirs, once both cards are here. */
+  code: string | null;
+}
+
 /** A team kept in a folder the team already syncs. */
 export interface FolderTeamView {
   id: string;
@@ -135,6 +147,7 @@ export interface View {
   invited: InviteView | null;
   /** Nearby is on. */
   nearby: boolean;
+  pairing: PairingView | null;
 }
 
 /** Before the vault opens: no passphrase yet, locked, or open. */
@@ -207,6 +220,11 @@ export const api = {
   setNearby: (on: boolean) => invoke<void>("set_nearby", { on }),
   /** Hand the sealed key straight to its person's computer. */
   sendNearby: () => invoke<void>("send_nearby"),
+  /** Add someone nearby: both people choose it, swap cards and compare a code. */
+  startPairing: () => invoke<void>("start_pairing"),
+  cancelPairing: () => invoke<void>("cancel_pairing"),
+  pairWith: (computer: string) => invoke<void>("pair_with", { computer }),
+  confirmPairing: () => invoke<void>("confirm_pairing"),
   /** Forget a contact and take them off your teams. */
   forgetContact: (id: string) => invoke<void>("forget_contact", { id }),
   /** Seal a key you already hold to a contact, or to every member of a team. */

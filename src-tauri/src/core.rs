@@ -32,6 +32,8 @@ const ALREADY_ACCEPTED: &str = "This key was already accepted and can't be opene
 pub const CARD_LOCKS: usize = 12;
 /// An invite in a team folder works for this long; a new one can be made any time.
 const INVITE_TTL: u64 = 30 * 24 * 60 * 60;
+/// Adding someone nearby stops by itself after this long.
+const PAIRING_MS: u64 = 2 * 60 * 1000;
 /// A program waiting for Allow is refused after this long.
 pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -90,6 +92,20 @@ struct ProgramAsk {
     reply: mpsc::Sender<Answer>,
 }
 
+/// Adding someone nearby: the card you sent them and the one they sent you,
+/// until you confirm the code matches.
+struct Pairing {
+    ends_at: u64,
+    with: Option<PairingWith>,
+}
+
+struct PairingWith {
+    fingerprint: String,
+    name: String,
+    sent: Option<Vec<u8>>,
+    got: Option<Card>,
+}
+
 struct Core {
     store: Store,
     settings: Settings,
@@ -119,6 +135,7 @@ struct Core {
     replacing: Option<[u8; 16]>,
     /// Listening and announcing on the local network, while Nearby is on.
     nearby: Option<Nearby>,
+    pairing: Option<Pairing>,
     /// Programs allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
     program: Option<ProgramAsk>,
@@ -216,6 +233,19 @@ pub struct FolderTeamView {
     pub to_replace: Vec<String>,
 }
 
+/// Adding someone nearby.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct PairingView {
+    /// When it stops by itself, in Unix milliseconds.
+    pub ends_at: u64,
+    /// People nearby who are adding people too: id is their computer.
+    pub people: Vec<ContactView>,
+    /// The person you're swapping cards with.
+    pub with: Option<String>,
+    /// The code to compare with theirs, once both cards are here.
+    pub code: Option<String>,
+}
+
 /// An invite you opened, waiting for Join.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct InviteView {
@@ -268,6 +298,7 @@ pub struct View {
     pub invited: Option<InviteView>,
     /// Nearby is on.
     pub nearby: bool,
+    pub pairing: Option<PairingView>,
 }
 
 impl Handoff {
@@ -301,6 +332,7 @@ impl Handoff {
             invited: None,
             replacing: None,
             nearby: None,
+            pairing: None,
             approvals,
             program: None,
             asks: 0,
@@ -470,6 +502,7 @@ impl Handoff {
     /// can do that; it's then opened like a file you opened yourself.
     fn receive_nearby(&self, bytes: &[u8]) -> Result<(), String> {
         let senders: Vec<PublicIdentity> = match keyhandoff_seal::parse_object(bytes).map_err(|e| e.to_string())? {
+            Object::Card(card) => return self.receive_card(card),
             Object::Sealed(sealed) => vec![sealed.sender()],
             Object::Bundle(bundle) => bundle.parts().iter().map(|p| p.sender()).collect(),
             _ => return Err("Only keys can be sent nearby.".into()),
@@ -484,6 +517,96 @@ impl Handoff {
         let result = self.open_object(bytes, None);
         (self.notify)();
         result
+    }
+
+    /// Add someone nearby: announce your name for a while, so people near you
+    /// who are doing the same can pick you. Turns Nearby on if it's off.
+    pub fn start_pairing(&self) -> Result<(), String> {
+        if self.lock().nearby.is_none() {
+            self.set_nearby(true)?;
+        }
+        let mut core = self.lock();
+        let name = core.settings.name.clone();
+        core.nearby.as_ref().ok_or("Nearby is off.")?.set_pairing(Some(&name))?;
+        core.pairing = Some(Pairing { ends_at: now_ms() + PAIRING_MS, with: None });
+        Ok(())
+    }
+
+    pub fn cancel_pairing(&self) {
+        self.lock().stop_pairing();
+    }
+
+    /// Pick someone who is adding people too: they get your card, and their
+    /// KeyHandoff sends theirs back.
+    pub fn pair_with(&self, fingerprint: &str) -> Result<(), String> {
+        let (to, card) = {
+            let mut core = self.lock();
+            if core.pairing.as_ref().is_none_or(|p| p.with.as_ref().is_some_and(|w| w.fingerprint != fingerprint)) {
+                return Err("Start Add someone nearby first.".into());
+            }
+            let nearby = core.nearby.as_ref().ok_or("Nearby is off.")?;
+            let (_, name) = nearby.pairing().into_iter().find(|(fp, _)| fp == fingerprint).ok_or("They aren't adding people any more.")?;
+            let to = nearby.find(fingerprint).ok_or("They aren't nearby any more.")?;
+            let card = core.fresh_card()?;
+            let with = core.pairing.as_mut().expect("checked").with.get_or_insert(PairingWith { fingerprint: fingerprint.into(), name, sent: None, got: None });
+            with.sent = Some(card.clone());
+            (to, card)
+        };
+        nearby::deliver(to, &card)
+    }
+
+    /// Their card arrived while you're adding people: keep it until you
+    /// confirm the code, and send yours back if you haven't.
+    fn receive_card(&self, card: Card) -> Result<(), String> {
+        let send_back = {
+            let mut core = self.lock();
+            let fingerprint = card.holder().fingerprint();
+            let Some(pairing) = core.pairing.as_ref().filter(|p| now_ms() < p.ends_at) else {
+                return Err("They aren't adding people right now. Ask them to choose Add someone nearby.".into());
+            };
+            if pairing.with.as_ref().is_some_and(|w| w.fingerprint != fingerprint) {
+                return Err("They're adding someone else right now. Try again in a moment.".into());
+            }
+            let needs_ours = pairing.with.as_ref().is_none_or(|w| w.sent.is_none());
+            let ours = if needs_ours { Some(core.fresh_card()?) } else { None };
+            let at = core.nearby.as_ref().and_then(|n| n.find(&fingerprint));
+            let with = core.pairing.as_mut().expect("checked").with.get_or_insert(PairingWith {
+                fingerprint: fingerprint.clone(),
+                name: card.name().to_string(),
+                sent: None,
+                got: None,
+            });
+            with.got = Some(card);
+            match ours {
+                Some(ours) => {
+                    with.sent = Some(ours.clone());
+                    Some((at.ok_or("Their computer isn't announcing itself. Try again.")?, ours))
+                }
+                None => None,
+            }
+        };
+        (self.notify)();
+        if let Some((at, ours)) = send_back {
+            // Not inside their request: their computer is waiting on our reply.
+            std::thread::spawn(move || {
+                let _ = nearby::deliver(at, &ours);
+            });
+        }
+        Ok(())
+    }
+
+    /// The codes match: add them, the way opening their card would.
+    pub fn confirm_pairing(&self) -> Result<(), String> {
+        let mut core = self.lock();
+        let card = core
+            .pairing
+            .as_mut()
+            .and_then(|p| p.with.as_mut())
+            .filter(|w| w.sent.is_some())
+            .and_then(|w| w.got.take())
+            .ok_or("Their card hasn't arrived yet.")?;
+        core.stop_pairing();
+        core.add_contact(&card)
     }
 
     /// Hand the sealed key on the Sealed screen straight to its person's
@@ -1116,6 +1239,36 @@ impl Core {
         self.nearby.as_ref()?.find(&fingerprint)
     }
 
+    /// A new card for one person, its locks kept in the keyring. Returns its bytes.
+    fn fresh_card(&mut self) -> Result<Vec<u8>, String> {
+        let (card, pending) = keyhandoff_seal::create_card(&self.identity, &self.settings.name, now(), DEFAULT_CARD_TTL, CARD_LOCKS)
+            .map_err(|e| e.to_string())?;
+        pending.into_iter().for_each(|p| self.keyring.insert(p));
+        self.store.save_keyring(&self.keyring)?;
+        Ok(card.to_bytes().to_vec())
+    }
+
+    fn stop_pairing(&mut self) {
+        self.pairing = None;
+        if let Some(n) = &self.nearby {
+            let _ = n.set_pairing(None);
+        }
+    }
+
+    fn pairing_view(&self, pairing: &Pairing) -> PairingView {
+        let people = self
+            .nearby
+            .as_ref()
+            .map(|n| n.pairing())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(fp, name)| ContactView { id: fp.clone(), name, computer: fp, sends_left: 0, nearby: true })
+            .collect();
+        let with = pairing.with.as_ref();
+        let code = with.and_then(|w| Some(nearby::pairing_code(w.sent.as_ref()?, w.got.as_ref()?.to_bytes())));
+        PairingView { ends_at: pairing.ends_at, people, with: with.map(|w| w.name.clone()), code }
+    }
+
     /// The index of a team you keep.
     fn keeping(&self, team_id: &str) -> Result<usize, String> {
         self.folder_teams
@@ -1394,6 +1547,9 @@ impl Core {
 
     /// Delete kept keys and one-time keys that ran out.
     fn tick(&mut self) -> Result<(), String> {
+        if self.pairing.as_ref().is_some_and(|p| now_ms() >= p.ends_at) {
+            self.stop_pairing();
+        }
         let t = now();
         if self.vault.purge(t) > 0 {
             self.store.save_vault(&self.vault)?;
@@ -1436,6 +1592,7 @@ impl Core {
             teams: self.teams.iter().map(|t| self.team_view(t)).collect(),
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
             nearby: self.nearby.is_some(),
+            pairing: self.pairing.as_ref().map(|p| self.pairing_view(p)),
             invited: self.invited.as_ref().map(|(invite, folder)| InviteView {
                 team: invite.team().to_string(),
                 keeper: invite.keeper_name().to_string(),
@@ -2047,7 +2204,7 @@ mod tests {
         let ann_fp = ann.handoff.view().computer;
         for sender in [&ben, &mallory] {
             sender.handoff.start_nearby(false).unwrap();
-            sender.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at);
+            sender.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at, None);
         }
 
         let key = hold(&ben, "Dialpad", KEY);
@@ -2075,6 +2232,55 @@ mod tests {
 
         for d in [data, ben.data, mallory.data] {
             let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn pairing_nearby_swaps_cards_and_both_see_the_same_code() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ann, ben) = (app("Ann"), app("Ben"));
+        for a in [&ann, &ben] {
+            a.handoff.start_nearby(false).unwrap();
+        }
+        let at = |a: &App| std::net::SocketAddr::from(([127, 0, 0, 1], a.handoff.lock().nearby.as_ref().unwrap().port()));
+        let (ann_fp, ben_fp) = (ann.handoff.view().computer, ben.handoff.view().computer);
+        // Discovery is mDNS; here each side is told the other is adding people.
+        ann.handoff.lock().nearby.as_ref().unwrap().note(&ben_fp, at(&ben), Some("Ben"));
+        ben.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at(&ann), Some("Ann"));
+
+        // A card arriving when Ann isn't adding anyone is refused.
+        let stray = ben.handoff.lock().fresh_card().unwrap();
+        assert!(nearby::deliver(at(&ann), &stray).unwrap_err().contains("aren't adding people"));
+
+        ann.handoff.start_pairing().unwrap();
+        ben.handoff.start_pairing().unwrap();
+        assert_eq!(ann.handoff.view().pairing.unwrap().people.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Ben"]);
+        ann.handoff.pair_with(&ben_fp).unwrap();
+        let code = |a: &App| a.handoff.view().pairing.and_then(|p| p.code);
+        let until = std::time::Instant::now() + Duration::from_secs(5);
+        while (code(&ann).is_none() || code(&ben).is_none()) && std::time::Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let shown = code(&ann).expect("Ann sees a code");
+        assert_eq!(code(&ben).as_deref(), Some(shown.as_str()), "both screens show the same code");
+        assert_eq!(ben.handoff.view().pairing.unwrap().with.as_deref(), Some("Ann"));
+
+        ann.handoff.confirm_pairing().unwrap();
+        ben.handoff.confirm_pairing().unwrap();
+        assert_eq!(ann.handoff.view().contacts.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Ben"]);
+        let ann_on_ben = ben.handoff.view().contacts[0].clone();
+        assert_eq!((ann_on_ben.name.as_str(), ann_on_ben.sends_left), ("Ann", CARD_LOCKS));
+        assert!(ann.handoff.view().pairing.is_none());
+
+        // Now Ben is on Ann's list, so a key goes straight to her.
+        ben.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at(&ann), None);
+        let key = hold(&ben, "Dialpad", KEY);
+        ben.handoff.send_kept(&ann_on_ben.id, &key).unwrap();
+        ben.handoff.send_nearby().unwrap();
+        assert_eq!(ann.handoff.view().accepted.unwrap().label, "Dialpad");
+
+        for a in [ann, ben] {
+            let _ = fs::remove_dir_all(a.data);
         }
     }
 

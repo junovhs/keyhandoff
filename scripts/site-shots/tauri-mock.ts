@@ -57,6 +57,7 @@ const HOME: View = {
   folder_teams: [],
   invited: null,
   nearby: false,
+  pairing: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
@@ -81,6 +82,8 @@ const SCENES: Record<string, Partial<View>> = {
   "folder-new": { name: "Ben", contacts: [], teams: [] },
   "folder-asking": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, asking: [ANN, CONTACTS[1]] }] },
   "folder-kept": { name: "Ben", contacts: [], teams: [], folder_teams: [{ ...KEPT, members: ["Ann", "Priya"] }] },
+  "pairing": { name: "Ben", keys: [], contacts: [], nearby: true, pairing: { ends_at: Date.now() + 90000, people: [{ ...ANN, id: "72ca77a8cc39c3ba", nearby: true }], with: null, code: null } },
+  "pairing-code": { name: "Ben", keys: [], contacts: [], nearby: true, pairing: { ends_at: Date.now() + 70000, people: [], with: "Ann", code: "482 913" } },
   "send-nearby": { name: "Ben", nearby: true, contacts: [{ ...ANN, nearby: true }, CONTACTS[1]] },
   "sealed-nearby": { name: "Ben", keys: [], nearby: true, safe: { ...safe("sealed"), nearby: true } },
   "home-sent-nearby": { name: "Ben", nearby: true, notice: "Sent to Ann's computer." },

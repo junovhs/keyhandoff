@@ -165,6 +165,7 @@ export const docs = defineDocs({
                     "Unused locks stop working after {fact:cardLife}.",
                   ],
                 },
+                { kind: "p", text: "**In the same room?** Both of you click **Add someone nearby** in Send a key, on the same network. Pick each other, and both screens show a six-digit code. If the codes match, click **Yes, add**: you're on each other's lists, and you can send keys straight across with Nearby. If they don't match, choose **No**: something on the network got in the middle." },
                 { kind: "p", text: "**When someone sends you their card,** open it: double-click it, drop it on the window, or press Ctrl V in KeyHandoff. **Card added** shows their name and computer fingerprint, and they're on your Send a key list." },
                 { kind: "p", text: "When someone opens your card, you become one of their contacts and they see how many keys they can still send you. When two or fewer are left, Send a key marks you in amber, on your row and on any team you're in, and the send that uses the last one says to ask you for a new card." },
                 { kind: "p", text: "**To forget a contact,** point at them in Send a key, click the cross and then **Forget for good?**. Their locks go and they come off your teams; a team left with nobody goes too. Keys you already sent them stay with them." },

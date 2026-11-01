@@ -324,6 +324,28 @@ async fn send_nearby(app: AppHandle, h: H) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn start_pairing(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.start_pairing())
+}
+
+#[tauri::command]
+fn cancel_pairing(app: AppHandle, h: H) {
+    h.cancel_pairing();
+    changed(&app);
+}
+
+/// Sends your card to someone nearby. Off the main thread: it waits for them.
+#[tauri::command]
+async fn pair_with(app: AppHandle, h: H, computer: String) -> Result<(), String> {
+    done(&app, h.pair_with(&computer))
+}
+
+#[tauri::command]
+fn confirm_pairing(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.confirm_pairing())
+}
+
+#[tauri::command]
 fn turn_away(app: AppHandle, h: H, team: String, member: String) -> Result<(), String> {
     done(&app, h.turn_away(&team, &member))
 }
@@ -517,7 +539,7 @@ pub fn run() {
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {

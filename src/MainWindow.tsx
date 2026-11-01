@@ -10,6 +10,7 @@ import {
   useView,
   type ContactView,
   type FolderTeamView,
+  type PairingView,
   type InviteView,
   type Keep,
   type KeyView,
@@ -111,6 +112,7 @@ export function MainWindow() {
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
       {view?.invited && !view.accepted && <InviteSheet invite={view.invited} run={run} />}
+      {view?.pairing && !view.added && <PairingSheet pairing={view.pairing} run={run} />}
       {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
       {view?.added && (
         <ContactSheet contact={view.added} onSend={(c) => void api.dismiss().then(() => setSending({ team: false, id: c.id, name: c.name }))} />
@@ -657,6 +659,10 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <Icon name={view.nearby ? "check" : "users"} />
         <span>{view.nearby ? "Nearby is on: people on this network can find you" : "Find people on this network"}</span>
       </button>
+      <button className="chip nearby-toggle" onClick={() => void run(api.startPairing())} title="Meet someone in person: both of you choose this, then compare a code.">
+        <Icon name="user" />
+        <span>Add someone nearby</span>
+      </button>
       {view.folder_teams.length > 0 && (
         <div className="keys">
           <span className="label">Team folders</span>
@@ -802,6 +808,57 @@ function FolderTeamRows({ team, run, onPick }: { team: FolderTeamView; run: Run;
         </div>
       ))}
     </>
+  );
+}
+
+/** Adding someone nearby: pick them, then compare the code on both screens. */
+function PairingSheet({ pairing, run }: { pairing: PairingView; run: Run }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), []);
+  const cancel = () => void run(api.cancelPairing());
+  if (pairing.with && pairing.code) {
+    return (
+      <div className="sheet" ref={sheet}>
+        <div className="hero">
+          <span className="lede">Compare with {pairing.with}</span>
+          <h2 className="display pairing-code mono">{pairing.code}</h2>
+        </div>
+        <p className="lede">Does {pairing.with}'s screen show the same code? If it doesn't, someone may be in the middle: choose No.</p>
+        <span className="grow-space" />
+        <div className="btn-row">
+          <button className="btn secondary" onClick={cancel}>No</button>
+          <button className="btn primary grow" onClick={() => void run(api.confirmPairing())}>Yes, add {pairing.with}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="hero">
+        <h2 className="display md">Add someone nearby</h2>
+        <p className="lede">
+          {pairing.with ? `Waiting for ${pairing.with}'s card…` : "Ask them to choose Add someone nearby too, then pick them here."}
+        </p>
+      </div>
+      <div className="keys">
+        {pairing.people.length === 0 && <p className="help">No one nearby is adding people yet.</p>}
+        {pairing.people.map((p) => (
+          <div key={p.id} className="key-row">
+            <button className="who contact" disabled={pairing.with !== null} onClick={() => void run(api.pairWith(p.id))}>
+              <span className="key-ico"><Icon name="user" /></span>
+              <span className="who">
+                <span className="nm">{p.name}</span>
+                <span className="meta mono">{p.computer}</span>
+              </span>
+            </button>
+          </div>
+        ))}
+      </div>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn secondary grow" onClick={cancel}>Cancel</button>
+      </div>
+    </div>
   );
 }
 

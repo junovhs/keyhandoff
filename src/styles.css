@@ -159,6 +159,7 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .nearby-toggle:hover { color: var(--text); }
 .nearby-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent-ink); }
 .near { color: var(--accent-ink); font-weight: 500; }
+.pairing-code { font-size: 48px; letter-spacing: .04em; }
 
 /* Once / 30 days / Keep */
 .segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line-strong); border-radius: 10px; }
