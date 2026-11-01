@@ -3213,6 +3213,205 @@ else:
         let _ = fs::remove_dir_all(ben.data);
     }
 
+    /// EVAL-01's coverage matrix: every client in `eval/coverage/clients`
+    /// sends the same keyed request, under `keyhandoff run`, to a server
+    /// verified as the key's host and to a stranger with a valid certificate
+    /// for another name. Each cell records what each server got (the key, the
+    /// placeholder, or nothing) and request times with and without the hook,
+    /// and the matrix goes to `eval/results/coverage.md` and
+    /// `.json`. It fails if any stranger ever gets the key, or if a cell the
+    /// docs claim isn't protected. Run it with
+    /// `cargo test --lib coverage_matrix -- --ignored --nocapture`.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore]
+    fn coverage_matrix() {
+        use crate::run::tests::{finished, start};
+        use std::process::{Command, Stdio};
+        const STRIPE: &[u8] = b"sk_test_51SyntheticMatrixKey0123456789abcdXYZ";
+        const SAMPLES: usize = 5;
+        let have = |p: &str, arg: &str| Command::new(p).arg(arg).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok();
+        assert!(have("node", "--version") && have("openssl", "version") && have("setsid", "--version"), "needs node, openssl and setsid");
+        let me = app("Matrix");
+        let h = me.handoff.clone();
+        let dir = me.data.join("matrix");
+        fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval");
+        for entry in fs::read_dir(eval.join("coverage/clients")).unwrap().flatten() {
+            fs::copy(entry.path(), dir.join(entry.file_name())).unwrap();
+        }
+        // Certificates from a test CA, and one Node server per name (and a plain one).
+        let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
+        sh("openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
+        let mut servers = Vec::new();
+        let mut ports = serde_json::Map::new();
+        for (name, plain) in [("api.stripe.test", false), ("evil.test", false), ("plain", true)] {
+            if !plain {
+                sh(&format!("openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
+            }
+            let mut args = vec![eval.join("coverage/server.mjs").display().to_string(), name.into(), format!("{name}.pem"), format!("{name}.key"), format!("{name}.jsonl")];
+            if plain {
+                args.push("--plain".into());
+            }
+            let mut child = Command::new("node").args(&args).current_dir(&dir).stdout(Stdio::piped()).spawn().unwrap();
+            let mut line = String::new();
+            std::io::BufRead::read_line(&mut std::io::BufReader::new(child.stdout.take().unwrap()), &mut line).unwrap();
+            ports.insert(name.into(), serde_json::json!(line.trim().parse::<u16>().unwrap()));
+            servers.push(child);
+        }
+        fs::write(dir.join("matrix.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "ports": ports }).to_string()).unwrap();
+        fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        let go_built = have("go", "version")
+            && Command::new("go").args(["build", "-o", "go_nethttp", "go_nethttp.go"]).current_dir(&dir).env("GOFLAGS", "-mod=mod").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+        {
+            let mut core = h.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(dir.join("ca.pem")));
+        }
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        // Answer every prompt with Always: each cell's command is its own approval.
+        let answering = Arc::new(AtomicBool::new(true));
+        let answerer = {
+            let (h, on) = (h.clone(), answering.clone());
+            std::thread::spawn(move || {
+                while on.load(Ordering::SeqCst) {
+                    if h.view().program.is_some() {
+                        let _ = h.answer(Answer::Always);
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            })
+        };
+
+        struct Cell {
+            client: &'static str,
+            tls: &'static str,
+            protocol: &'static str,
+            command: &'static [&'static str],
+            needs: Option<(&'static str, &'static str)>,
+            claimed: bool,
+        }
+        let cell = |client, tls, protocol, command, needs, claimed| Cell { client, tls, protocol, command, needs, claimed };
+        let cells = [
+            cell("Python http.client", "OpenSSL (system)", "HTTP/1.1, header", &["python3", "py_httpclient.py"][..], Some(("python3", "--version")), true),
+            cell("Python requests", "OpenSSL (system)", "HTTP/1.1, header", &["python3", "py_requests.py"], Some(("python3", "-c import requests")), true),
+            cell("Python httpx", "OpenSSL (system)", "HTTP/1.1, header", &["python3", "py_httpx.py"], Some(("python3", "-c import httpx")), true),
+            cell("Python", "OpenSSL (system)", "HTTP/1.1, chunked body", &["python3", "py_chunked.py"], Some(("python3", "--version")), true),
+            cell("Python", "OpenSSL (system)", "HTTP/1.1, gzip body", &["python3", "py_gzip.py"], Some(("python3", "--version")), false),
+            cell("Python", "OpenSSL (system)", "WebSocket upgrade, header", &["sh", "ws_upgrade.sh"], Some(("python3", "--version")), true),
+            cell("Python", "OpenSSL (system)", "WebSocket message (masked)", &["sh", "ws_message.sh"], Some(("python3", "--version")), false),
+            cell("curl", "OpenSSL (system)", "HTTP/1.1, header", &["sh", "curl_h1.sh"], Some(("curl", "--version")), true),
+            cell("curl", "OpenSSL (system), nghttp2", "HTTP/2, header (HPACK)", &["sh", "curl_h2.sh"], Some(("curl", "--version")), true),
+            cell("curl", "OpenSSL (system), nghttp2", "HTTP/2, body", &["sh", "curl_h2_body.sh"], Some(("curl", "--version")), true),
+            cell("curl", "none", "plain HTTP to a stranger", &["sh", "curl_plain.sh"], Some(("curl", "--version")), true),
+            cell("Ruby Net::HTTP", "OpenSSL (system)", "HTTP/1.1, header", &["ruby", "ruby_nethttp.rb"], Some(("ruby", "--version")), true),
+            cell("Node.js https", "OpenSSL (built into Node)", "HTTP/1.1, header", &["node", "node_https.mjs"], Some(("node", "--version")), false),
+            cell("Go net/http", "Go crypto/tls", "HTTP/1.1, header", &["./go_nethttp"], None, false),
+        ];
+        let read = |file: &str| fs::read_to_string(dir.join(file)).unwrap_or_default();
+        let median = |mut v: Vec<f64>| -> Option<f64> {
+            v.sort_by(f64::total_cmp);
+            (!v.is_empty()).then(|| v[v.len() / 2])
+        };
+        let time_of = |text: &str| -> Option<f64> {
+            text.lines().find(|l| l.starts_with("api.stripe.test ok"))?.split("TIME ").nth(1)?.trim().parse().ok()
+        };
+        let key = std::str::from_utf8(STRIPE).unwrap();
+        let mut rows = Vec::new();
+        for c in &cells {
+            let available = match c.needs {
+                Some((p, arg)) => {
+                    let mut parts = arg.splitn(2, ' ');
+                    let (a, b) = (parts.next().unwrap(), parts.next());
+                    Command::new(p).arg(a).args(b).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+                }
+                None => go_built,
+            };
+            if !available {
+                rows.push(serde_json::json!({ "client": c.client, "tls": c.tls, "protocol": c.protocol, "result": "not run: not installed here", "claimed": c.claimed }));
+                continue;
+            }
+            let (mut hooked, mut direct) = (Vec::new(), Vec::new());
+            let (mut good, mut evil, mut text) = (String::new(), String::new(), String::new());
+            let mut placeholder = String::new();
+            for sample in 0..SAMPLES {
+                for f in ["api.stripe.test.jsonl", "evil.test.jsonl", "plain.jsonl"] {
+                    let _ = fs::remove_file(dir.join(f));
+                }
+                h.lock().tripwire.blocked.clear();
+                let (out, code) = finished(&start(&dir, &profile, c.command, None));
+                assert_eq!(code, 0, "{}: {out}", c.client);
+                hooked.extend(time_of(&out));
+                if sample == 0 {
+                    (good, evil, text) = (read("api.stripe.test.jsonl") + &read("plain.jsonl"), read("evil.test.jsonl") + &read("plain.jsonl"), out);
+                    placeholder = h.lock().tripwire.runs.last().unwrap().placeholders[0].1.clone();
+                }
+                // The same client with the key itself, no KeyHandoff, for the baseline time.
+                let plain = Command::new(c.command[0]).args(&c.command[1..]).current_dir(&dir).env("STRIPE_API_KEY", key).output().unwrap();
+                direct.extend(time_of(&String::from_utf8_lossy(&plain.stdout)));
+            }
+            let got = |log: &str| {
+                if log.contains(key) {
+                    "key"
+                } else if log.contains(&placeholder) {
+                    "placeholder"
+                } else if log.is_empty() {
+                    "nothing"
+                } else {
+                    "the request, without key or placeholder"
+                }
+            };
+            let plain_cell = c.command.contains(&"curl_plain.sh");
+            let (to_server, to_stranger) = (if plain_cell { "-" } else { got(&good) }, got(&evil));
+            assert_ne!(to_stranger, "key", "{} {}: a stranger got the key", c.client, c.protocol);
+            let protected = (plain_cell || to_server == "key") && (to_stranger == "nothing" || to_stranger.starts_with("the request"));
+            let added = median(hooked.clone()).zip(median(direct.clone())).map(|(a, b)| a - b);
+            let blocked = text.contains("KeyHandoff stopped") || text.contains("KeyHandoff refused");
+            rows.push(serde_json::json!({
+                "client": c.client, "tls": c.tls, "protocol": c.protocol, "claimed": c.claimed,
+                "server_got": to_server, "stranger_got": to_stranger, "stranger_blocked": blocked,
+                "result": if protected { "protected" } else { "key safe, not protected" },
+                "hooked_ms": median(hooked), "direct_ms": median(direct), "added_ms": added,
+            }));
+        }
+        answering.store(false, Ordering::SeqCst);
+        answerer.join().unwrap();
+        for mut s in servers {
+            let _ = s.kill();
+            let _ = s.wait();
+        }
+
+        // Write it up.
+        let version = |p: &str, a: &str| {
+            Command::new(p).arg(a).output().ok().map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string()).unwrap_or_default()
+        };
+        let env = serde_json::json!({
+            "os": fs::read_to_string("/etc/os-release").ok().and_then(|s| s.lines().find(|l| l.starts_with("PRETTY_NAME=")).map(|l| l[12..].trim_matches('"').to_string())),
+            "kernel": version("uname", "-r"), "openssl": version("openssl", "version"), "python": version("python3", "--version"),
+            "curl": version("curl", "--version"), "ruby": version("ruby", "--version"), "node": version("node", "--version"), "go": version("go", "version"),
+        });
+        let mut md = String::from("# Coverage matrix\n\nThe same keyed request, under `keyhandoff run`, to a server verified as the key's host and to a stranger with a valid certificate for another name. **Protected**: the key's server got the key and the stranger got nothing. **Key safe, not protected**: the key never left, but the swap didn't happen (the key's server got the placeholder) or the stranger got the placeholder. Request times with and without the hook are in coverage.json; at this scale they're dominated by TCP timing (a ±40 ms delayed-ACK effect that comes and goes with how a client splits its writes), so the hook's own cost is measured separately (EVAL-03).\n\n");
+        md += "| Client | TLS | Protocol | Key's server got | Stranger got | Result |\n|---|---|---|---|---|---|\n";
+        for r in &rows {
+            let s = |k: &str| r[k].as_str().unwrap_or("-").to_string();
+            let result = if r["claimed"].as_bool() == Some(true) { format!("{} (claimed)", s("result")) } else { s("result") };
+            md += &format!("| {} | {} | {} | {} | {} | {} |\n", s("client"), s("tls"), s("protocol"), s("server_got"), s("stranger_got"), result);
+        }
+        md += "\nNot in this run: Postgres and Redis over TLS (no `psql` or `redis-cli` here), Java (JSSE), Rust with rustls, HTTP/3 (this curl has no QUIC), Windows (schannel). \n";
+        md += &format!("\nEnvironment: {}\n\nRegenerate: `cd src-tauri && cargo test --lib coverage_matrix -- --ignored --nocapture`.\n", serde_json::to_string(&env).unwrap());
+        fs::create_dir_all(eval.join("results")).unwrap();
+        fs::write(eval.join("results/coverage.md"), &md).unwrap();
+        fs::write(eval.join("results/coverage.json"), serde_json::to_string_pretty(&serde_json::json!({ "environment": env, "cells": rows })).unwrap()).unwrap();
+        println!("{md}");
+        let unprotected: Vec<_> = rows.iter().filter(|r| r["claimed"].as_bool() == Some(true) && r["result"] != "protected").map(|r| format!("{} {}", r["client"], r["protocol"])).collect();
+        assert!(unprotected.is_empty(), "claimed but not protected: {unprotected:?}");
+        let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{profile}-keys.sock")));
+        let _ = fs::remove_dir_all(me.data);
+    }
+
     #[test]
     fn helpers() {
         assert_eq!(file_name("Key for", "a/b:c."), "Key for a_b_c.handoff");

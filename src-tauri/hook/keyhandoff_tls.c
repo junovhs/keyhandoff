@@ -75,6 +75,8 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 /* Set while this hook talks to KeyHandoff, so its own socket calls pass. */
 static __thread int talking;
 
+static void hp_init(void);
+
 __attribute__((constructor)) static void hook_init(void) {
     const char *value = getenv(ENV_NAME);
     if (!value || strlen(value) < TOKEN_HEX + 2 || value[TOKEN_HEX] != ':' || strlen(value + TOKEN_HEX + 1) >= sizeof socket_path)
@@ -83,6 +85,7 @@ __attribute__((constructor)) static void hook_init(void) {
     strcpy(socket_path, value + TOKEN_HEX + 1);
     snprintf(hook_env, sizeof hook_env, "%s=%s", ENV_NAME, value);
     unsetenv(ENV_NAME);
+    hp_init();
     active = 1;
 }
 
@@ -394,52 +397,409 @@ static int tls_blocked(SSL *ssl, const char *destination) {
     return hit;
 }
 
-/* The bytes to write: `buf` itself, or a copy with each placeholder for a
- * verified host replaced by its key, which the caller wipes and frees; or
- * null to refuse the write, when a placeholder would go anywhere else or the
- * connection is to a refused destination. */
-static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy) {
+/* ---- HTTP/2 ----
+ * HTTP/2 compresses headers (HPACK) before they reach SSL_write, usually
+ * with a Huffman code, so a placeholder in a header isn't there as written.
+ * On a connection that chose h2, the hook follows the frames from the
+ * connection preface on, decodes each complete header block's string
+ * literals, swaps placeholders where the connection allows, and encodes
+ * the string again the same way (same representation, same table effect:
+ * the key is as long as its placeholder, so table sizes don't change). A
+ * header block split over CONTINUATION frames or writes isn't rewritten. */
+
+#include "hpack_huffman.h"
+
+#define H2_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+#define H2_CONNS 128
+
+static unsigned short hp_sorted[257];
+static unsigned int hp_first[31];
+static int hp_count[31], hp_index[31];
+
+/* Canonical decoding tables: symbols in code order, and where each length starts. */
+static void hp_init(void) {
+    int k = 0;
+    for (int len = 1; len <= 30; len++) {
+        hp_index[len] = k;
+        for (int sym = 0; sym < 257; sym++)
+            if (hpack_lengths[sym] == len) hp_sorted[k++] = (unsigned short)sym;
+        hp_count[len] = k - hp_index[len];
+        hp_first[len] = hp_count[len] ? hpack_codes[hp_sorted[hp_index[len]]] : 0;
+    }
+}
+
+static long hp_decode(const unsigned char *in, size_t n, unsigned char *out, size_t cap) {
+    unsigned int code = 0;
+    int len = 0;
+    size_t o = 0;
+    for (size_t i = 0; i < n; i++) {
+        for (int bit = 7; bit >= 0; bit--) {
+            code = code << 1 | ((in[i] >> bit) & 1);
+            if (++len > 30) return -1;
+            if (hp_count[len] && code >= hp_first[len] && code - hp_first[len] < (unsigned)hp_count[len]) {
+                int sym = hp_sorted[hp_index[len] + (int)(code - hp_first[len])];
+                if (sym == 256 || o >= cap) return -1;
+                out[o++] = (unsigned char)sym;
+                code = 0;
+                len = 0;
+            }
+        }
+    }
+    /* What's left is padding: under 8 bits, all ones. */
+    if (len > 7 || code != (1u << len) - 1) return -1;
+    return (long)o;
+}
+
+static size_t hp_encode(const unsigned char *in, size_t n, unsigned char *out) {
+    unsigned long long bits = 0;
+    int held = 0;
+    size_t o = 0;
+    for (size_t i = 0; i < n; i++) {
+        bits = bits << hpack_lengths[in[i]] | hpack_codes[in[i]];
+        held += hpack_lengths[in[i]];
+        while (held >= 8) {
+            held -= 8;
+            out[o++] = (unsigned char)(bits >> held);
+        }
+        bits &= (1ULL << held) - 1;
+    }
+    if (held) out[o++] = (unsigned char)(bits << (8 - held) | ((1u << (8 - held)) - 1));
+    return o;
+}
+
+static int hp_int(const unsigned char *p, size_t n, size_t *i, int prefix, size_t *out) {
+    if (*i >= n) return 0;
+    size_t max = (1u << prefix) - 1, v = p[(*i)++] & max;
+    if (v < max) {
+        *out = v;
+        return 1;
+    }
+    for (int shift = 0; *i < n && shift <= 21; shift += 7) {
+        unsigned char b = p[(*i)++];
+        v += (size_t)(b & 0x7f) << shift;
+        if (!(b & 0x80)) {
+            *out = v;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static size_t hp_put_int(unsigned char *o, unsigned char high, int prefix, size_t v) {
+    size_t max = (1u << prefix) - 1, k = 1;
+    if (v < max) {
+        o[0] = (unsigned char)(high | v);
+        return 1;
+    }
+    o[0] = (unsigned char)(high | max);
+    for (v -= max; v >= 128; v >>= 7) o[k++] = (unsigned char)(v & 0x7f) | 0x80;
+    o[k++] = (unsigned char)v;
+    return k;
+}
+
+/* Where each connection is in its frames: bytes of a frame still to come. */
+struct h2conn {
+    SSL *ssl;
+    size_t skip;
+};
+static struct h2conn h2conns[H2_CONNS];
+static pthread_mutex_t h2lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* What a write does to that, applied once the write goes through. */
+struct h2plan {
+    int track; /* 1: from the preface, 2: carry on, 0: nothing to do */
+    int lost;  /* stop following this connection */
+    size_t skip;
+};
+
+static struct h2conn *h2_find(SSL *ssl) {
+    for (int i = 0; i < H2_CONNS; i++)
+        if (h2conns[i].ssl == ssl) return &h2conns[i];
+    return 0;
+}
+
+static void h2_commit(SSL *ssl, const struct h2plan *plan) {
+    if (!plan->track) return;
+    pthread_mutex_lock(&h2lock);
+    struct h2conn *c = h2_find(ssl);
+    if (!c && plan->track == 1) c = h2_find(0);
+    if (!c && plan->track == 1) c = &h2conns[(size_t)ssl / 64 % H2_CONNS];
+    if (c) {
+        c->ssl = plan->lost ? 0 : ssl;
+        c->skip = plan->skip;
+    }
+    pthread_mutex_unlock(&h2lock);
+}
+
+static int is_h2(SSL *ssl) {
+    REAL(void, SSL_get0_alpn_selected, (const SSL *, const unsigned char **, unsigned int *));
+    const unsigned char *alpn = 0;
+    unsigned int n = 0;
+    if (real_SSL_get0_alpn_selected) real_SSL_get0_alpn_selected(ssl, &alpn, &n);
+    return n == 2 && alpn && !memcmp(alpn, "h2", 2);
+}
+
+/* What this write does with each placeholder on this connection. */
+enum { UNDECIDED, SWAP, ELSEWHERE, NO_KEY };
+struct verdict {
+    int state;
+    char *key;
+};
+
+static int decide(SSL *ssl, const char *destination, int i, struct verdict *v) {
+    if (v[i].state == UNDECIDED) {
+        const struct swap *s = &swaps[i];
+        char host[256];
+        v[i].state = ELSEWHERE;
+        if (!tls_blocked(ssl, destination) && verified(ssl, s->hosts, s->ca, host, sizeof host)) {
+            v[i].state = NO_KEY; /* the right server, but the run is over: the placeholder goes */
+            v[i].key = malloc(s->len);
+            if (v[i].key && fetch(s, host, v[i].key)) v[i].state = SWAP;
+        }
+    }
+    return v[i].state;
+}
+
+/* Swap placeholders in `text` (decoded header value or body) where allowed.
+ * Returns -1 if one would go elsewhere (its index in *leak), else whether
+ * anything changed. */
+static int swap_in(SSL *ssl, const char *destination, unsigned char *text, size_t n, struct verdict *v, int *leak) {
+    int changed = 0;
+    for (int i = 0; i < swap_count; i++) {
+        const struct swap *s = &swaps[i];
+        if (!memmem(text, n, s->placeholder, s->len)) continue;
+        int state = decide(ssl, destination, i, v);
+        if (state == ELSEWHERE) {
+            *leak = i;
+            return -1;
+        }
+        if (state != SWAP) continue;
+        for (unsigned char *at = text; (at = memmem(at, n - (size_t)(at - text), s->placeholder, s->len)); at += s->len) memcpy(at, v[i].key, s->len);
+        changed = 1;
+    }
+    return changed;
+}
+
+/* A header block with its value strings swapped, in a new buffer, or null
+ * when nothing changed or it can't be read. */
+static unsigned char *h2_block(SSL *ssl, const char *destination, const unsigned char *b, size_t n, size_t *out_n, struct verdict *v, int *leak) {
+    unsigned char *out = 0, *text = 0;
+    size_t o = 0, copied = 0, i = 0;
+    while (i < n) {
+        size_t value;
+        unsigned char first = b[i];
+        if (first & 0x80) { /* indexed */
+            if (!hp_int(b, n, &i, 7, &value)) goto unreadable;
+            continue;
+        }
+        if ((first & 0xe0) == 0x20) { /* table size update */
+            if (!hp_int(b, n, &i, 5, &value)) goto unreadable;
+            continue;
+        }
+        size_t name;
+        if (!hp_int(b, n, &i, (first & 0xc0) == 0x40 ? 6 : 4, &name)) goto unreadable;
+        for (int part = name ? 1 : 0; part < 2; part++) { /* a literal name, then the value */
+            size_t at = i, len;
+            int huffman = i < n && (b[i] & 0x80);
+            if (!hp_int(b, n, &i, 7, &len) || len > n - i) goto unreadable;
+            if (part == 0) {
+                i += len;
+                continue;
+            }
+            size_t cap = len * 8 / 5 + 1;
+            text = malloc(cap);
+            if (!text) goto unreadable;
+            long tn = huffman ? hp_decode(b + i, len, text, cap) : (long)len;
+            if (!huffman) memcpy(text, b + i, len);
+            i += len;
+            if (tn < 0) goto unreadable;
+            int changed = swap_in(ssl, destination, text, (size_t)tn, v, leak);
+            if (changed < 0) goto unreadable;
+            if (changed) {
+                if (!out && !(out = malloc(n * 4 + 64))) goto unreadable;
+                memcpy(out + o, b + copied, at - copied);
+                o += at - copied;
+                if (huffman) {
+                    unsigned char *enc = malloc((size_t)tn * 4 + 8);
+                    if (!enc) goto unreadable;
+                    size_t en = hp_encode(text, (size_t)tn, enc);
+                    o += hp_put_int(out + o, 0x80, 7, en);
+                    memcpy(out + o, enc, en);
+                    o += en;
+                    explicit_bzero(enc, en);
+                    free(enc);
+                } else {
+                    o += hp_put_int(out + o, 0, 7, (size_t)tn);
+                    memcpy(out + o, text, (size_t)tn);
+                    o += (size_t)tn;
+                }
+                copied = i;
+            }
+            explicit_bzero(text, cap);
+            free(text);
+            text = 0;
+        }
+    }
+    if (!out) return 0;
+    memcpy(out + o, b + copied, n - copied);
+    *out_n = o + n - copied;
+    return out;
+unreadable:
+    if (text) {
+        explicit_bzero(text, 1);
+        free(text);
+    }
+    if (out) {
+        explicit_bzero(out, o);
+        free(out);
+    }
+    return 0;
+}
+
+/* The write with its HTTP/2 header blocks swapped, in a new buffer, or null
+ * when nothing changed (or this isn't an HTTP/2 connection being followed). */
+static unsigned char *h2_rewrite(SSL *ssl, const char *destination, const unsigned char *b, size_t n, size_t *out_n, struct verdict *v, int *leak,
+                                 struct h2plan *plan) {
+    size_t pos = 0;
+    plan->track = 0;
+    if (n >= 24 && !memcmp(b, H2_PREFACE, 24)) {
+        plan->track = 1;
+        pos = 24;
+    } else {
+        pthread_mutex_lock(&h2lock);
+        struct h2conn *c = h2_find(ssl);
+        size_t skip = c ? c->skip : 0;
+        pthread_mutex_unlock(&h2lock);
+        if (!c) return 0;
+        plan->track = 2;
+        if (skip >= n) {
+            plan->skip = skip - n;
+            return 0;
+        }
+        pos = skip;
+    }
+    plan->skip = 0;
+    plan->lost = 0;
+    unsigned char *out = 0;
+    size_t o = 0, copied = 0;
+    while (pos < n) {
+        if (n - pos < 9) {
+            plan->lost = 1; /* a frame header split between writes */
+            break;
+        }
+        size_t len = (size_t)b[pos] << 16 | (size_t)b[pos + 1] << 8 | b[pos + 2], end = pos + 9 + len;
+        unsigned char type = b[pos + 3], flags = b[pos + 4];
+        if (end > n) {
+            plan->skip = end - n;
+            break;
+        }
+        if (type == 1 && (flags & 0x4)) { /* HEADERS with END_HEADERS */
+            size_t p = pos + 9, pad = 0;
+            if (flags & 0x8) pad = b[p++];
+            if (flags & 0x20) p += 5;
+            if (p + pad <= end) {
+                size_t block_n = 0;
+                unsigned char *block = h2_block(ssl, destination, b + p, end - pad - p, &block_n, v, leak);
+                if (*leak >= 0) break;
+                size_t frame = (p - pos - 9) + block_n + pad;
+                if (block && frame <= 0xffffff) {
+                    if (!out && !(out = malloc(n * 4 + 64))) break;
+                    memcpy(out + o, b + copied, pos - copied);
+                    o += pos - copied;
+                    out[o++] = (unsigned char)(frame >> 16);
+                    out[o++] = (unsigned char)(frame >> 8);
+                    out[o++] = (unsigned char)frame;
+                    memcpy(out + o, b + pos + 3, p - pos - 3);
+                    o += p - pos - 3;
+                    memcpy(out + o, block, block_n);
+                    o += block_n;
+                    memcpy(out + o, b + end - pad, pad);
+                    o += pad;
+                    copied = end;
+                }
+                if (block) {
+                    explicit_bzero(block, block_n);
+                    free(block);
+                }
+            }
+        }
+        pos = end;
+    }
+    if (!out) return 0;
+    if (*leak >= 0) {
+        explicit_bzero(out, o);
+        free(out);
+        return 0;
+    }
+    memcpy(out + o, b + copied, n - copied);
+    *out_n = o + n - copied;
+    return out;
+}
+
+/* ---- The write ---- */
+
+/* The bytes to write: `buf` itself, or a copy (in *copy, *out_n bytes, for
+ * the caller to wipe and free) with placeholders swapped where the
+ * connection is verified for their key; or null to refuse the write, when a
+ * placeholder would go anywhere else or the connection is to a refused
+ * destination. */
+static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy, size_t *out_n, struct h2plan *plan) {
     *copy = 0;
+    *out_n = len;
+    plan->track = 0;
     if (!active || !buf || !len) return buf;
     ensure_loaded();
     char destination[256];
     destination_of(ssl, destination, sizeof destination);
-    const struct swap *leaking = 0;
-    for (int i = 0; i < swap_count; i++) {
-        const struct swap *s = &swaps[i];
-        if (!memmem(buf, len, s->placeholder, s->len)) continue;
-        char host[256];
-        if (tls_blocked(ssl, destination) || !verified(ssl, s->hosts, s->ca, host, sizeof host)) {
-            leaking = s;
-            break;
+    struct verdict v[MAX_SWAPS] = {{0}};
+    int leak = -1;
+    unsigned char *work = (unsigned char *)buf;
+    size_t n = len;
+    if (is_h2(ssl)) {
+        size_t h2n;
+        unsigned char *h2 = h2_rewrite(ssl, destination, work, n, &h2n, v, &leak, plan);
+        if (h2) {
+            work = h2;
+            n = h2n;
+            *copy = (char *)h2;
         }
-        char *key = malloc(s->len);
-        if (!key) continue;
-        if (fetch(s, host, key)) {
-            if (!*copy) {
-                *copy = malloc(len);
-                if (!*copy) {
-                    explicit_bzero(key, s->len);
-                    free(key);
-                    return buf;
-                }
-                memcpy(*copy, buf, len);
-            }
-            for (char *at = *copy; (at = memmem(at, len - (size_t)(at - *copy), s->placeholder, s->len)); at += s->len)
-                memcpy(at, key, s->len);
-        }
-        explicit_bzero(key, s->len);
-        free(key);
     }
-    if (leaking) {
-        wipe(*copy, len);
+    if (leak < 0) {
+        /* Placeholders as written: HTTP/1, bodies, uncompressed headers. */
+        int changed = 0;
+        for (int i = 0; i < swap_count && leak < 0; i++) {
+            const struct swap *s = &swaps[i];
+            if (!memmem(work, n, s->placeholder, s->len)) continue;
+            int state = decide(ssl, destination, i, v);
+            if (state == ELSEWHERE) leak = i;
+            if (state != SWAP) continue;
+            if (!*copy) {
+                if (!(*copy = malloc(n))) break;
+                memcpy(*copy, work, n);
+                work = (unsigned char *)*copy;
+            }
+            for (unsigned char *at = work; (at = memmem(at, n - (size_t)(at - work), s->placeholder, s->len)); at += s->len) memcpy(at, v[i].key, s->len);
+            changed = 1;
+        }
+        (void)changed;
+    }
+    for (int i = 0; i < swap_count; i++) {
+        if (v[i].key) {
+            explicit_bzero(v[i].key, swaps[i].len);
+            free(v[i].key);
+        }
+    }
+    if (leak >= 0) {
+        wipe(*copy, n);
         *copy = 0;
-        report(leaking, destination);
+        plan->track = 0;
+        report(&swaps[leak], destination);
         return 0;
     }
     if (tls_blocked(ssl, destination)) {
-        wipe(*copy, len);
+        wipe(*copy, n);
         *copy = 0;
+        plan->track = 0;
         say("refused a connection to", destination);
         return 0;
     }
@@ -447,6 +807,7 @@ static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy) {
         /* A retried write may now come from another buffer. */
         REAL(long, SSL_ctrl, (SSL *, int, long, void *));
         if (real_SSL_ctrl) real_SSL_ctrl(ssl, SSL_CTRL_MODE, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, 0);
+        *out_n = n;
         return *copy;
     }
     return buf;
@@ -463,13 +824,18 @@ int SSL_write(SSL *ssl, const void *buf, int num) {
     REAL(int, SSL_write, (SSL *, const void *, int));
     if (!real_SSL_write) return -1;
     char *copy;
-    const void *out = swapped(ssl, buf, num > 0 ? (size_t)num : 0, &copy);
+    size_t n;
+    struct h2plan plan;
+    const void *out = swapped(ssl, buf, num > 0 ? (size_t)num : 0, &copy, &n, &plan);
     if (!out) {
         errno = ECONNREFUSED;
         return -1;
     }
-    int r = real_SSL_write(ssl, out, num);
-    wipe(copy, num > 0 ? (size_t)num : 0);
+    int r = real_SSL_write(ssl, out, (int)n);
+    wipe(copy, n);
+    if (r > 0) h2_commit(ssl, &plan);
+    /* A rewritten HTTP/2 header can change the length: all of it went, or none. */
+    if (r > 0 && n != (size_t)num) return r == (int)n ? num : -1;
     return r;
 }
 
@@ -477,15 +843,19 @@ int SSL_write_ex(SSL *ssl, const void *buf, size_t num, size_t *written) {
     REAL(int, SSL_write_ex, (SSL *, const void *, size_t, size_t *));
     if (!real_SSL_write_ex) return 0;
     char *copy;
-    const void *out = swapped(ssl, buf, num, &copy);
+    size_t n, sent = 0;
+    struct h2plan plan;
+    const void *out = swapped(ssl, buf, num, &copy, &n, &plan);
     if (!out) {
         if (written) *written = 0;
         errno = ECONNREFUSED;
         return 0;
     }
-    int r = real_SSL_write_ex(ssl, out, num, written);
-    wipe(copy, num);
-    return r;
+    int r = real_SSL_write_ex(ssl, out, n, &sent);
+    wipe(copy, n);
+    if (r == 1) h2_commit(ssl, &plan);
+    if (written) *written = r == 1 && n != num ? (sent == n ? num : 0) : sent;
+    return r == 1 && n != num && sent != n ? 0 : r;
 }
 
 /* ---- Plain sockets ---- */
