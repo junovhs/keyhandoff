@@ -305,6 +305,30 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
 .mock-who { font: 500 13px var(--mono); color: var(--accent-ink); }
 [data-step="0"] .ann, [data-step="1"] .ann, [data-step="2"] .ann { opacity: .3; transform: translateX(calc(-50% + 360px)) scale(.6); }
 [data-step="3"] .ben, [data-step="4"] .ben { opacity: .3; transform: translateX(calc(-50% - 360px)) scale(.6); }
+/* How teams work: one diagram that grows. You alone, then Ann's card arrives, then a team
+   that one send reaches. Each step adds to the last, so nothing jumps. */
+.circle-stage { position: relative; height: 470px; max-width: 900px; margin: 0 auto; }
+.circle-map { position: absolute; inset: 70px 0 0; }
+.circle-map .links { position: absolute; inset: 0; width: 100%; height: 100%; }
+.circle-map line { stroke: var(--accent-ink); stroke-width: 1.5; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity .5s var(--ease); }
+[data-step="1"] .to-ann, [data-step="2"] .circle-map line { opacity: .7; }
+.peer { position: absolute; left: var(--x); top: var(--y); display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translate(-50%, -50%); font-size: 14px; font-weight: 600; color: var(--text-2); opacity: 0; transition: opacity .5s var(--ease); }
+.peer i { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--raised); font: 600 22px var(--font); color: var(--text); }
+.peer.you { opacity: 1; }
+.peer.you i { width: 88px; height: 88px; border-color: var(--accent); background: var(--accent-grad); font-size: 20px; box-shadow: 0 0 40px rgba(26, 109, 255, .35); }
+.peer.you em { display: flex; align-items: center; gap: 6px; font-style: normal; font-size: 13px; color: var(--accent-ink); }
+[data-step="1"] .p-ann, [data-step="2"] .p-ann, [data-step="2"] .p-priya, [data-step="2"] .p-ben { opacity: 1; }
+.team-ring { position: absolute; left: 55%; top: 6%; width: 40%; height: 90%; border: 1px dashed rgba(106, 162, 255, .5); border-radius: 28px; background: rgba(26, 109, 255, .05); opacity: 0; transition: opacity .5s var(--ease); }
+.team-ring span { position: absolute; top: 12px; left: 16px; font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+[data-step="2"] .team-ring { opacity: 1; }
+/* Ann's card travels to you; then a sealed copy travels from you to each member. */
+.card-chip { position: absolute; left: 68%; top: 30%; transform: translate(-50%, -50%); opacity: 0; }
+[data-step="1"] .card-chip { animation: card-in 1.6s var(--ease) .8s forwards; }
+@keyframes card-in { 0% { opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; left: 22%; top: 50%; } 100% { opacity: 0; left: 22%; top: 50%; } }
+.copy { position: absolute; left: 22%; top: 50%; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--accent-grad); color: #fff; transform: translate(-50%, -50%); opacity: 0; }
+[data-step="2"] .copy { animation: copy-out 1.4s var(--ease) calc(1.2s + var(--d, 0s)) forwards; }
+@keyframes copy-out { 0% { opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; left: var(--x); top: var(--y); } 100% { opacity: 0; left: var(--x); top: var(--y); } }
+
 /* The windows themselves are styled by the app's stylesheet (scoped to .kh in index.astro).
    Here: the window's size, and which screen each step shows. */
 .kh { width: 100%; max-width: 360px; height: 560px; overflow: hidden; border-radius: 12px; pointer-events: none; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); }
@@ -480,6 +504,14 @@ html.js .rv.in { opacity: 1; transform: none; }
   .callout b { margin-bottom: 2px; font-size: 16px; }
   .callout p { font-size: 13px; line-height: 1.4; }
   .limits { margin-top: 12px; }
+  #circle { padding: 36px 0; }
+  #circle h2 { font-size: 28px; }
+  #circle .head { margin-bottom: 16px; }
+  .circle-stage { height: 400px; }
+  .circle-map { inset: 60px 0 0; }
+  .peer i { width: 48px; height: 48px; font-size: 17px; }
+  .peer.you i { width: 66px; height: 66px; font-size: 16px; }
+  .team-ring { left: 50%; width: 48%; }
   footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .foot-brand { grid-column: 1 / -1; }
 }

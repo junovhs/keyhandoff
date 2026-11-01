@@ -1,4 +1,4 @@
-// Scroll reveals, the hero's .env search, the blind-spot diagram, Just you and the team handoff. Everything here
+// Scroll reveals, the hero's .env search, the blind-spot diagram, Just you, the team handoff and how teams work. Everything here
 // is decoration: without it the page shows its full content.
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -21,6 +21,9 @@ if (readers) runReaders(readers);
 const solo = document.getElementById("solo-stage");
 // Safe Copy listening, caught, the vault, then KeyHandoff typing the key in.
 if (solo) runFrames(solo, [["0", 2200], ["1", 3000], ["2", 2400], ["3", 6400]], "3", soloTyping(solo));
+const circle = document.getElementById("circle-stage");
+// You alone, then Ann's card arrives, then a team that one send reaches.
+if (circle) runFrames(circle, [["0", 3200], ["1", 3600], ["2", 4400]], "2");
 const duo = document.getElementById("duo");
 // An opening line, three steps in Ben's window, two in Ann's, then a closing line.
 if (duo) runFrames(duo, [["intro", 3600], ["0", 2600], ["1", 2400], ["2", 3400], ["3", 2800], ["4", 3000], ["outro", 4000]], "4");

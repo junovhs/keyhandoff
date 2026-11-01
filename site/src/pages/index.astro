@@ -345,6 +345,37 @@ const INCIDENTS = [
       </div>
     </section>
 
+    <section class="wrap" id="circle">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="users" />How teams work</span>
+        <h2>Start on your own. Add teammates when you need them.</h2>
+      </div>
+      <div class="circle-stage rv" id="circle-stage" data-step="0">
+        <p class="duo-cap" aria-live="polite">
+          <span class="s0"><b>1</b>On your own, it&rsquo;s already a vault for your keys.</span>
+          <span class="s1"><b>2</b>To add Ann, she sends you her card once.</span>
+          <span class="s2"><b>3</b>Make a team, and one send reaches everyone.</span>
+        </p>
+        <div class="circle-map" aria-hidden="true">
+          <svg class="links" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line class="to-ann" x1="22" y1="50" x2="68" y2="30" />
+            <line class="to-priya" x1="22" y1="50" x2="84" y2="56" />
+            <line class="to-ben" x1="22" y1="50" x2="66" y2="76" />
+          </svg>
+          <span class="team-ring"><span>Platform team</span></span>
+          <span class="peer you" style="--x:22%; --y:50%"><i>You</i><em><Icon name="lock" size={13} />3 keys</em></span>
+          <span class="peer p-ann" style="--x:68%; --y:30%"><i>A</i>Ann</span>
+          <span class="peer p-priya" style="--x:84%; --y:56%"><i>P</i>Priya</span>
+          <span class="peer p-ben" style="--x:66%; --y:76%"><i>B</i>Ben</span>
+          <span class="file-chip card-chip"><Icon name="file" size={14} />Ann&rsquo;s card</span>
+          <span class="copy" style="--x:68%; --y:30%"><Icon name="key" size={14} /></span>
+          <span class="copy" style="--x:84%; --y:56%; --d:.15s"><Icon name="key" size={14} /></span>
+          <span class="copy" style="--x:66%; --y:76%; --d:.3s"><Icon name="key" size={14} /></span>
+        </div>
+      </div>
+      <p class="wire-note rv"><Icon name="shield" />A card holds no secret, and there&rsquo;s no server or sign-up: your teams live on your computer.</p>
+    </section>
+
     <section class="wrap" id="built-in">
       <div class="head center rv">
         <span class="eyebrow"><Icon name="shield" />Built in, everywhere</span>
