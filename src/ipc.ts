@@ -49,9 +49,12 @@ export interface ProgramView {
   /** Where it runs; null when the system won't say. */
   folder: string | null;
   keys: string[];
+  /** The AI coding agent that started it ("Claude Code"); null when none was found. */
+  agent: string | null;
 }
 
-export type Answer = "always" | "once" | "deny";
+/** `30min`: offered instead of Always when an AI agent started the program. */
+export type Answer = "always" | "30min" | "once" | "deny";
 
 /** Someone whose card you opened. */
 export interface ContactView {

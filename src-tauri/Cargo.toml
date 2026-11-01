@@ -83,3 +83,5 @@ strip = true
 opt-level = 3
 [profile.dev.package.blake2]
 opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3

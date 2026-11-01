@@ -9,6 +9,13 @@
 //
 //     import { load } from "./keyhandoff_env.mjs"; await load();
 //
+// What this process prints through process.stdout and process.stderr then
+// passes through a filter that shows a key, plain, base64, hex, URL-encoded or
+// reversed, as `[KeyHandoff: Name hidden]`. It catches a key printed by
+// accident. Child processes that write to the terminal directly aren't
+// covered; `keyhandoff run` covers them. Pass `{ mask: false }` to leave
+// output alone.
+//
 // No dependencies: copy this file next to your script. JavaScript strings
 // can't be wiped, so the value stays in this process's memory until it exits.
 
@@ -27,7 +34,7 @@ export class KeyHandoffError extends Error {}
  * environment or from the .env file at `path`. A variable already set to a
  * real value is left alone. Resolves to the names of the variables set.
  */
-export async function load(path = ".env", profile = undefined) {
+export async function load(path = ".env", profile = undefined, { mask = true } = {}) {
   const pointers = {};
   for (const [name, value] of Object.entries(process.env)) {
     if (value.startsWith(PREFIX)) pointers[name] = value.slice(PREFIX.length).trim();
@@ -43,7 +50,82 @@ export async function load(path = ".env", profile = undefined) {
   const reply = await ask(names, profile || process.env.KEYHANDOFF_PROFILE || "default");
   if ("error" in reply) throw new KeyHandoffError(reply.error);
   for (const name of vars) process.env[name] = reply.values[pointers[name]];
+  if (mask) maskOutput(reply.values);
   return vars;
+}
+
+// Hiding printed keys. Same rules as KeyHandoff's own masker (src-tauri/src/mask.rs).
+
+const FRAGMENT = 12;
+
+function forms(key) {
+  const k = Buffer.from(key);
+  const out = [k, Buffer.from(k).reverse(), Buffer.from(k.toString("hex")), Buffer.from(k.toString("hex").toUpperCase())];
+  for (const encoding of ["base64", "base64url"]) {
+    for (let offset = 0; offset < 3; offset++) {
+      const encoded = Buffer.from(Buffer.concat([Buffer.alloc(offset), k]).toString(encoding));
+      const skip = offset ? Math.ceil((offset * 8) / 6) : 0;
+      const keep = Math.floor(((offset + k.length) * 8) / 6);
+      if (keep > skip) out.push(encoded.subarray(skip, keep));
+    }
+  }
+  const pct = (upper) => Buffer.from([...k].map((b) => "%" + b.toString(16).padStart(2, "0")[upper ? "toUpperCase" : "toLowerCase"]()).join(""));
+  out.push(pct(true), pct(false));
+  return out.filter((f) => f.length > 0);
+}
+
+class Masker {
+  constructor(keys) {
+    this.forms = Object.entries(keys).flatMap(([name, value]) => forms(value).map((form) => [name, form]));
+    this.starts = new Set();
+    for (const [, f] of this.forms) {
+      const w = Math.min(FRAGMENT, f.length);
+      for (let i = 0; i + w <= f.length; i++) this.starts.add(f.subarray(i, i + w).toString("latin1"));
+    }
+    this.widths = [...new Set(this.forms.map(([, f]) => Math.min(FRAGMENT, f.length)))].sort((a, b) => b - a);
+    this.held = Buffer.alloc(0);
+  }
+
+  within(bytes) {
+    const hit = this.forms.find(([, f]) => f.includes(bytes));
+    return hit ? hit[0] : null;
+  }
+
+  push(data, last = false) {
+    const buf = Buffer.concat([this.held, Buffer.from(data)]);
+    const out = [];
+    let i = 0;
+    let from = 0;
+    while (i < buf.length) {
+      const w = this.widths.find((w) => i + w <= buf.length && this.starts.has(buf.subarray(i, i + w).toString("latin1")));
+      if (w !== undefined) {
+        let end = i + w;
+        while (end < buf.length && this.within(buf.subarray(i, end + 1))) end++;
+        if (end === buf.length && !last) break;
+        out.push(buf.subarray(from, i), Buffer.from(`[KeyHandoff: ${this.within(buf.subarray(i, end)) ?? "A key"} hidden]`));
+        i = from = end;
+        continue;
+      }
+      if (!last && buf.length - i < FRAGMENT && this.within(buf.subarray(i))) break;
+      i++;
+    }
+    out.push(buf.subarray(from, i));
+    this.held = Buffer.from(buf.subarray(i));
+    return Buffer.concat(out);
+  }
+}
+
+function maskOutput(values) {
+  for (const stream of [process.stdout, process.stderr]) {
+    const masker = new Masker(values);
+    const write = stream.write.bind(stream);
+    stream.write = (chunk, encoding, callback) => {
+      if (typeof encoding === "function") [callback, encoding] = [encoding, undefined];
+      const bytes = typeof chunk === "string" ? Buffer.from(chunk, encoding) : chunk;
+      return write(masker.push(bytes), callback);
+    };
+    process.once("exit", () => write(masker.push(Buffer.alloc(0), true)));
+  }
 }
 
 function* readEnv(path) {

@@ -495,17 +495,21 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
   );
 }
 
-/** A program asks for kept keys through a `handoff:` pointer. */
+/**
+ * A program asks for kept keys, through a `handoff:` pointer or `keyhandoff run`.
+ * When an AI agent started it, the sheet says so and offers 30 minutes, not Always.
+ */
 function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
   const sheet = useRef<HTMLDivElement>(null);
-  useEffect(() => void enter(sheet.current, "rise", 360), [program.path, program.folder]);
+  useEffect(() => void enter(sheet.current, "rise", 360), [program.path, program.folder, program.command]);
   const one = program.keys.length === 1;
+  const agent = program.agent;
   return (
     <div className="sheet" ref={sheet}>
       <div className="head">
         <Glyph base="window" mark="key" />
         <div>
-          <span className="lede">A program wants {one ? "a key" : `${program.keys.length} keys`}</span>
+          <span className="lede">{agent ? `${agent} wants` : "A program wants"} {one ? "a key" : `${program.keys.length} keys`}</span>
           <h2 className="display md">{program.name}</h2>
         </div>
       </div>
@@ -521,14 +525,19 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
         from <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>.
       </p>
       <p className="help">
-        <span className="mono">{program.path}</span>. Always allow covers this program in this folder; allow only programs you
-        started.
+        {agent
+          ? `${agent} started this. Read the command: it gets the key exactly as written. KeyHandoff asks every time an AI agent runs a command, unless you allow this one for 30 minutes.`
+          : "Always allow covers this exact command in this folder. If the script changes, or the same program runs anything else, KeyHandoff asks again."}
       </p>
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void run(api.answer("deny"))}>Deny</button>
         <button className="btn secondary" onClick={() => void run(api.answer("once"))}>Just this once</button>
-        <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
+        {agent ? (
+          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("30min"))}>Allow for 30 minutes</button>
+        ) : (
+          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
+        )}
       </div>
     </div>
   );

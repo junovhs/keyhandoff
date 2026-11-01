@@ -37,8 +37,47 @@ fn peer(stream: &UnixStream) -> Option<Peer> {
     }
     let proc = PathBuf::from(format!("/proc/{}", cred.pid));
     let program = fs::read_link(proc.join("exe")).ok()?;
-    let cmdline = fs::read(proc.join("cmdline")).unwrap_or_default();
-    let cmdline = String::from_utf8_lossy(&cmdline);
-    let command = super::super::display_command(cmdline.split('\0').filter(|a| !a.is_empty()));
-    Some(Peer { program, folder: fs::read_link(proc.join("cwd")).ok(), command })
+    let argv = args(cred.pid);
+    let command = super::super::display_command(argv.iter().map(String::as_str));
+    let args = argv.into_iter().skip(1).collect();
+    Some(Peer { program, folder: fs::read_link(proc.join("cwd")).ok(), command, args, agent: agent(cred.pid) })
+}
+
+fn args(pid: i32) -> Vec<String> {
+    let cmdline = fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
+    String::from_utf8_lossy(&cmdline).split('\0').filter(|a| !a.is_empty()).map(String::from).collect()
+}
+
+/// The AI coding agent among `pid` and the processes that started it: each
+/// one's name, executable and first two arguments are checked, and Claude
+/// Code's `CLAUDECODE` marker in the environment. A renamed agent isn't
+/// found, so this is a warning; binding approvals to the command is what holds.
+pub fn agent(pid: i32) -> Option<String> {
+    let environ = fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
+    if environ.split(|&b| b == 0).any(|v| v == b"CLAUDECODE=1") {
+        return Some("Claude Code".into());
+    }
+    let mut pid = pid;
+    for _ in 0..64 {
+        let proc = PathBuf::from(format!("/proc/{pid}"));
+        let comm = fs::read_to_string(proc.join("comm")).unwrap_or_default();
+        let exe = fs::read_link(proc.join("exe")).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+        let names = [comm.trim_end().to_string(), exe].into_iter().chain(args(pid).into_iter().take(2));
+        if let Some(agent) = names.filter(|n| !n.is_empty()).find_map(|n| super::super::agent_named(&n)) {
+            return Some(agent);
+        }
+        // `pid (comm) state ppid …`; comm can hold spaces and parentheses.
+        let stat = fs::read_to_string(proc.join("stat")).ok()?;
+        let ppid: i32 = stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok()?;
+        if ppid <= 1 {
+            return None;
+        }
+        pid = ppid;
+    }
+    None
+}
+
+/// Connect to a running KeyHandoff's key socket, as `keyhandoff run` does.
+pub fn connect_keys(profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStream>> {
+    Ok(Box::new(UnixStream::connect(socket(profile))?))
 }

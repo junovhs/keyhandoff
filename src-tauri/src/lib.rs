@@ -8,9 +8,11 @@
 
 mod core;
 mod folder;
+mod mask;
 mod nearby;
 mod os;
 mod pointer;
+mod run;
 mod session;
 mod slots;
 mod store;
@@ -27,6 +29,11 @@ use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, WebviewWindow, Wi
 use zeroize::Zeroizing;
 
 use crate::core::{Answer, Clipboard, Handoff, View};
+
+/// `keyhandoff run …`: start a command with its keys; returns the exit code.
+pub fn run_command(args: &[String]) -> i32 {
+    run::main(args)
+}
 use crate::session::Session;
 use crate::update::{UpdateView, Updates};
 use crate::vault::Keep;

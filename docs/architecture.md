@@ -77,7 +77,9 @@ A `.env` pointer such as `DIALPAD_API_KEY=handoff:Dialpad` names a kept key. A l
 - **Linux:** a `0600` Unix socket, `handoff-<profile>-keys.sock`, in the runtime directory. `SO_PEERCRED` gives the asking process, which must be this user; `/proc` gives its executable and working folder.
 - **Windows:** a local named pipe, `\\.\pipe\handoff-<user>-<profile>-keys`, with remote clients rejected. `GetNamedPipeClientProcessId` gives the process; its image path and its working folder (from the process parameters in its PEB) identify it.
 
-An approval is a program path, a folder and a key id, kept in `approvals.bin`. A request with any key not yet allowed waits up to 60 seconds for an answer in the window, and one program at a time can wait. Forgetting a key removes its approvals, and a key kept once is destroyed after it's given out. The reply is built in a buffer sized so it never reallocates, and zeroed after it's sent.
+An approval is a program path, a folder, a key id and a hash of the command (its arguments and the contents of every file they name), kept in `approvals.bin`. When an AI coding agent is among the processes that started the asking program, saved approvals don't count, and "Allow for 30 minutes" is kept in memory only.
+
+`keyhandoff run -- COMMAND` (`run.rs`) is the same request from KeyHandoff's own executable with the exact command it will start, `{"names": […], "run": ["/usr/bin/python3", "report.py"]}`; the app believes `run` only when the asking executable is its own. The runner starts the command with the keys in its environment and passes its stdout and stderr through `mask.rs`, which hides every printed form of each key. A request with any key not yet allowed waits up to 60 seconds for an answer in the window, and one program at a time can wait. Forgetting a key removes its approvals, and a key kept once is destroyed after it's given out. The reply is built in a buffer sized so it never reallocates, and zeroed after it's sent.
 
 ## Transport: .handoff files
 

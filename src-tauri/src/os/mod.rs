@@ -76,15 +76,85 @@ impl MasterKey {
 pub struct Peer {
     pub program: PathBuf,
     pub folder: Option<PathBuf>,
-    /// `python3 report.py`: shown so you recognise the script, never used
-    /// for approval (the program can set it to anything).
+    /// `python3 report.py`: shown so you recognise the script.
     pub command: Option<String>,
+    /// The arguments after the program. An approval is bound to them and to
+    /// the files they name ([`Peer::binding`]). A program reports its own
+    /// arguments, so for a loader this binds what it claims to run; under
+    /// `keyhandoff run` it's what really runs.
+    pub args: Vec<String>,
+    /// The AI coding agent among the processes that started it, if one is.
+    pub agent: Option<String>,
+}
+
+impl Peer {
+    /// What an approval is bound to: the program, its arguments, and the
+    /// contents of every file the arguments name (a script, a config), so an
+    /// edited script, or the same interpreter running other code, asks again.
+    pub fn binding(&self) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        let mut part = |bytes: &[u8]| {
+            h.update((bytes.len() as u64).to_le_bytes());
+            h.update(bytes);
+        };
+        part(self.program.as_os_str().as_encoded_bytes());
+        for arg in &self.args {
+            part(arg.as_bytes());
+            let path = match &self.folder {
+                Some(folder) => folder.join(arg),
+                None => PathBuf::from(arg),
+            };
+            match file_hash(&path) {
+                Some(hash) => part(&hash),
+                None => part(b""),
+            }
+        }
+        h.finalize().into()
+    }
+}
+
+/// The SHA-256 of a regular file's contents, if `path` is one.
+pub fn file_hash(path: &std::path::Path) -> Option<[u8; 32]> {
+    use sha2::{Digest, Sha256};
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut h = Sha256::new();
+    std::io::copy(&mut file, &mut h).ok()?;
+    Some(h.finalize().into())
+}
+
+/// AI coding agents by process name (lowercase, without `.exe`). Claude Code
+/// also runs as `node …/claude-code/cli.js`, so a name containing the second
+/// column matches too.
+const AGENTS: &[(&str, &str, &str)] = &[
+    ("claude", "claude-code", "Claude Code"),
+    ("cursor", "cursor-agent", "Cursor"),
+    ("codex", "@openai/codex", "Codex"),
+    ("copilot", "github-copilot", "GitHub Copilot"),
+    ("aider", "aider-chat", "Aider"),
+    ("windsurf", "windsurf", "Windsurf"),
+    ("gemini", "gemini-cli", "Gemini CLI"),
+];
+
+/// The agent a process name or path names, if any: matched on the file
+/// name, so `claude-desktop` or a folder called `codex` doesn't count.
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+fn agent_named(name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    let file = lower.rsplit(['/', '\\']).next().unwrap_or(&lower);
+    let file = file.strip_suffix(".exe").unwrap_or(file);
+    AGENTS
+        .iter()
+        .find(|(exact, part, _)| file == *exact || lower.contains(part))
+        .map(|(_, _, agent)| agent.to_string())
 }
 
 /// A command line for display: the program's file name, then its arguments,
 /// cut to a readable length.
-#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
-fn display_command<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<String> {
+pub fn display_command<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<String> {
     const MAX: usize = 200;
     let first = args.next()?;
     let program = first.rsplit(['/', '\\']).next().unwrap_or(first);

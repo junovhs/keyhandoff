@@ -57,12 +57,16 @@ pub struct Settings {
     pub nearby: bool,
 }
 
-/// A program allowed to get one kept key when it runs in one folder.
+/// A command allowed to get one kept key when it runs in one folder.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Approval {
     pub program: PathBuf,
     pub folder: Option<PathBuf>,
     pub key: [u8; 16],
+    /// [`crate::os::Peer::binding`]: its arguments and the files they name.
+    /// Approvals from before commands were bound have none and no longer count.
+    #[serde(default)]
+    pub command: Option<[u8; 32]>,
 }
 
 /// Someone whose card you opened: their computer and the locks you can still

@@ -36,6 +36,8 @@ const INVITE_TTL: u64 = 30 * 24 * 60 * 60;
 const PAIRING_MS: u64 = 2 * 60 * 1000;
 /// A program waiting for Allow is refused after this long.
 pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long "Allow for 30 minutes" lasts, for a command an AI agent started.
+const FOR_NOW_SECS: u64 = 30 * 60;
 
 /// Called once when a Safe Copy capture ends.
 pub type OnCaptured = Box<dyn FnOnce(Captured) + Send>;
@@ -78,8 +80,11 @@ enum Safe {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Answer {
-    /// Whenever this program runs in this folder.
+    /// Whenever this command runs in this folder.
     Always,
+    /// This command, for 30 minutes: what's offered when an AI agent started it.
+    #[serde(rename = "30min")]
+    ForNow,
     Once,
     Deny,
 }
@@ -136,8 +141,10 @@ struct Core {
     /// Listening and announcing on the local network, while Nearby is on.
     nearby: Option<Nearby>,
     pairing: Option<Pairing>,
-    /// Programs allowed to get a key when they run in a folder.
+    /// Commands allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
+    /// Commands an AI agent started, allowed until a time; never saved.
+    for_now: Vec<(Approval, u64)>,
     program: Option<ProgramAsk>,
     asks: u64,
 }
@@ -197,6 +204,8 @@ pub struct ProgramView {
     pub folder: Option<String>,
     /// The names of the keys it wants.
     pub keys: Vec<String>,
+    /// The AI coding agent that started it ("Claude Code"), if one did.
+    pub agent: Option<String>,
 }
 
 /// Someone you can send keys to.
@@ -334,6 +343,7 @@ impl Handoff {
             nearby: None,
             pairing: None,
             approvals,
+            for_now: Vec::new(),
             program: None,
             asks: 0,
         };
@@ -1132,9 +1142,13 @@ impl Handoff {
 
     /// A program asks for kept keys by name (`handoff:Name` pointers). Keys
     /// it was allowed in this folder come back at once; otherwise the window
-    /// asks, and this waits for the answer. Approval is per program, folder
-    /// and key, because allowing `python3` alone would allow every script.
+    /// asks, and this waits for the answer. Approval is per command, folder
+    /// and key ([`Peer::binding`]), because allowing `python3` alone would
+    /// allow every script. When an AI agent started the program, saved
+    /// approvals don't count: the window always asks, naming the agent, and
+    /// offers 30 minutes instead of Always.
     pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
+        let binding = peer.binding();
         let (ids, new, id, answer) = {
             let mut core = self.lock();
             let _ = core.tick();
@@ -1142,7 +1156,7 @@ impl Handoff {
                 .iter()
                 .map(|n| core.vault.find(n).ok_or_else(|| format!("No kept key is named {n}.")))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, k)).collect();
+            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, binding, k)).collect();
             new.dedup();
             if new.is_empty() {
                 return core.release(&ids);
@@ -1166,7 +1180,15 @@ impl Handoff {
             match answer {
                 Answer::Deny => Err("Not allowed in KeyHandoff.".into()),
                 Answer::Once => core.release(&ids),
-                Answer::Always => core.allow(peer, &new).and_then(|()| core.release(&ids)),
+                Answer::Always if peer.agent.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids)),
+                Answer::Always | Answer::ForNow => {
+                    let until = now() + FOR_NOW_SECS;
+                    for &key in &new {
+                        let approval = Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding) };
+                        core.for_now.push((approval, until));
+                    }
+                    core.release(&ids)
+                }
             }
         };
         (self.notify)();
@@ -1502,21 +1524,28 @@ impl Core {
         ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len(), nearby }
     }
 
-    fn allowed(&self, peer: &Peer, key: [u8; 16]) -> bool {
-        self.approvals.iter().any(|a| a.key == key && a.program == peer.program && a.folder == peer.folder)
+    /// Whether this exact command may have `key` without asking. With an AI
+    /// agent among its starters only a 30-minute allowance counts.
+    fn allowed(&self, peer: &Peer, binding: [u8; 32], key: [u8; 16]) -> bool {
+        let fits = |a: &Approval| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding);
+        let t = now();
+        self.for_now.iter().any(|(a, until)| *until > t && fits(a)) || (peer.agent.is_none() && self.approvals.iter().any(fits))
     }
 
-    fn allow(&mut self, peer: &Peer, keys: &[[u8; 16]]) -> Result<(), String> {
+    fn allow(&mut self, peer: &Peer, binding: [u8; 32], keys: &[[u8; 16]]) -> Result<(), String> {
         for &key in keys {
-            self.approvals.push(Approval { program: peer.program.clone(), folder: peer.folder.clone(), key });
+            self.approvals.push(Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding) });
         }
         self.prune_approvals()
     }
 
-    /// Drop approvals for keys that are gone, and save.
+    /// Drop approvals for keys that are gone, and ones from before approvals
+    /// were bound to the command, and save.
     fn prune_approvals(&mut self) -> Result<(), String> {
         let vault = &self.vault;
-        self.approvals.retain(|a| vault.items().iter().any(|i| i.id == a.key));
+        let kept = |a: &Approval| a.command.is_some() && vault.items().iter().any(|i| i.id == a.key);
+        self.approvals.retain(kept);
+        self.for_now.retain(|(a, _)| kept(a));
         self.store.save_approvals(&self.approvals)
     }
 
@@ -1551,6 +1580,7 @@ impl Core {
             self.stop_pairing();
         }
         let t = now();
+        self.for_now.retain(|(_, until)| *until > t);
         if self.vault.purge(t) > 0 {
             self.store.save_vault(&self.vault)?;
             if self.accepted.is_some_and(|id| !self.vault.items().iter().any(|i| i.id == id)) {
@@ -1619,6 +1649,7 @@ impl Core {
             command: ask.peer.command.clone(),
             folder: ask.peer.folder.as_deref().map(home_relative),
             keys: labels.collect(),
+            agent: ask.peer.agent.clone(),
         }
     }
 
@@ -2406,7 +2437,7 @@ mod tests {
     }
 
     fn peer(program: &str, folder: &str) -> Peer {
-        Peer { program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")) }
+        Peer { program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")), args: vec!["report.py".into()], agent: None }
     }
 
     /// Wait for a program to be asking, then answer it.
@@ -2501,7 +2532,11 @@ mod tests {
                 .output()
                 .unwrap();
             assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            String::from_utf8(out.stdout).unwrap().trim().to_string()
+            // The script prints the key's hash, then the key itself, which the loader hides.
+            let out = String::from_utf8(out.stdout).unwrap();
+            let (hash, printed) = out.trim().split_once('\n').unwrap();
+            assert_eq!(printed, "[KeyHandoff: Dialpad live hidden]");
+            hash.to_string()
         };
         let expected: String = Sha256::digest(KEY).iter().map(|b| format!("{b:02x}")).collect();
 
@@ -2539,15 +2574,124 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn python_loader_gets_the_key_through_the_socket() {
-        let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_LIVE_API_KEY'].encode()).hexdigest())\n";
+        let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_LIVE_API_KEY'].encode()).hexdigest())\nprint(os.environ['DIALPAD_LIVE_API_KEY'])\n";
         loader_gets_the_key_through_the_socket("python3", "keyhandoff_env.py", ("check.py", script));
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn node_loader_gets_the_key_through_the_socket() {
-        let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\n";
+        let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\nconsole.log(process.env.DIALPAD_LIVE_API_KEY);\n";
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
+    }
+
+    /// FEAT-08's check, for real: `keyhandoff run` (this test binary, started
+    /// detached as the runner) gives an approved script its key and masks
+    /// every form it prints, from it and from a shell it starts; an edited
+    /// script asks again; and a run whose parent chain includes a process
+    /// named `claude` always asks, names Claude Code, and gets 30 minutes
+    /// rather than Always.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn keyhandoff_run_binds_approval_to_the_command_names_agents_and_masks_output() {
+        use crate::run::tests::{finished, start};
+        use std::process::Command;
+        const STRIPE: &[u8] = b"sk_test_51SyntheticRunKey0123456789abcdefXYZ";
+        if Command::new("python3").arg("--version").output().is_err() || Command::new("setsid").arg("--version").output().is_err() {
+            eprintln!("skipped: no python3 or setsid");
+            return;
+        }
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        h.lock().vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        let project = me.data.join("project").canonicalize().unwrap_or_else(|_| {
+            fs::create_dir_all(me.data.join("project")).unwrap();
+            me.data.join("project").canonicalize().unwrap()
+        });
+        fs::write(project.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        let script = r#"import base64, os, subprocess, sys
+k = os.environ["STRIPE_API_KEY"]
+print("plain", k)
+print("b64", base64.b64encode(("Bearer " + k).encode()).decode())
+print("hex", k.encode().hex().upper())
+print("url", "".join("%%%02X" % b for b in k.encode()))
+print("rev", k[::-1])
+sys.stdout.flush()
+os.write(2, ("fd " + k + "\n").encode())
+subprocess.run(["sh", "-c", "echo shell $STRIPE_API_KEY"])
+for c in k:
+    sys.stdout.write(c)
+    sys.stdout.flush()
+print()
+print("len", len(k))
+"#;
+        fs::write(project.join("report.py"), script).unwrap();
+        let wait_or_answer = |out: &Path, answer: Option<Answer>| -> (Option<ProgramView>, String, i32) {
+            let shown = answer.map(|a| answer_when_asked(&h, a));
+            let (text, code) = finished(out);
+            (shown, text, code)
+        };
+
+        // First run asks, naming the exact command; no agent in this chain.
+        let out = start(&project, &profile, &["python3", "report.py"], None);
+        let (shown, text, code) = wait_or_answer(&out, Some(Answer::Always));
+        let shown = shown.unwrap();
+        assert_eq!((shown.command.as_deref(), shown.agent.as_deref()), (Some("python3 report.py"), None), "{shown:?}");
+        assert_eq!(code, 0, "{text}");
+        assert!(text.contains(&format!("len {}", STRIPE.len())), "the script had the key: {text}");
+        assert_eq!(text.matches("[KeyHandoff: Stripe hidden]").count(), 8, "{text}");
+        for window in STRIPE.windows(crate::mask::FRAGMENT) {
+            assert!(!text.contains(std::str::from_utf8(window).unwrap()), "leaked: {text}");
+        }
+
+        // Approved: the same command runs without asking.
+        let (_, text, code) = wait_or_answer(&start(&project, &profile, &["python3", "report.py"], None), None);
+        assert_eq!(code, 0, "{text}");
+        assert!(h.view().program.is_none());
+
+        // Under a process named claude it asks anyway, names Claude Code, and
+        // Always becomes 30 minutes: the next agent run is silent, and the
+        // saved approval is still the plain one.
+        let agent_dir = me.data.join("agent");
+        fs::create_dir_all(&agent_dir).unwrap();
+        let claude = agent_dir.join("claude");
+        fs::copy("/bin/sh", &claude).unwrap();
+        let out = start(&project, &profile, &["python3", "report.py"], Some(&claude));
+        let (shown, text, code) = wait_or_answer(&out, Some(Answer::Always));
+        assert_eq!(shown.unwrap().agent.as_deref(), Some("Claude Code"));
+        assert_eq!(code, 0, "{text}");
+        let (_, _, code) = wait_or_answer(&start(&project, &profile, &["python3", "report.py"], Some(&claude)), None);
+        assert_eq!(code, 0);
+        assert_eq!(h.lock().approvals.len(), 1, "an agent's Always isn't saved");
+
+        // Editing the script, or running other code with the same
+        // interpreter, asks again; denied, the command doesn't start.
+        fs::write(project.join("report.py"), format!("{script}print('edited')\n")).unwrap();
+        let (shown, text, code) = wait_or_answer(&start(&project, &profile, &["python3", "report.py"], None), Some(Answer::Deny));
+        assert!(shown.is_some());
+        assert_eq!(code, 1);
+        assert!(text.contains("Not allowed") && !text.contains("edited"), "{text}");
+        let (_, text, _) =
+            wait_or_answer(&start(&project, &profile, &["python3", "-c", "import os; print(os.environ['STRIPE_API_KEY'])"], None), Some(Answer::Deny));
+        assert!(text.contains("Not allowed"), "{text}");
+
+        // A program that isn't KeyHandoff can't claim to be a run.
+        let sock = os::runtime_dir().join(format!("handoff-{profile}-keys.sock"));
+        let claim = r#"import socket, sys
+c = socket.socket(socket.AF_UNIX); c.connect(sys.argv[1])
+c.sendall(b'{"names":["Stripe"],"run":["/usr/bin/python3","report.py"]}\n')
+print(c.makefile().readline())"#;
+        let reply = Command::new("python3").args(["-c", claim]).arg(&sock).output().unwrap();
+        let reply = String::from_utf8_lossy(&reply.stdout);
+        assert!(reply.contains("Only keyhandoff run can name the command"), "{reply}");
+        assert!(h.view().program.is_none());
+
+        assert!(!files_contain(&project, STRIPE), "the project holds no key");
+        let _ = fs::remove_file(sock);
+        let _ = fs::remove_dir_all(me.data);
     }
 
     #[test]

@@ -105,7 +105,10 @@ const SCENES: Record<string, Partial<View>> = {
   "caught-you": { safe: safe("caught", null) },
   "home-added": { notice: "OpenAI is in your keys." },
   program: {
-    program: { name: "python3", path: "/usr/bin/python3", command: "python3 dialpad_report.py", folder: "~/code/report-bot", keys: ["Dialpad"] },
+    program: { name: "python3", path: "/usr/bin/python3", command: "python3 dialpad_report.py", folder: "~/code/report-bot", keys: ["Dialpad"], agent: null },
+  },
+  "program-agent": {
+    program: { name: "python3", path: "/usr/bin/python3", command: "python3 -c import os; print(os.environ['DIALPAD_API_KEY'])", folder: "~/code/report-bot", keys: ["Dialpad"], agent: "Claude Code" },
   },
   "home-copied": { notice: "Copied DIALPAD_API_KEY=handoff:Dialpad" },
   "listening-apps": { safe: safe("listening", null, ["Ditto"]) },

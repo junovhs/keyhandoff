@@ -86,3 +86,7 @@ pub fn runtime_dir() -> PathBuf {
 pub fn user_name() -> Option<String> {
     std::env::var("USER").ok()
 }
+
+pub fn connect_keys(_profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStream>> {
+    Err(std::io::Error::other("not supported on this system"))
+}
