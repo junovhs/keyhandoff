@@ -275,8 +275,8 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
    Ann's windows (whoever is acting is big, the other small and dim), then a closing line. */
 .team-stage { position: relative; height: 740px; }
 /* The opening and closing frames: a small designed card with its line under it. */
-.frame-card { position: absolute; top: 50%; left: 50%; display: flex; flex-direction: column; align-items: center; gap: 36px; width: min(100%, 720px); transform: translate(-50%, -50%); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); }
-[data-step="intro"] .f-intro, [data-step="outro"] .f-outro { opacity: 1; transition-delay: .3s; }
+.frame-card { position: absolute; top: 50%; left: 50%; display: flex; flex-direction: column; align-items: center; gap: 36px; width: min(100%, 720px); transform: translate(-50%, -50%) scale(.97); opacity: 0; pointer-events: none; transition: opacity .6s var(--ease), transform .8s var(--ease); }
+[data-step="intro"] .f-intro, [data-step="outro"] .f-outro { opacity: 1; transform: translate(-50%, -50%); transition-delay: .4s; }
 .frame-text { display: flex; flex-wrap: wrap; justify-content: center; margin: 0; text-align: center; font-size: clamp(26px, 3.2vw, 38px); font-weight: 600; line-height: 1.2; letter-spacing: -.03em; }
 .frame-text span { display: inline-block; white-space: pre; opacity: 0; transform: translateY(14px); }
 [data-step="intro"] .f-intro .frame-text span, [data-step="outro"] .f-outro .frame-text span { animation: word .5s var(--ease) calc(.9s + var(--i) * 60ms) forwards; }
@@ -298,55 +298,99 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
 .duo-cap { position: absolute; top: 0; left: 0; right: 0; display: grid; margin: 0; text-align: center; font-size: clamp(22px, 2.4vw, 28px); font-weight: 500; letter-spacing: -.02em; color: var(--accent-ink); }
 .duo-cap span { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: 14px; opacity: 0; transform: translateY(10px); transition: opacity .3s var(--ease), transform .3s var(--ease); }
 .duo-cap b { display: grid; place-items: center; flex-shrink: 0; width: 1.4em; height: 1.4em; border-radius: 50%; background: var(--accent-grad); color: #fff; font-size: .7em; font-weight: 600; letter-spacing: 0; }
-.duo { position: absolute; top: 84px; left: 0; right: 0; bottom: 0; transition: opacity .4s var(--ease); }
-[data-step="intro"] .duo, [data-step="outro"] .duo { opacity: 0; }
+.duo { position: absolute; top: 84px; left: 0; right: 0; bottom: 0; transition: opacity .8s var(--ease) .3s; }
+[data-step="intro"] .duo, [data-step="outro"] .duo { opacity: 0; transition-delay: 0s; transition-duration: .5s; }
 .mock { position: absolute; top: 0; left: 50%; width: 360px; transform: translateX(-50%); transform-origin: 50% 0; }
-.mock { display: flex; flex-direction: column; align-items: center; gap: 12px; transition: opacity .8s var(--ease), transform .8s var(--ease); }
+.mock { display: flex; flex-direction: column; align-items: center; gap: 12px; transition: opacity 1s var(--ease), transform 1s var(--ease); }
 .mock-who { font: 500 13px var(--mono); color: var(--accent-ink); }
 #duo[data-step="0"] .ann, #duo[data-step="1"] .ann, #duo[data-step="2"] .ann { opacity: .3; transform: translateX(calc(-50% + 360px)) scale(.6); }
 #duo[data-step="3"] .ben, #duo[data-step="4"] .ben { opacity: .3; transform: translateX(calc(-50% - 360px)) scale(.6); }
-/* How teams work, as it could be. Pictures only: people, three coloured keys, and one short line per
-   beat. Ben has the keys, invites Ann and Priya, they join and the keys follow, he changes one key and
-   both get it, then Priya leaves and her copies go dead while Ann's refresh. */
-.lc-stage { position: relative; max-width: 860px; margin: 0 auto; padding-top: 72px; }
-.lc { position: relative; height: 420px; }
-.lc-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
-.lc-lines line { stroke: var(--accent-ink); stroke-width: 2; stroke-dasharray: 3 7; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity .5s var(--ease); }
-.pn { position: absolute; left: var(--x); top: var(--y); display: flex; flex-direction: column; align-items: center; gap: 12px; transform: translate(-50%, -38px); transition: opacity .5s var(--ease), filter .5s var(--ease); }
-.pn > i { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--raised); font: 600 26px var(--font); font-style: normal; color: var(--text); }
-.pn.pb > i { width: 92px; height: 92px; border: 0; background: var(--accent-grad); box-shadow: 0 0 50px rgba(26, 109, 255, .4); }
-.toks { display: flex; gap: 8px; }
-.tok { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; font-style: normal; transition: opacity .4s var(--ease), filter .4s var(--ease); }
-.t1 { background: #7a5cff; } .t2 { background: #14b88a; } .t3 { background: #f5a524; }
-.pa, .pp, .pa .tok, .pp .tok { opacity: 0; }
-.fly { position: absolute; left: 22%; top: 44%; display: flex; gap: 4px; padding: 7px; border-radius: 10px; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
-.fly.inv { background: var(--accent-grad); color: #fff; }
-.dot { display: block; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
-.to-a { --tx: 76%; --ty: 22%; } .to-p { --tx: 76%; --ty: 70%; }
-@keyframes lc-fly { 0% { opacity: 0; left: 22%; top: 44%; } 15% { opacity: 1; } 85% { opacity: 1; left: var(--tx); top: var(--ty); } 100% { opacity: 0; left: var(--tx); top: var(--ty); } }
-@keyframes lc-in { to { opacity: 1; } }
-@keyframes spin { 0% { transform: rotate(0); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } 50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, .25), 0 0 24px currentColor; } 100% { transform: rotate(360deg); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } }
-@keyframes pop { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.35); box-shadow: 0 0 0 5px rgba(255, 255, 255, .2); } }
-/* 2: invited, still faded */
-[data-step="1"] .pa, [data-step="1"] .pp { animation: none; opacity: .35; transition-delay: 1.2s; }
-[data-step="1"] .inv { animation: lc-fly 1.3s var(--ease) .3s both; }
-/* 3: they join, lines connect, the keys follow */
-[data-step="2"] .pa, [data-step="3"] .pa, [data-step="4"] .pa, [data-step="2"] .pp, [data-step="3"] .pp, [data-step="4"] .pp { opacity: 1; }
-[data-step="2"] .ln-ann, [data-step="3"] .ln-ann, [data-step="4"] .ln-ann, [data-step="2"] .ln-priya, [data-step="3"] .ln-priya, [data-step="4"] .ln-priya { opacity: .8; }
-[data-step="2"] .join { animation: lc-fly 1.3s var(--ease) .6s both; }
-[data-step="2"] .pa .tok, [data-step="3"] .pa .tok, [data-step="4"] .pa .tok, [data-step="2"] .pp .tok, [data-step="3"] .pp .tok, [data-step="4"] .pp .tok { opacity: 1; }
-[data-step="2"] .pa .tok, [data-step="2"] .pp .tok { transition-delay: 1.7s; }
-/* 4: Ben changes the purple key; both get the new one */
-[data-step="3"] .pb .t1 { animation: spin .9s var(--ease) .3s; }
-[data-step="3"] .one { animation: lc-fly 1.2s var(--ease) 1.1s both; }
-[data-step="3"] .pa .t1, [data-step="3"] .pp .t1 { animation: pop .6s var(--ease) 2.2s; }
-/* 5: Priya leaves; her copies die; Ben refreshes all three, for Ann only */
-[data-step="4"] .pp { opacity: .35; filter: grayscale(1); transition-delay: .3s; }
-[data-step="4"] .ln-priya { opacity: 0; transition-delay: .3s; }
-[data-step="4"] .pp .tok { filter: grayscale(1) brightness(.5); }
-[data-step="4"] .pb .tok { animation: spin .9s var(--ease) 1.2s; }
-[data-step="4"] .again { animation: lc-fly 1.2s var(--ease) 2s both; }
-[data-step="4"] .pa .tok { animation: pop .6s var(--ease) 3.1s; }
+/* Before and after the windows, they wait a little lower, so they rise into place instead of appearing. */
+#duo[data-step="intro"] .ben, #duo[data-step="outro"] .ann { transform: translateX(-50%) translateY(48px) scale(.94); }
+#duo[data-step="intro"] .ann { opacity: 0; transform: translateX(calc(-50% + 360px)) translateY(48px) scale(.55); }
+#duo[data-step="outro"] .ben { opacity: 0; transform: translateX(calc(-50% - 360px)) translateY(48px) scale(.55); }
+/* How teams work, as an orbit. The team's vault is a glowing core; members take seats on a ring
+   around it, seen tilted in perspective, and are turned upright again so they stand on it. Keys are
+   cold white light running down the spokes. Ben has the keys, invites Ann and Priya (sparks run the
+   ring to their seats), they join and the keys stream out, one change pulses out to everyone, then
+   Priya drifts off the ring, her spoke goes dark, and the vault re-keys for Ann alone. States are
+   transitions, so reduced motion holds on the last frame. Plane coordinates are pixels in a 560px square. */
+.lc-stage { position: relative; max-width: 900px; margin: 0 auto; padding-top: 72px; --ice: #9ae8ff; --ice-glow: rgba(154, 232, 255, .55); }
+.ob { position: relative; height: 470px; perspective: 1300px; perspective-origin: 50% -10%; }
+.ob-plane { position: absolute; left: 50%; top: 120px; width: 560px; height: 560px; margin-left: -280px; transform: rotateX(64deg); transform-origin: 50% 0; transform-style: preserve-3d; }
+.ob-plane::before { content: ""; position: absolute; inset: -60px; border-radius: 50%; background: radial-gradient(closest-side, rgba(26, 109, 255, .22), rgba(26, 109, 255, .04) 70%, transparent); }
+.ob-ring { position: absolute; inset: 30px; border-radius: 50%; border: 1.5px solid rgba(154, 232, 255, .28); box-shadow: 0 0 30px rgba(26, 109, 255, .25), inset 0 0 30px rgba(26, 109, 255, .2); }
+.ob-ring::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 78%, rgba(154, 232, 255, .9) 96%, transparent 100%); -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); animation: ob-sweep 7s linear infinite; }
+@keyframes ob-sweep { to { transform: rotate(360deg); } }
+.ob-ring.inner { inset: 150px; border-color: rgba(154, 232, 255, .14); box-shadow: none; }
+.ob-ring.inner::after { display: none; }
+.ob-spokes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ob-spokes line { fill: none; stroke-linecap: round; }
+.ob-spokes .sp { stroke: rgba(154, 232, 255, .8); stroke-width: 2; stroke-dasharray: 260; stroke-dashoffset: 260; transition: stroke-dashoffset 1.1s var(--ease), opacity .8s var(--ease); }
+.ob-spokes .fl { stroke: #fff; stroke-width: 3; stroke-dasharray: 2 18; opacity: 0; animation: ob-flow 1s linear infinite; transition: opacity .6s var(--ease); }
+@keyframes ob-flow { to { stroke-dashoffset: -20; } }
+.ob-seat { position: absolute; left: var(--x); top: var(--y); width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; border: 1.5px dashed rgba(154, 232, 255, .5); opacity: 0; transition: opacity .8s var(--ease), border-color .6s var(--ease), box-shadow .6s var(--ease); }
+.ob-seat.s-ben { opacity: 1; border-style: solid; border-color: var(--ice); box-shadow: 0 0 26px var(--ice-glow); }
+.ob-wave { position: absolute; left: 280px; top: 280px; width: 500px; height: 500px; margin: -250px 0 0 -250px; border-radius: 50%; border: 3px solid var(--ice); box-shadow: 0 0 30px var(--ice-glow), inset 0 0 30px var(--ice-glow); opacity: 0; transform: scale(.1); }
+@keyframes ob-wave { 0% { opacity: 0; transform: scale(.1); } 15% { opacity: 1; } 100% { opacity: 0; transform: scale(1.05); } }
+/* Sparks run the ring: a pivot at the centre turns from Ben's angle to the seat's. */
+.ob-spark { position: absolute; left: 280px; top: 280px; width: 0; height: 0; transform: rotate(150deg); opacity: 0; }
+.ob-spark::before { content: ""; position: absolute; left: 250px; top: -9px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: #fff; box-shadow: 0 0 18px 6px var(--ice-glow); }
+@keyframes ob-run-a { 0% { opacity: 0; transform: rotate(150deg); } 12%, 85% { opacity: 1; } 100% { opacity: 0; transform: rotate(320deg); } }
+@keyframes ob-run-p { 0% { opacity: 0; transform: rotate(150deg); } 12%, 85% { opacity: 1; } 100% { opacity: 0; transform: rotate(40deg); } }
+/* Key light down a spoke, from the core to a seat. */
+.ob-bolt { position: absolute; left: 280px; top: 280px; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 0 16px 5px var(--ice-glow); opacity: 0; }
+@keyframes ob-to-a { 0% { left: 280px; top: 280px; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 471px; top: 119px; opacity: 0; } }
+@keyframes ob-to-p { 0% { left: 280px; top: 280px; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 471px; top: 441px; opacity: 0; } }
+@keyframes ob-to-b { 0% { left: 280px; top: 280px; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 63px; top: 405px; opacity: 0; } }
+/* Upright things: turned back by the plane's angle around their foot. */
+.ob-up { position: absolute; left: var(--x); top: var(--y); display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 30px; transform: translate(-50%, -100%) rotateX(-64deg); transform-origin: 50% 100%; transition: opacity .9s var(--ease), filter .9s var(--ease), left 1.4s var(--ease), top 1.4s var(--ease); }
+.ob-core > i { display: grid; place-items: center; width: 104px; height: 104px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--ice) 18%, var(--accent) 60%, #0a2a78); color: #fff; box-shadow: 0 0 70px rgba(26, 109, 255, .7), 0 0 120px rgba(154, 232, 255, .25); animation: ob-breathe 3.2s ease-in-out infinite; }
+@keyframes ob-breathe { 50% { box-shadow: 0 0 90px rgba(26, 109, 255, .85), 0 0 160px rgba(154, 232, 255, .35); } }
+.ob-core .nm { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ice); }
+.ob-keys { display: flex; gap: 6px; }
+.ob-keys i { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; border: 1px solid rgba(154, 232, 255, .4); background: rgba(8, 20, 46, .9); color: #fff; box-shadow: 0 0 12px rgba(154, 232, 255, .3); transition: opacity .5s var(--ease), transform .5s var(--ease), filter .6s var(--ease); }
+.ob-mem > b { display: grid; place-items: center; width: 70px; height: 70px; border-radius: 50%; border: 1px solid var(--line-strong); background: linear-gradient(180deg, #1a2336, #0b111d); font: 600 25px var(--font); color: var(--text); box-shadow: 0 16px 36px rgba(0, 0, 0, .6); }
+.ob-mem.ben > b { border: 0; background: var(--accent-grad); box-shadow: 0 0 44px rgba(26, 109, 255, .55); }
+.ob-mem .nm { font-size: 14px; font-weight: 500; color: var(--text-2); }
+.ob-mem.ann, .ob-mem.priya { opacity: 0; filter: blur(6px); }
+.ann .ob-keys i, .priya .ob-keys i { opacity: 0; transform: scale(.4); }
+@keyframes ob-flash { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.3); background: #fff; color: var(--accent); box-shadow: 0 0 24px var(--ice-glow); } }
+/* 2: sparks run the ring; Ann's and Priya's seats appear, then they do, faintly */
+#circle-stage[data-step="1"] .spk-a { animation: ob-run-a 1.4s cubic-bezier(.45, 0, .55, 1) .3s both; }
+#circle-stage[data-step="1"] .spk-p { animation: ob-run-p 1.1s cubic-bezier(.45, 0, .55, 1) .3s both; }
+#circle-stage:not([data-step="0"]) .ob-seat { opacity: 1; transition-delay: 1.2s; }
+#circle-stage[data-step="1"] .ob-mem.ann, #circle-stage[data-step="1"] .ob-mem.priya { opacity: .45; filter: blur(1.5px); transition-delay: 1.5s; }
+/* 3: they join; spokes reach them and the keys stream out */
+#circle-stage[data-step="2"] .ob-mem, #circle-stage[data-step="3"] .ob-mem, #circle-stage[data-step="4"] .ob-mem { opacity: 1; filter: none; transition-delay: .1s; }
+#circle-stage[data-step="2"] .ob-seat, #circle-stage[data-step="3"] .ob-seat, #circle-stage[data-step="4"] .s-ann { border-style: solid; border-color: var(--ice); box-shadow: 0 0 26px var(--ice-glow); transition-delay: .1s; }
+#circle-stage[data-step="2"] .sp, #circle-stage[data-step="3"] .sp, #circle-stage[data-step="4"] .sp-ann, #circle-stage[data-step="4"] .sp-ben { stroke-dashoffset: 0; }
+#circle-stage .sp-ben { stroke-dashoffset: 0; }
+#circle-stage[data-step="2"] .fl, #circle-stage[data-step="3"] .fl, #circle-stage[data-step="4"] .fl-ann, #circle-stage[data-step="4"] .fl-ben { opacity: .85; }
+#circle-stage[data-step="2"] .bolt.a1 { animation: ob-to-a 1s cubic-bezier(.45, 0, .55, 1) .7s both; }
+#circle-stage[data-step="2"] .bolt.a2 { animation: ob-to-a 1s cubic-bezier(.45, 0, .55, 1) .9s both; }
+#circle-stage[data-step="2"] .bolt.a3 { animation: ob-to-a 1s cubic-bezier(.45, 0, .55, 1) 1.1s both; }
+#circle-stage[data-step="2"] .bolt.p1 { animation: ob-to-p 1s cubic-bezier(.45, 0, .55, 1) .7s both; }
+#circle-stage[data-step="2"] .bolt.p2 { animation: ob-to-p 1s cubic-bezier(.45, 0, .55, 1) .9s both; }
+#circle-stage[data-step="2"] .bolt.p3 { animation: ob-to-p 1s cubic-bezier(.45, 0, .55, 1) 1.1s both; }
+#circle-stage[data-step="2"] .ann .ob-keys i, #circle-stage[data-step="3"] .ann .ob-keys i, #circle-stage[data-step="4"] .ann .ob-keys i,
+#circle-stage[data-step="2"] .priya .ob-keys i, #circle-stage[data-step="3"] .priya .ob-keys i, #circle-stage[data-step="4"] .priya .ob-keys i { opacity: 1; transform: none; }
+#circle-stage[data-step="2"] .ob-keys i:nth-child(1) { transition-delay: 1.6s; }
+#circle-stage[data-step="2"] .ob-keys i:nth-child(2) { transition-delay: 1.8s; }
+#circle-stage[data-step="2"] .ob-keys i:nth-child(3) { transition-delay: 2s; }
+/* 4: one change at the core pulses out to everyone at once */
+#circle-stage[data-step="3"] .ob-core .ob-keys i:nth-child(1) { animation: ob-flash .7s var(--ease) .3s; }
+#circle-stage[data-step="3"] .ob-wave { animation: ob-wave 1.6s var(--ease) .7s both; }
+#circle-stage[data-step="3"] .ob-mem .ob-keys i:nth-child(1) { animation: ob-flash .7s var(--ease) 1.5s; }
+/* 5: Priya drifts off the ring and goes dark; the vault re-keys for those who stay */
+#circle-stage[data-step="4"] .ob-mem.priya { left: 540px; top: 520px; opacity: .3; filter: grayscale(1) blur(1px); transition-delay: .3s; }
+#circle-stage[data-step="4"] .priya .ob-keys i { filter: brightness(.35); box-shadow: none; transition-delay: .6s; }
+#circle-stage[data-step="4"] .s-priya { opacity: 0; transition-delay: .3s; }
+#circle-stage[data-step="4"] .sp-priya { opacity: 0; transition-delay: .3s; }
+#circle-stage[data-step="4"] .ob-core .ob-keys i { animation: ob-flash .7s var(--ease) 1.5s; }
+#circle-stage[data-step="4"] .bolt.r-a { animation: ob-to-a 1s cubic-bezier(.45, 0, .55, 1) 2s both; }
+#circle-stage[data-step="4"] .bolt.r-b { animation: ob-to-b 1s cubic-bezier(.45, 0, .55, 1) 2s both; }
+#circle-stage[data-step="4"] .ann .ob-keys i, #circle-stage[data-step="4"] .ben .ob-keys i { animation: ob-flash .7s var(--ease) 3s; }
 
 /* The windows themselves are styled by the app's stylesheet (scoped to .kh in index.astro).
    Here: the window's size, and which screen each step shows. */
@@ -355,7 +399,8 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
 .kh .hero, .kh .head { padding: 0; margin: 0; max-width: none; text-align: left; }
 .kh .lede, .kh .sub { max-width: none; }
 .kh h1, .kh h2 { white-space: normal; text-wrap: wrap; }
-.kh .view { opacity: 0; transform: translateY(6px); transition: opacity .3s var(--ease), transform .3s var(--ease); }
+.kh .view { opacity: 0; transform: translateY(14px); transition: opacity .3s var(--ease), transform .3s var(--ease); }
+[data-step="0"] .kh .s0, [data-step="1"] .kh .s1, [data-step="2"] .kh .s2, [data-step="3"] .kh .s3, [data-step="4"] .kh .s4 { transition: opacity .5s var(--ease) .3s, transform .7s var(--ease) .3s; }
 .kh .stage.view { position: absolute; inset: 48px 0 0; }
 /* The old screen fades out before the new one fades in, so they never overlap. */
 [data-step="0"] .s0, [data-step="1"] .s1, [data-step="2"] .s2, [data-step="3"] .s3, [data-step="4"] .s4 { opacity: 1; transform: none; transition-delay: .3s; }
@@ -428,8 +473,10 @@ html.js .cutaway:not(.in) .layer { transform: none; }
 #sw-stage[data-step="0"] .sw-env .v { box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(26, 109, 255, .55); transition-delay: .5s; }
 .sw-tag { align-self: flex-start; padding: 3px 10px; border: 1px solid rgba(106, 162, 255, .35); border-radius: 999px; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
 
-.sw-tunnel { position: absolute; left: var(--lane-l); right: calc(100% - var(--lane-r)); top: var(--top); height: 52px; transform: translateY(-50%); border: 1px solid rgba(106, 162, 255, .5); border-radius: 999px; background: repeating-linear-gradient(120deg, rgba(26, 109, 255, .26) 0 14px, rgba(26, 109, 255, .07) 14px 28px); box-shadow: 0 0 46px rgba(26, 109, 255, .35), inset 0 0 22px rgba(26, 109, 255, .3); animation: sw-flow 1.4s linear infinite; }
-@keyframes sw-flow { to { background-position: 64.66px 0; } }
+.sw-tunnel { position: absolute; left: var(--lane-l); right: calc(100% - var(--lane-r)); top: var(--top); height: 52px; transform: translateY(-50%); border: 1px solid rgba(106, 162, 255, .5); overflow: hidden; border-radius: 999px; background: rgba(26, 109, 255, .07); box-shadow: 0 0 46px rgba(26, 109, 255, .35), inset 0 0 22px rgba(26, 109, 255, .3); }
+/* Stripes 28px apart at 120deg repeat every 32.33px across, so sliding by two periods loops without a seam. */
+.sw-tunnel::before { content: ""; position: absolute; top: 0; bottom: 0; left: -64.66px; right: 0; background: repeating-linear-gradient(120deg, rgba(26, 109, 255, .26) 0 14px, rgba(26, 109, 255, .07) 14px 28px); animation: sw-flow 1.4s linear infinite; }
+@keyframes sw-flow { to { transform: translateX(64.66px); } }
 .sw-tunnel-lock { position: absolute; left: var(--lane-l); top: var(--top); z-index: 1; display: grid; place-items: center; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--accent-grad); color: #fff; box-shadow: 0 0 30px rgba(26, 109, 255, .6); }
 .sw-tunnel-label { position: absolute; left: calc((var(--lane-l) + var(--lane-r)) / 2); top: calc(var(--top) - 50px); transform: translateX(-50%); font: 500 12.5px var(--mono); color: var(--accent-ink); white-space: nowrap; }
 .sw-path { position: absolute; left: var(--lane-l); right: calc(100% - var(--lane-r)); top: var(--bottom); border-top: 2px dashed var(--line-strong); }
@@ -589,7 +636,8 @@ html.js .rv.in { opacity: 1; transform: none; }
   #circle { padding: 36px 0; }
   #circle h2 { font-size: 28px; }
   #circle .head { margin-bottom: 16px; }
-  .lc { height: 340px; }
+  .ob { height: 330px; }
+  .ob-plane { top: 70px; transform: scale(.5) rotateX(64deg); }
   #standin .head { margin-bottom: 16px; }
   .sw-stage { padding-top: 52px; }
   .sw { height: 330px; --lane-l: 41%; --lane-r: 66%; --wire: 55%; }
@@ -610,9 +658,6 @@ html.js .rv.in { opacity: 1; transform: none; }
   .sw-pkt > span { padding: 4px 6px; }
   .sw-stop { top: calc(var(--bottom) - 70px); padding: 5px 10px; font-size: 12px; }
   .sw-alert { left: 50%; top: calc(100% - 38px); font-size: 12px; }
-  .pn > i { width: 58px; height: 58px; font-size: 20px; }
-  .pn.pb > i { width: 70px; height: 70px; }
-  .tok { width: 24px; height: 24px; }
   footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .foot-brand { grid-column: 1 / -1; }
 }

@@ -399,21 +399,26 @@ const INCIDENTS = [
           <span class="s3"><b>4</b>Change a key once. Everyone gets it.</span>
           <span class="s4"><b>5</b>Someone leaves? Their copies stop working.</span>
         </p>
-        <div class="lc" aria-hidden="true">
-          <svg class="lc-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <line class="ln-ann" x1="22" y1="44" x2="76" y2="22" />
-            <line class="ln-priya" x1="22" y1="44" x2="76" y2="70" />
-          </svg>
-          <span class="pn pb" style="--x:22%; --y:44%"><i>B</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
-          <span class="pn pa" style="--x:76%; --y:22%"><i>A</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
-          <span class="pn pp" style="--x:76%; --y:70%"><i>P</i><span class="toks"><i class="tok t1"><Icon name="key" size={12} /></i><i class="tok t2"><Icon name="key" size={12} /></i><i class="tok t3"><Icon name="key" size={12} /></i></span></span>
-          <span class="fly inv to-a"><Icon name="file" size={18} /></span>
-          <span class="fly inv to-p"><Icon name="file" size={18} /></span>
-          <span class="fly bundle join to-a"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
-          <span class="fly bundle join to-p"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
-          <span class="fly bundle one to-a"><i class="dot t1"></i></span>
-          <span class="fly bundle one to-p"><i class="dot t1"></i></span>
-          <span class="fly bundle again to-a"><i class="dot t1"></i><i class="dot t2"></i><i class="dot t3"></i></span>
+        <div class="ob" aria-hidden="true">
+          <div class="ob-plane">
+            <span class="ob-ring"></span><span class="ob-ring inner"></span>
+            <svg class="ob-spokes" viewBox="0 0 560 560">
+              <line class="sp sp-ben" x1="280" y1="280" x2="63" y2="405" /><line class="sp sp-ann" x1="280" y1="280" x2="471" y2="119" /><line class="sp sp-priya" x1="280" y1="280" x2="471" y2="441" />
+              <line class="fl fl-ben" x1="280" y1="280" x2="63" y2="405" /><line class="fl fl-ann" x1="280" y1="280" x2="471" y2="119" /><line class="fl fl-priya" x1="280" y1="280" x2="471" y2="441" />
+            </svg>
+            <span class="ob-seat s-ben" style="--x:63px; --y:405px"></span>
+            <span class="ob-seat s-ann" style="--x:471px; --y:119px"></span>
+            <span class="ob-seat s-priya" style="--x:471px; --y:441px"></span>
+            <span class="ob-wave"></span>
+            <span class="ob-spark spk-a"></span><span class="ob-spark spk-p"></span>
+            <span class="ob-bolt bolt a1"></span><span class="ob-bolt bolt a2"></span><span class="ob-bolt bolt a3"></span>
+            <span class="ob-bolt bolt p1"></span><span class="ob-bolt bolt p2"></span><span class="ob-bolt bolt p3"></span>
+            <span class="ob-bolt bolt r-a"></span><span class="ob-bolt bolt r-b"></span>
+            <span class="ob-up ob-mem ann" style="--x:471px; --y:119px"><span class="ob-keys"><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i></span><b>A</b><span class="nm">Ann</span></span>
+            <span class="ob-up ob-core" style="--x:280px; --y:280px"><span class="ob-keys"><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i></span><i><Icon name="lock" size=34 /></i><span class="nm">Team vault</span></span>
+            <span class="ob-up ob-mem ben" style="--x:63px; --y:405px"><span class="ob-keys"><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i></span><b>B</b><span class="nm">Ben</span></span>
+            <span class="ob-up ob-mem priya" style="--x:471px; --y:441px"><span class="ob-keys"><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i><i><Icon name="key" size={13} /></i></span><b>P</b><span class="nm">Priya</span></span>
+          </div>
         </div>
       </div>
     </section>
