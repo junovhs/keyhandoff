@@ -32,6 +32,8 @@ img { display: block; max-width: 100%; height: auto; }
 :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; border-radius: 4px; }
 .wrap { width: min(1160px, calc(100% - 112px)); margin: 0 auto; }
 .icon { display: block; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Lucide draws on a 24px grid, so its lines want a heavier stroke than the app's 16px icons. */
+.icon.lucide { stroke-width: 2; }
 .px { display: block; }
 code, kbd, pre { font-family: var(--mono); }
 p code, h3 code, li code { font-size: .88em; color: var(--text); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 5px; padding: 1px 5px; }
@@ -185,7 +187,7 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
 .r3, .r4, .r5 { grid-column: 3; padding-left: 28px; }
 .r0, .r3 { grid-row: 1; } .r1, .r4 { grid-row: 2; } .r2, .r5 { grid-row: 3; }
 .reader-ico { flex-shrink: 0; color: var(--exposed); transition: color .9s var(--ease); }
-.reader-ico .icon { stroke-width: 1.1; }
+.reader-ico .icon { stroke-width: 1.5; }
 [data-state="safe"] .reader-ico { color: var(--accent-ink); }
 /* Both lines share one cell, so flipping never changes the diagram's height. */
 .reader-txt .gets { display: grid; margin-top: 4px; font-weight: 500; }
