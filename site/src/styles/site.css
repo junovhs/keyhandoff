@@ -438,12 +438,47 @@ html.js .rv.in { opacity: 1; transform: none; }
   .row { font-size: 12px; }
   .row .k { flex: 0 1 auto; max-width: 42%; }
   .readers { grid-template-columns: minmax(0, 1fr); }
-  .stack { height: 520px; transform: scale(.82); }
   section { padding: 72px 0; }
   .count { font-size: 12px; }
   .btn { padding: 0 16px; }
   .solo-stage .kh { max-width: 320px; }
   .source { width: 300px; }
+  /* Phones: the blind spot, Just you, Your team and the cutaway each fit one screen. */
+  #blind-spot, #solo, #team, #built-in { padding: 36px 0; }
+  #solo h2, #team h2, #built-in h2 { font-size: 28px; }
+  .big-q { margin-bottom: 20px; font-size: 26px; }
+  .readers { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px 14px; }
+  .envfile { flex-direction: row; flex-wrap: wrap; justify-content: center; column-gap: 12px; width: 100%; margin-bottom: 4px; padding: 12px 16px; }
+  .envfile .tile-plain { width: auto; height: auto; }
+  .envfile .tile-plain svg { width: 30px; height: auto; }
+  .envfile code { font-size: 22px; }
+  .reader { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .reader-ico .icon { width: 26px; height: 26px; }
+  .reader-txt b { margin: 0; font-size: 15px; }
+  .reader-txt > span:not(.gets) { display: none; }
+  .reader-txt .gets { margin-top: 2px; font-size: 13px; }
+  .readers-switch { margin-top: 18px; }
+  .proof-line { margin-top: 12px; font-size: 13px; }
+  .punch { margin-top: 20px; font-size: 20px; }
+  #solo .head, #team .head { margin-bottom: 16px; }
+  #solo .head .sub { display: none; }
+  .solo-stage { height: 500px; }
+  .duo-cap { font-size: 17px; }
+  .source { top: 40px; gap: 6px; padding: 12px; }
+  .solo-stage .kh { top: 170px; transform: translateX(-50%) scale(.58); transform-origin: top center; }
+  .team-stage { height: 500px; }
+  .duo { top: 52px; }
+  .mock { transform: translateX(-50%) scale(.74); }
+  .frame-card { gap: 24px; }
+  .frame-text { font-size: 24px; }
+  #built-in .head { margin-bottom: 8px; }
+  .cutaway { gap: 8px; }
+  .stack { height: 620px; margin-bottom: -390px; transform: scale(.37); transform-origin: top center; }
+  .callouts { gap: 14px; }
+  .callout { padding-left: 14px; }
+  .callout b { margin-bottom: 2px; font-size: 16px; }
+  .callout p { font-size: 13px; line-height: 1.4; }
+  .limits { margin-top: 12px; }
   footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .foot-brand { grid-column: 1 / -1; }
 }
