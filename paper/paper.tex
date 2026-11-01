@@ -1,0 +1,1175 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+\documentclass[
+  11pt]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\usepackage{caption}
+\captionsetup[table]{skip=6pt}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{xurl}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+% fallback for those not using the hyperref driver hyperxmp:
+\makeatletter
+\@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
+\makeatother
+\hypersetup{
+  pdftitle={Stolen keys are worthless: placeholder credentials that become real only inside encryption{,} with tripwires},
+  pdfauthor={junovhs · junovhs@gmail.com · https://github.com/junovhs/keyhandoff},
+  colorlinks=true,
+  linkcolor={black},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={blue},
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Stolen keys are worthless:
+placeholder credentials that become real
+only inside encryption, with tripwires}
+\author{junovhs · junovhs@gmail.com ·
+\url{https://github.com/junovhs/keyhandoff}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Abstract}\label{abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+Developers keep API keys where their
+tools can read them: in \texttt{.env}
+files, in environment variables, in
+shell history and logs. Supply-chain
+malware and, increasingly, AI coding
+agents read the same places. Vaults and
+run wrappers (\texttt{op\ run},
+\texttt{doppler\ run}) keep keys out of
+files but hand the real key to the
+program, where anything in its process
+can take it. Placeholder proxies keep
+the real key out of the program but
+require routing traffic through a
+man-in-the-middle and only speak HTTP.
+
+We present a design, implemented in
+KeyHandoff, a small desktop key manager,
+in which a program started with
+\texttt{keyhandoff\ run} never holds the
+key. It holds a placeholder with the
+key's prefix and length. A hook in the
+program's own TLS library swaps the real
+key in at the moment a write is
+encrypted, and only on a connection
+whose certificate chain the hook has
+verified itself, against the system's
+roots, as one of the key's servers.
+Because nothing legitimate sends a
+placeholder anywhere else, every
+placeholder is also a tripwire. A write
+carrying one elsewhere, as written or in
+common encodings, is refused before a
+byte leaves. The run that tried is
+named, the destination is refused from
+then on, and a signed warning reaches
+teammates through a folder they already
+share. Each run gets fresh placeholders,
+so one found later traces back to its
+run.
+
+We evaluate coverage across 15 client
+and protocol combinations, 11
+reconstructed attacks drawn from
+documented supply-chain campaigns and
+AI-agent misuse, overhead, and an
+adversarial review.
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Coverage:} 12 of the 15
+  combinations are protected, including
+  HTTP/2, where we rewrite
+  HPACK-compressed headers {[}17{]}. The
+  other three never release the key.
+\item
+  \textbf{Attacks:} in every
+  reconstructed attack the attacking
+  code held only a placeholder, and no
+  real key left the machine. Every send
+  was stopped and attributed.
+\item
+  \textbf{Overhead:} a swapped request
+  costs about 0.26 ms; anything else
+  costs about 2 µs.
+\item
+  \textbf{Adversarial review:} it found,
+  and we fixed, a way for in-process
+  code to obtain the key through the
+  hook's own token. It also states
+  precisely what still does: code that
+  targets the hook in memory, and use of
+  the key at its own server.
+\end{itemize}
+
+\section*{1. The
+problem}\label{the-problem}
+\addcontentsline{toc}{section}{1. The
+problem}
+
+A key is safe until a program needs it.
+At that point it ends up somewhere other
+code can read:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Files and the environment.}
+  \texttt{.env} files, shell profiles
+  and CI variables hold keys in plain
+  text. Stealers target exactly these.
+  The August 2025 compromise of
+  \texttt{nx} packages inventoried
+  environment variables and
+  \texttt{.env} files, asked locally
+  installed AI command-line tools to
+  search for more, and uploaded the haul
+  triple-base64-encoded to a public
+  GitHub repository created in the
+  victim's own account {[}1, 2{]}. The
+  September 2025 Shai-Hulud worm, run
+  from npm install scripts, harvested
+  environment variables and cloud keys,
+  published them double-base64-encoded
+  to a public repository named
+  \texttt{Shai-Hulud}, and planted a
+  GitHub Action that sent each
+  repository's secrets to a webhook
+  {[}3{]}.
+\item
+  \textbf{AI coding agents.} An agent
+  with shell access can print, encode or
+  upload a key. It may do so because it
+  was asked, or because it was told to
+  by text it read: an issue, a web page,
+  a README. An agent can also run the
+  wrapper itself
+  (\texttt{op\ run\ -\/-\ sh\ -c\ \textquotesingle{}env\textquotesingle{}}).
+\item
+  \textbf{Logs and transcripts.} Keys
+  printed while debugging end up in
+  terminal scrollback, CI logs and agent
+  transcripts.
+\end{itemize}
+
+Existing tools each remove part of this
+exposure:
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Approach
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Key in a file
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Key in the program
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Traffic
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Protocols
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{.env} & yes & yes & direct &
+any \\
+Vault + run wrapper (\texttt{op\ run},
+\texttt{doppler\ run},
+\texttt{infisical\ run}) {[}4--6{]} & no
+& yes & direct & any \\
+Placeholder proxy (agent sandboxes,
+\texttt{agent-vault},
+\texttt{iron-proxy}, fnox, GhostKey)
+{[}7--11{]} & no & no & through a MITM
+proxy and its CA & HTTP \\
+Kernel uprobe swap (Kloak) {[}14{]} & no
+& no & direct & TLS, in a cluster, with
+privileges \\
+\textbf{This work} & no & no (except
+during the swap) & direct & anything
+over TLS the hook covers \\
+\end{longtable}
+}
+
+\section*{2. Threat
+model}\label{threat-model}
+\addcontentsline{toc}{section}{2. Threat
+model}
+
+We defend a developer's own computer,
+which is not compromised at the
+administrator level. The attacker runs
+code as the developer, either inside a
+program the developer starts (a
+malicious dependency, an agent's
+command) or beside it. That code can
+read the program's environment, files
+and output, and can make network
+connections. It cannot change the
+kernel, read other users' memory, or
+break TLS.
+
+The goal is that the key never leaves
+the machine except to its own server,
+inside a TLS connection whose
+certificate the hook verified.
+Everything the attacker can take is a
+placeholder. Placeholders die when their
+run ends, and every attempt to send one
+elsewhere is visible.
+
+Out of scope, and said plainly in
+\texttt{docs/threats.md}:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Use at the key's own server.}
+  Code in the program can make requests
+  to the key's own server as the
+  developer, exactly as any program
+  allowed the key could.
+\item
+  \textbf{Code that targets the hook in
+  memory.} The key is in the program's
+  memory for the duration of each swap.
+\item
+  \textbf{Administrator-level
+  compromise.}
+\end{itemize}
+
+\section*{3. Design}\label{design}
+\addcontentsline{toc}{section}{3.
+Design}
+
+\subsection*{3.1 Running a program with
+keys}\label{running-a-program-with-keys}
+\addcontentsline{toc}{subsection}{3.1
+Running a program with keys}
+
+\texttt{keyhandoff\ run\ -\/-\ COMMAND}
+reads \texttt{handoff:Name} pointers
+from \texttt{.env} and the environment.
+It asks the running KeyHandoff app for
+those keys over a per-user local socket,
+naming the exact command it will start,
+then starts the command.
+
+\textbf{Approval is bound to the
+command.} An approval covers the
+program's path, its arguments, and the
+SHA-256 of every file the arguments
+name. An edited script, or the same
+interpreter running other code
+(\texttt{python\ -c\ …}), has to ask
+again. The runner's claim about the
+command is believed only when the
+request comes from KeyHandoff's own
+executable, compared by file identity or
+content.
+
+\textbf{Prompts are AI-aware.}
+KeyHandoff walks the requesting
+process's parent chain. If Claude Code,
+Cursor, Codex, Copilot, Aider, Windsurf
+or Gemini CLI appears in it, saved
+approvals don't count: the prompt names
+the agent and the exact command, and
+offers ``Allow for 30 minutes'', which
+is never saved, instead of ``Always''.
+Name-based detection is a warning; the
+binding to the command is the guarantee.
+
+\textbf{Output is masked.} The program's
+stdout and stderr, and those of
+everything it starts, pass through a
+masker. It hides the key or placeholder
+printed plain, base64 (at each byte
+offset), hex, percent-encoded or
+reversed, and any run of 12 or more of
+those characters, across chunk
+boundaries.
+
+\subsection*{3.2
+Placeholders}\label{placeholders}
+\addcontentsline{toc}{subsection}{3.2
+Placeholders}
+
+Each key records the servers it is for.
+They are guessed from well-known
+prefixes (\texttt{sk\_live\_} means
+\texttt{api.stripe.com},
+\texttt{sk-ant-} means
+\texttt{api.anthropic.com}) and can be
+edited. For such a key, the program gets
+a placeholder instead of the key: the
+same prefix and length, with random
+characters of the same classes after it,
+fresh for every run. Same length means
+client libraries accept it and
+\texttt{Content-Length} doesn't change.
+A key its provider signs with rather
+than sends (AWS) gets no default server,
+because a placeholder cannot work for
+it.
+
+\subsection*{3.3 The
+swap}\label{the-swap}
+\addcontentsline{toc}{subsection}{3.3
+The swap}
+
+On Linux the runner preloads a small C
+library into the program
+(\texttt{LD\_PRELOAD}). It interposes
+OpenSSL's \texttt{SSL\_write} and
+\texttt{SSL\_write\_ex}, resolving
+OpenSSL at run time, so the library
+needs no headers and works with OpenSSL
+1.1 and 3. When a write holds a
+placeholder, the hook does four things:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Verify the chain itself.} It
+  checks the peer's certificate chain
+  against the system's default roots
+  and, if set, the key's own CA. It
+  never uses the program's trust
+  settings, \texttt{SSL\_CERT\_FILE} or
+  the verification result the program
+  saw, because code in the program can
+  change all three.
+\item
+  \textbf{Check the host.} It checks the
+  leaf certificate against the key's
+  hosts with \texttt{X509\_check\_host}.
+  The name asked for in SNI and the
+  \texttt{Host} header play no part.
+\item
+  \textbf{Fetch the key.} It asks
+  KeyHandoff for the key, presenting the
+  run's token. KeyHandoff answers only
+  processes descended from the run's
+  runner, and only while the runner is
+  connected.
+\item
+  \textbf{Swap.} It writes the key into
+  a private copy of the buffer, writes
+  that copy (with
+  \texttt{SSL\_MODE\_ACCEPT\_MOVING\_WRITE\_BUFFER},
+  so a retried write can come from
+  another buffer), and wipes it.
+\end{enumerate}
+
+The verification verdict is cached per
+connection for a minute. The cache key
+is the connection object together with
+the leaf certificate's signature bytes,
+so a reused object talking to another
+server misses.
+
+\textbf{HTTP/2.} HPACK {[}17{]}
+compresses headers, usually with a
+static Huffman code, before they reach
+\texttt{SSL\_write}, so a placeholder in
+an HTTP/2 header is never there as
+written. On a connection that negotiated
+\texttt{h2}, the hook follows the frames
+from the connection preface. It decodes
+each complete HEADERS block's string
+literals, swaps the placeholder where
+the connection is verified, and
+re-encodes each string with the same
+representation. Because the key is as
+long as its placeholder, the dynamic
+tables on both sides stay in step. The
+Huffman table was not typed in. We
+measured each symbol's code length from
+the system's libnghttp2 encoder, rebuilt
+the canonical code from those lengths,
+and checked it byte for byte against
+libnghttp2 on 1,898 random strings
+(\texttt{src-tauri/hook/gen\_hpack\_huffman.py}).
+
+\textbf{HTTP Basic auth}
+(\texttt{curl\ -u\ key:}) sends the key
+base64-encoded. At the key's own server,
+the hook decodes the base64 run, swaps,
+and encodes it again at the same length.
+
+\textbf{Node.js} links its own OpenSSL,
+out of the preloaded hook's reach. The
+runner adds a \texttt{-\/-require}
+module to \texttt{NODE\_OPTIONS}. It
+wraps the TLS socket write path, waits
+for the handshake, verifies the chain
+itself (with
+\texttt{crypto.X509Certificate}, against
+Node's root store and the key's CA), and
+swaps or refuses.
+
+\textbf{The token.} The hook reads its
+token at load and overwrites it in
+place. Just unsetting it would leave it
+in \texttt{/proc/self/environ} (§6.4).
+It passes the token on to programs the
+hook starts through \texttt{exec},
+\texttt{posix\_spawn}, \texttt{system}
+and \texttt{popen}.
+
+\subsection*{3.4
+Tripwires}\label{tripwires}
+\addcontentsline{toc}{subsection}{3.4
+Tripwires}
+
+A placeholder headed anywhere but its
+key's servers is a leak in the act.
+
+\textbf{What is refused.} The hook
+refuses, before any of it leaves:
+
+\begin{itemize}
+\tightlist
+\item
+  a TLS write holding a placeholder on a
+  connection not verified for its key;
+\item
+  any write holding one on a plain
+  internet socket (\texttt{send},
+  \texttt{sendto}, \texttt{sendmsg},
+  \texttt{write}, \texttt{writev});
+\item
+  a name lookup (\texttt{getaddrinfo})
+  containing one.
+\end{itemize}
+
+It recognises the placeholder as
+written, in standard base64 nested up to
+three levels deep at every byte offset,
+in URL-safe base64, hex,
+percent-encoding and reversed. Those 47
+patterns are scanned in one pass over a
+hashed set of 4-byte windows, probed at
+a stride of the shortest pattern length
+minus three.
+
+\textbf{What happens next.} KeyHandoff
+keeps an alert naming the key, the
+command that tried, and the destination.
+It refuses that destination for later
+runs: by name, by certificate name, and
+by address. It also writes a signed
+warning into each team folder the
+developer is on. Teammates' KeyHandoffs
+refuse destinations from warnings signed
+by the team's keeper or members.
+
+\textbf{Lineage.} Every run's
+placeholders are recorded, so a
+placeholder found later says which key,
+command and time it came from, even
+base64-encoded up to three times. A
+placeholder can turn up in a log, a
+commit or an agent transcript.
+
+\section*{4.
+Implementation}\label{implementation}
+\addcontentsline{toc}{section}{4.
+Implementation}
+
+KeyHandoff is a Tauri app with a Rust
+core and React screens. The parts
+described here are:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Runner:} \texttt{run.rs}, and
+  \texttt{mask.rs} for output masking.
+\item
+  \textbf{Placeholders and hosts:}
+  \texttt{placeholder.rs}.
+\item
+  \textbf{The C hook:}
+  \texttt{src-tauri/hook/keyhandoff\_tls.c},
+  about 1,400 lines, compiled by
+  \texttt{build.rs} and embedded in the
+  executable.
+\item
+  \textbf{The Node hook:}
+  \texttt{keyhandoff\_node.cjs}, about
+  210 lines.
+\item
+  \textbf{Signed team warnings:} a new
+  object kind in the sealing crate,
+  \texttt{crates/seal/src/warning.rs}.
+\end{itemize}
+
+The hook is written out on first use to
+a private folder under
+\texttt{\$XDG\_RUNTIME\_DIR}, named by
+its contents.
+
+\section*{5.
+Evaluation}\label{evaluation}
+\addcontentsline{toc}{section}{5.
+Evaluation}
+
+Everything below is regenerated by
+\texttt{eval/run.sh} and, for coverage
+and attacks, by CI on every push. CI
+runs on GitHub's Ubuntu 22.04 runner;
+the Windows build and tests also run
+there, but no Windows cell is claimed.
+The numbers below are from a Ryzen 9
+3900X running Pop!\_OS 22.04 with
+OpenSSL 3.0.2.
+
+\subsection*{5.1
+Coverage}\label{coverage}
+\addcontentsline{toc}{subsection}{5.1
+Coverage}
+
+The same keyed request goes to a server
+whose certificate is valid for the key's
+host, and to a stranger with a valid
+certificate for another name. Both
+servers use the same test CA, configured
+as the key's CA.
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Client
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+TLS
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Protocol
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Key's server got
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Stranger got
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Python http.client, requests, httpx &
+system OpenSSL & HTTP/1.1, header & key
+& nothing \\
+Python & system OpenSSL & HTTP/1.1,
+chunked body & key & nothing \\
+Python & system OpenSSL & HTTP/1.1, gzip
+body & placeholder & placeholder \\
+Python & system OpenSSL & WebSocket
+upgrade header & key & nothing \\
+Python & system OpenSSL & WebSocket
+message (masked) & placeholder &
+placeholder \\
+curl & system OpenSSL & HTTP/1.1 header;
+Basic auth & key & nothing \\
+curl & system OpenSSL, nghttp2 & HTTP/2
+header (HPACK) & key & nothing \\
+curl & system OpenSSL, nghttp2 & HTTP/2
+body & key & the request, without key or
+placeholder \\
+curl & none & plain HTTP to a stranger &
+-- & nothing \\
+Ruby Net::HTTP & system OpenSSL &
+HTTP/1.1, header & key & nothing \\
+Node.js https & Node's OpenSSL &
+HTTP/1.1, header & key & nothing \\
+Go net/http & Go crypto/tls & HTTP/1.1,
+header & placeholder & placeholder \\
+\end{longtable}
+}
+
+Twelve of the 15 cells are protected.
+The three that aren't (gzip bodies,
+masked WebSocket messages, Go) never
+release the key: the request to the
+key's server fails, and the stranger
+gets a placeholder. Not tested here:
+Postgres and Redis over TLS, Java,
+rustls, HTTP/3, and Windows.
+
+\subsection*{5.2 Attack
+replays}\label{attack-replays}
+\addcontentsline{toc}{subsection}{5.2
+Attack replays}
+
+These are reconstructions of documented
+behaviour, not live malware. The
+Shai-Hulud replays send the
+double-base64 haul to a webhook, folding
+the worm's two channels (a public
+repository and a webhook) into one. They
+run locally against a synthetic key;
+\texttt{eval/replays/README.md} has the
+ethics note.
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Replay
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Attacker held
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Left the machine
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Stopped and attributed
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Nx ``s1ngularity'': env, \texttt{.env},
+AI-CLI inventory, triple base64,
+GitHub-style upload & placeholder &
+nothing & yes \\
+Shai-Hulud: env, double base64, HTTPS
+webhook (Node) & placeholder & nothing &
+yes \\
+Shai-Hulud to a plain HTTP webhook &
+placeholder (masked) & nothing & yes \\
+\texttt{.env} hunter, posted in clear &
+placeholder & nothing & yes \\
+Agent (under a parent named
+\texttt{claude}): print / base64 the key
+& masked output & -- & -- (nothing
+sent) \\
+Agent:
+\texttt{env\ \textbackslash{}\textbar{}\ curl}
+to a paste site & masked output &
+nothing & yes \\
+Agent: post to a webhook & masked output
+& nothing & yes \\
+Agent: key in a DNS name & masked output
+& -- & yes \\
+Agent: write the key into a committed
+file & placeholder & -- & -- (traced to
+its run) \\
+Use the key at its own server & -- & the
+request, as you & no (out of scope) \\
+\end{longtable}
+}
+
+Afterwards, a teammate on the same team
+folder was refused every stopped
+destination. The loot from the Nx,
+Shai-Hulud, \texttt{.env} hunter and
+commit replays traced back to the run
+that produced it.
+
+\subsection*{5.3
+Overhead}\label{overhead}
+\addcontentsline{toc}{subsection}{5.3
+Overhead}
+
+A Python client keeps one TLS connection
+open to a local server. It sends 2,000
+small requests after 50 warm-up ones,
+then uploads 64 MiB in 64 KiB writes.
+Figures are the median of 9 alternating
+rounds. The baseline (``direct'') is
+started the same way: detached, through
+the runner, with no hook.
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Per request
+\end{minipage} &
+\begin{minipage}[b]{\linewidth}\raggedright
+Upload
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Direct & 61--63 µs & \textasciitilde940
+MiB/s \\
+Hook, nothing to swap & +2 µs & within
+noise (−3\%) \\
+Hook, key swapped in every request &
++262 µs & within noise (−13\% against a
+±20\% spread) \\
+\end{longtable}
+}
+
+The swap's cost is one local round trip
+to KeyHandoff for the key; the chain
+check is cached per connection.
+Measuring forced two fixes:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Uploads first ran 80\% slower}
+  under the hook, because 47 patterns
+  were each searched separately, on both
+  the plaintext and the ciphertext. The
+  single-pass hashed scan fixed that.
+\item
+  \textbf{A swapped request first cost
+  about 730 µs,} because the chain was
+  verified every time and the parent
+  chain was walked on every connection.
+\end{itemize}
+
+We have not yet compared
+\texttt{op\ run} or a placeholder proxy,
+and the planned week of ordinary
+development under the hook has not been
+run.
+
+\subsection*{5.4 Adversarial
+review}\label{adversarial-review}
+\addcontentsline{toc}{subsection}{5.4
+Adversarial review}
+
+\texttt{docs/threats.md} tabulates 21
+attacks by an attacker running as the
+user. Each is classed as stopped,
+worthless (only a placeholder leaves),
+gets the key, or out of scope, with a
+test or a reason.
+
+The review found one real hole, now
+fixed. The hook removed its token with
+\texttt{unsetenv}, but the token stayed
+in the process's first environment
+block, readable at
+\texttt{/proc/self/environ}. Code in the
+program could read it and ask KeyHandoff
+for the key. The test that demonstrates
+this
+(\texttt{attacks\_on\_placeholders\_get\_no\_key})
+fails without the fix.
+
+These attacks still get the key, by
+design or as stated limits:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{A token in a child without the
+  hook.} A statically linked binary's
+  environment keeps the token, and
+  in-run code could read it there.
+\item
+  \textbf{In-process memory reads}
+  during a swap.
+\item
+  \textbf{Use at the key's own server.}
+\end{itemize}
+
+No one outside the project has reviewed
+the table yet.
+
+\section*{6.
+Discussion}\label{discussion}
+\addcontentsline{toc}{section}{6.
+Discussion}
+
+\subsection*{6.1 What placeholders
+change}\label{what-placeholders-change}
+\addcontentsline{toc}{subsection}{6.1
+What placeholders change}
+
+The common theft paths become harmless:
+reading the environment or
+\texttt{.env}, printing, uploading,
+pasting into an agent transcript,
+committing. Each yields a placeholder
+that dies with its run, and every send
+of one through a covered path is stopped
+and attributed.
+
+What remains open is narrower and
+different in kind. The attacker must
+either use the key through its own
+legitimate server, which is visible in
+that provider's logs, or write code that
+targets KeyHandoff's hook specifically.
+
+\subsection*{6.2 Why the hook, and not a
+proxy}\label{why-the-hook-and-not-a-proxy}
+\addcontentsline{toc}{subsection}{6.2
+Why the hook, and not a proxy}
+
+A proxy sees traffic only if the program
+routes it there and trusts the proxy's
+CA. Code in the program can undo both.
+It also understands only the protocols
+the proxy parses.
+
+The in-process hook works on any
+protocol over the TLS libraries it
+covers, with no routing and no new CA.
+It decides on the certificate the server
+actually presented, not on what the
+program asked for.
+
+The cost is that the key is in the
+program's memory during the swap. Moving
+the swap out of the process, with an
+eBPF uprobe on \texttt{SSL\_write} as
+Kloak does in Kubernetes {[}14{]}, would
+close that gap. It needs privileges a
+developer's desktop tool shouldn't ask
+for.
+
+\subsection*{6.3 Why tripwires have no
+false
+positives}\label{why-tripwires-have-no-false-positives}
+\addcontentsline{toc}{subsection}{6.3
+Why tripwires have no false positives}
+
+A placeholder is never a valid
+credential anywhere. Nothing legitimate
+can send it to a server other than its
+key's. A refused write is therefore
+always a real attempt.
+
+The exceptions are configuration errors.
+A wrong host on the key makes legitimate
+requests fail closed rather than leak. A
+teammate's warning about a service the
+developer needs blocks it; warnings name
+their signer.
+
+\subsection*{6.4
+Limitations}\label{limitations}
+\addcontentsline{toc}{subsection}{6.4
+Limitations}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Coverage.} Coverage is the TLS
+  libraries hooked: dynamically linked
+  OpenSSL and Node. Windows (schannel)
+  is not built.
+\item
+  \textbf{Placeholders that aren't
+  seen.} Placeholders inside compression
+  or other encodings aren't recognised,
+  and neither are header blocks split
+  across HTTP/2 CONTINUATION frames.
+\item
+  \textbf{Agent detection} is by process
+  name.
+\item
+  \textbf{Evaluation.} The replays are
+  reconstructions, run on one machine
+  rather than in disposable VMs. The
+  false-alarm week hasn't happened.
+\end{itemize}
+
+\section*{7. Related
+work}\label{related-work}
+\addcontentsline{toc}{section}{7.
+Related work}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Run wrappers.} 1Password's
+  \texttt{op\ run} {[}4{]},
+  \texttt{doppler\ run} {[}5{]} and
+  \texttt{infisical\ run} {[}6{]} inject
+  keys into a child's environment.
+  \texttt{op\ run} also masks secrets
+  the child prints. The child holds the
+  real key.
+\item
+  \textbf{Placeholder proxies.} Docker's
+  agent sandboxes {[}7{]}, Infisical's
+  Agent Vault {[}8{]}, iron-proxy
+  {[}9{]}, fnox's proxy {[}10{]} and
+  GhostKey {[}11{]} give the workload a
+  placeholder and swap in the real key
+  at an HTTP(S) proxy, which the
+  workload must route through and whose
+  CA it must trust. fnox notes that a
+  same-user process can bypass the
+  proxy's environment settings.
+\item
+  \textbf{Sandbox credential brokers.}
+  Bashkit's placeholder mode {[}12{]}
+  swaps a placeholder in outbound HTTP
+  headers for scripts it runs, and
+  OpenSandbox's credential vault
+  {[}13{]} keeps the real key in an
+  egress sidecar outside the sandbox. A
+  design proposed for Sandlock {[}15{]}
+  keeps the secret in a supervisor
+  process and gives the child a
+  per-session phantom token. All of
+  these protect a sandboxed guest; ours
+  protects programs a developer runs on
+  their own machine.
+\item
+  \textbf{Kernel uprobes.} Kloak
+  {[}14{]} swaps placeholders for
+  Kubernetes workloads with an eBPF
+  uprobe on \texttt{SSL\_write},
+  restricted to allowed destinations. It
+  is the closest mechanism to ours, at a
+  different layer and for a different
+  user.
+\item
+  \textbf{eBPF TLS tracing.} Tools such
+  as eCapture {[}16{]} read
+  \texttt{SSL\_write} plaintext through
+  uprobes without changing it.
+\item
+  \textbf{Honeytokens.} Decoy
+  credentials that alarm when used
+  {[}18{]} are the ancestor of our
+  tripwires, and per-site unique decoys
+  can show where a leak happened
+  {[}19{]}. Honeywords {[}20{]} plant
+  decoy passwords beside the real one.
+  Our placeholders differ in that they
+  are the credential the program
+  actually uses, fresh per run.
+\item
+  \textbf{Artificial immune systems.}
+  Forrest, Hofmeyr and others applied
+  self/non-self discrimination to
+  intrusion detection {[}21, 22{]}.
+\end{itemize}
+
+\section*{8. Ethics}\label{ethics}
+\addcontentsline{toc}{section}{8.
+Ethics}
+
+The replays reimplement only the
+collection and exfiltration steps
+described in public reports. They have
+no propagation, persistence or
+destructive behaviour. They run against
+local servers with synthetic keys, and
+\texttt{.test} names never resolve
+outside the machine.
+
+\section*{9. Artifact}\label{artifact}
+\addcontentsline{toc}{section}{9.
+Artifact}
+
+Run \texttt{eval/run.sh} from a
+checkout. It needs Rust, Node.js, Python
+3, openssl, curl and setsid; Ruby, Go,
+\texttt{requests} and \texttt{httpx} add
+their rows when present.
+
+It writes
+\texttt{eval/results/coverage.md},
+\texttt{replays.md} and
+\texttt{benchmarks.md}, with JSON beside
+each. CI
+(\texttt{.github/workflows/check.yml})
+reruns the coverage matrix and the
+replays on every push, and fails if a
+claimed cell isn't protected, a stranger
+ever gets a key, or a replayed send
+isn't stopped and attributed.
+
+\section*{Acknowledgments}\label{acknowledgments}
+\addcontentsline{toc}{section}{Acknowledgments}
+
+Claude (Anthropic), an AI model, was
+used extensively to write the software,
+run the evaluation and draft this paper.
+The author reviewed the text, checked
+every number against
+\texttt{eval/results/} and every
+reference against its source, and takes
+responsibility for the contents.
+
+\section*{References}\label{references}
+\addcontentsline{toc}{section}{References}
+
+{[}1{]} Wiz Research. s1ngularity:
+supply chain attack leaks secrets on
+GitHub: everything you need to know.
+August 2025.
+\url{https://www.wiz.io/blog/s1ngularity-supply-chain-attack}
+
+{[}2{]} Wiz Research. s1ngularity's
+aftermath: AI, TTPs, and impact in the
+Nx supply chain attack. 2025.
+\url{https://www.wiz.io/blog/s1ngularitys-aftermath}
+
+{[}3{]} Wiz Research. Shai-Hulud:
+ongoing package supply chain worm
+delivering data-stealing malware.
+September 2025.
+\url{https://www.wiz.io/blog/shai-hulud-npm-supply-chain-attack}
+
+{[}4{]} 1Password. op run (CLI
+reference).
+\url{https://www.1password.dev/cli/reference/commands/run}
+
+{[}5{]} Doppler. CLI guide.
+\url{https://docs.doppler.com/docs/cli}
+
+{[}6{]} Infisical. infisical run (CLI
+reference).
+\url{https://infisical.com/docs/cli/commands/run}
+
+{[}7{]} Docker. Docker Sandboxes:
+credentials.
+\url{https://docs.docker.com/ai/sandboxes/security/credentials/}
+
+{[}8{]} Infisical. Agent Vault.
+\url{https://github.com/Infisical/agent-vault}
+
+{[}9{]} ironsh. iron-proxy.
+\url{https://github.com/ironsh/iron-proxy}
+
+{[}10{]} fnox. Proxy guide.
+\url{https://fnox.jdx.dev/guide/proxy.html}
+
+{[}11{]} GhostKey.
+\url{https://github.com/jhaji2911/GhostKey}
+
+{[}12{]} Bashkit. Credential injection.
+\url{https://docs.rs/crate/bashkit/latest/source/docs/credential-injection.md}
+
+{[}13{]} OpenSandbox. Credential vault.
+\url{https://github.com/opensandbox-group/opensandbox}
+
+{[}14{]} spinningfactory. Kloak.
+\url{https://github.com/spinningfactory/kloak}
+
+{[}15{]} multikernel. RFC: credential
+injection via the proxy (Sandlock issue
+66).
+\url{https://github.com/multikernel/sandlock/issues/66}
+
+{[}16{]} gojue. eCapture.
+\url{https://github.com/gojue/ecapture}
+
+{[}17{]} R. Peon and H. Ruellan. HPACK:
+Header Compression for HTTP/2. RFC 7541,
+IETF, 2015.
+
+{[}18{]} L. Spitzner. Honeytokens: the
+other honeypot. SecurityFocus, 2003.
+
+{[}19{]} J. DeBlasio, S. Savage, G. M.
+Voelker and A. C. Snoeren. Tripwire:
+inferring internet site compromise. In
+Proc. ACM Internet Measurement
+Conference (IMC), 2017.
+
+{[}20{]} A. Juels and R. L. Rivest.
+Honeywords: making password-cracking
+detectable. In Proc. ACM CCS, 2013.
+
+{[}21{]} S. Forrest, S. A. Hofmeyr, A.
+Somayaji and T. A. Longstaff. A sense of
+self for Unix processes. In Proc. IEEE
+Symposium on Security and Privacy, 1996.
+
+{[}22{]} S. A. Hofmeyr and S. Forrest.
+Architecture for an artificial immune
+system. Evolutionary Computation 8(4),
+2000.
+
+\end{document}
