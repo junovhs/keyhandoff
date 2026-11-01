@@ -10,6 +10,7 @@ export const GLYPH_MARKS = {
   check: { d: CHECK, tone: "ok" },
   send: { d: "M60 78H90M79 67L90 78L79 89", tone: "accent" },
   key: { d: "M57 79a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M71 79H93M87 79V87", tone: "accent" },
+  stop: { d: "M65 69L85 89M85 69L65 89", tone: "accent" },
 } as const;
 
 export const LINES = {

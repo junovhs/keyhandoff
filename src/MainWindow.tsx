@@ -15,6 +15,7 @@ import {
   type Keep,
   type KeyView,
   type ProgramView,
+  type AlertView,
   type TeamView,
   type View,
 } from "./ipc";
@@ -129,6 +130,7 @@ export function MainWindow() {
         />
       )}
       {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
+      {view?.alert && !view.program && <AlertSheet alert={view.alert} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
         <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
@@ -569,6 +571,40 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
         ) : (
           <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** A program under `keyhandoff run` tried to send a key's stand-in somewhere else, and was stopped. */
+function AlertSheet({ alert }: { alert: AlertView }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  useEffect(() => void enter(sheet.current, "rise", 360), [alert.at, alert.destination]);
+  const teams = alert.shared_with;
+  return (
+    <div className="sheet" ref={sheet}>
+      <div className="head">
+        <Glyph base="window" mark="stop" />
+        <div>
+          <span className="lede">KeyHandoff stopped a leak</span>
+          <h2 className="display md">{alert.key}</h2>
+        </div>
+      </div>
+      <div className="chip">
+        <Icon name="file" />
+        <span className="mono">{alert.command}</span>
+      </div>
+      <p className="lede">
+        It tried to send {alert.key}'s stand-in to <strong>{alert.destination}</strong>. Nothing left your computer, and the stand-in was never the key.
+      </p>
+      <p className="help">
+        From now on, programs you start with keyhandoff run can't reach {alert.destination}
+        {teams.length ? `, and neither can anyone on ${teams.join(", ")}` : ""}. If you didn't expect this, look at what{" "}
+        <span className="mono">{alert.command}</span> runs.
+      </p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn primary grow" autoFocus onClick={() => void api.dismiss()}>Done</button>
       </div>
     </div>
   );

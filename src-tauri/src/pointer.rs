@@ -16,7 +16,10 @@
 //! token: `{"hook": "<token>"}` gets one `placeholder<TAB>host,host<TAB>ca`
 //! line per placeholder, then an empty line, and
 //! `{"swap": {"token", "placeholder", "host"}}` gets `ok <key in hex>` or
-//! `no <reason>`, only from a process the runner started.
+//! `no <reason>`, only from a process the runner started. `{"hook"}` also
+//! lists destinations to refuse, one `!destination` line each, and
+//! `{"alert": {"token", "placeholder", "destination"}}` reports a
+//! placeholder the hook stopped going somewhere else.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -47,6 +50,16 @@ struct Ask {
     /// From the TLS hook: the key behind a placeholder, for a verified host.
     #[serde(default)]
     swap: Option<SwapAsk>,
+    /// From the TLS hook: it stopped a placeholder going somewhere else.
+    #[serde(default)]
+    alert: Option<AlertAsk>,
+}
+
+#[derive(Deserialize)]
+struct AlertAsk {
+    token: String,
+    placeholder: String,
+    destination: String,
 }
 
 #[derive(Deserialize)]
@@ -78,6 +91,10 @@ pub fn serve(handoff: &Handoff, peer: &Peer, mut stream: Box<dyn KeyStream>) {
     let reply = match ask {
         Some(Ask { hook: Some(token), .. }) => hook_lines(handoff, peer, &token),
         Some(Ask { swap: Some(swap), .. }) => swap_line(handoff, peer, &swap),
+        Some(Ask { alert: Some(a), .. }) => match handoff.alert(&a.token, peer, &a.placeholder, &a.destination) {
+            Ok(()) => Zeroizing::new(b"ok\n".to_vec()),
+            Err(error) => Zeroizing::new(format!("no {error}\n").into_bytes()),
+        },
         Some(ask) if !ask.names.is_empty() && ask.names.len() <= MAX_NAMES => answer(handoff, peer, ask.names, ask.run, ask.placeholders, &mut run),
         _ => reply(&Reply::Error { error: "KeyHandoff couldn't read the request.".into() }),
     };
@@ -100,7 +117,13 @@ pub fn refuse(mut stream: Box<dyn KeyStream>, error: &str) {
 
 fn hook_lines(handoff: &Handoff, peer: &Peer, token: &str) -> Zeroizing<Vec<u8>> {
     let mut out = Zeroizing::new(Vec::new());
-    for (placeholder, hosts, ca) in handoff.hook_swaps(token, peer).unwrap_or_default() {
+    let (swaps, blocked) = handoff.hook_swaps(token, peer).unwrap_or_default();
+    for destination in blocked {
+        if !destination.contains(['\t', '\n']) {
+            out.extend_from_slice(format!("!{destination}\n").as_bytes());
+        }
+    }
+    for (placeholder, hosts, ca) in swaps {
         let ca = ca.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
         if ca.contains(['\t', '\n']) {
             continue;

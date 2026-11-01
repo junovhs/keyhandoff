@@ -153,6 +153,19 @@ export interface View {
   /** Nearby is on. */
   nearby: boolean;
   pairing: PairingView | null;
+  /** The latest attempt to send a key's stand-in somewhere else, until dismissed. */
+  alert: AlertView | null;
+}
+
+/** A program tried to send a key's stand-in somewhere other than its servers, and was stopped. */
+export interface AlertView {
+  key: string;
+  command: string;
+  destination: string;
+  at: number;
+  run_started: number;
+  /** Teams whose folders now carry the warning. */
+  shared_with: string[];
 }
 
 /** Before the vault opens: no passphrase yet, locked, or open. */

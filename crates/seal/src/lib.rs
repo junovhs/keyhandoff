@@ -1,6 +1,7 @@
 //! Handoff sealing core: device identity, key requests with one-time keys,
 //! contact cards that carry a batch of them, sealing a secret to a request,
-//! bundles of sealed keys for a team, teams kept in a shared folder,
+//! bundles of sealed keys for a team, teams kept in a shared folder and the
+//! warnings members leave there,
 //! opening it exactly once, and the armored text that carries them through
 //! chat and email.
 //!
@@ -16,6 +17,7 @@ mod keyring;
 mod request;
 mod sealed;
 mod team;
+mod warning;
 mod wire;
 
 use std::fmt;
@@ -26,6 +28,7 @@ pub use identity::{Identity, PublicIdentity};
 pub use keyring::{Keyring, Opened, PendingRequest};
 pub use request::{Request, create_request};
 pub use sealed::{Payload, Sealed, Secret, seal};
+pub use warning::{MAX_CULPRIT_BYTES, MAX_DESTINATION_BYTES, Warning, warn};
 pub use team::{Invite, MAX_TEAM_MEMBERS, Member, Membership, TeamLock, TeamState, create_invite, join, reinvite, rejoin, seal_team};
 
 /// Format version written into every object (`HOF` + version + kind).
@@ -51,6 +54,7 @@ pub enum Kind {
     Invite = 5,
     Membership = 6,
     TeamState = 7,
+    Warning = 8,
 }
 
 impl Kind {
@@ -63,6 +67,7 @@ impl Kind {
             5 => Some(Kind::Invite),
             6 => Some(Kind::Membership),
             7 => Some(Kind::TeamState),
+            8 => Some(Kind::Warning),
             _ => None,
         }
     }
@@ -78,6 +83,7 @@ pub enum Object {
     Invite(Invite),
     Membership(Membership),
     TeamState(TeamState),
+    Warning(Warning),
 }
 
 /// Parse and verify any `.handoff` object from its binary form.
@@ -90,6 +96,7 @@ pub fn parse_object(bytes: &[u8]) -> Result<Object, Error> {
         Kind::Invite => Invite::parse(bytes).map(Object::Invite),
         Kind::Membership => Membership::parse(bytes).map(Object::Membership),
         Kind::TeamState => TeamState::parse(bytes).map(Object::TeamState),
+        Kind::Warning => Warning::parse(bytes).map(Object::Warning),
     }
 }
 

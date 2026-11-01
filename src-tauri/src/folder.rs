@@ -5,16 +5,20 @@
 //! - `invite.handoff`: the keeper's invite.
 //! - `members/<fingerprint>.handoff`: each joiner's membership.
 //! - `team.handoff`: the latest team state.
+//! - `warnings/<fingerprint>-<destination hash>.handoff`: a member's
+//!   warning about a destination one of their programs tried to send a
+//!   placeholder to.
 
 use std::fs;
 use std::path::Path;
 
-use keyhandoff_seal::{armor, Invite, Membership, Object, TeamState};
+use keyhandoff_seal::{armor, Invite, Membership, Object, TeamState, Warning};
 use rand_core::{OsRng, RngCore};
 
 const INVITE: &str = "invite.handoff";
 const STATE: &str = "team.handoff";
 const MEMBERS: &str = "members";
+const WARNINGS: &str = "warnings";
 /// Larger files in the folder are not KeyHandoff's and are skipped.
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 
@@ -31,6 +35,26 @@ pub fn write_membership(folder: &Path, membership: &Membership) -> Result<(), St
 pub fn write_state(folder: &Path, state: &TeamState) -> Result<(), String> {
     let line = format!("The {} team, version {}. Only its members' KeyHandoff can open it.", state.team(), state.version());
     write(&folder.join(STATE), state.to_bytes(), &line)
+}
+
+pub fn write_warning(folder: &Path, warning: &Warning) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let tag: String = Sha256::digest(warning.destination().as_bytes()).iter().take(6).map(|b| format!("{b:02x}")).collect();
+    let line = format!("A program tried to send a key's stand-in to {}. KeyHandoff refuses it for the team. It holds no secret.", warning.destination());
+    write(&folder.join(WARNINGS).join(format!("{}-{tag}.handoff", warning.reporter().fingerprint())), warning.to_bytes(), &line)
+}
+
+/// Every warning in the folder that parses and verifies.
+pub fn warnings(folder: &Path) -> Vec<Warning> {
+    let Ok(entries) = fs::read_dir(folder.join(WARNINGS)) else { return Vec::new() };
+    entries
+        .flatten()
+        .take(1024)
+        .filter_map(|e| match read(&e.path()) {
+            Some(Object::Warning(w)) => Some(w),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Every membership in the folder that parses and verifies. Anything else is skipped.

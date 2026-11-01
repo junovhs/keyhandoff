@@ -58,6 +58,7 @@ const HOME: View = {
   invited: null,
   nearby: false,
   pairing: null,
+  alert: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
@@ -109,6 +110,9 @@ const SCENES: Record<string, Partial<View>> = {
   },
   "program-agent": {
     program: { name: "python3", path: "/usr/bin/python3", command: "python3 -c import os; print(os.environ['DIALPAD_API_KEY'])", folder: "~/code/report-bot", keys: ["Dialpad"], agent: "Claude Code" },
+  },
+  alert: {
+    alert: { key: "Stripe", command: "python3 pay.py", destination: "collect.badpkg.dev", at: NOW, run_started: NOW, shared_with: ["Platform"] },
   },
   "home-copied": { notice: "Copied DIALPAD_API_KEY=handoff:Dialpad" },
   "listening-apps": { safe: safe("listening", null, ["Ditto"]) },

@@ -27,6 +27,7 @@ const IDENTITY: &str = "identity.bin";
 const PENDING: &str = "pending.bin";
 const VAULT: &str = "vault.bin";
 const APPROVALS: &str = "approvals.bin";
+const TRIPWIRE: &str = "tripwire.bin";
 const CONTACTS: &str = "contacts.bin";
 const TEAMS: &str = "teams.bin";
 const FOLDER_TEAMS: &str = "folder-teams.bin";
@@ -67,6 +68,40 @@ pub struct Approval {
     /// Approvals from before commands were bound have none and no longer count.
     #[serde(default)]
     pub command: Option<[u8; 32]>,
+}
+
+/// What placeholders have caught: every run's stand-ins, so one found later
+/// says where it came from; every attempt to send one somewhere else; and
+/// the destinations refused from then on.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Tripwire {
+    pub runs: Vec<RunRecord>,
+    pub alerts: Vec<Alert>,
+    pub blocked: Vec<String>,
+}
+
+/// One `keyhandoff run` with placeholders.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RunRecord {
+    pub started: u64,
+    /// `python3 pay.py`.
+    pub command: String,
+    pub folder: Option<String>,
+    /// Each key's name and the placeholder this run got for it.
+    pub placeholders: Vec<(String, String)>,
+}
+
+/// A program tried to send a placeholder somewhere other than its key's servers.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Alert {
+    pub at: u64,
+    pub key: String,
+    pub command: String,
+    pub destination: String,
+    /// When that run started, which with the command names it.
+    pub run_started: u64,
+    #[serde(default)]
+    pub seen: bool,
 }
 
 /// Someone whose card you opened: their computer and the locks you can still
@@ -350,6 +385,18 @@ impl Store {
             Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The allowed programs file is damaged.".to_string()),
             None => Ok(Vec::new()),
         }
+    }
+
+    pub fn tripwire(&self) -> Result<Tripwire, String> {
+        match self.read(TRIPWIRE)? {
+            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| "The tripwire file is damaged.".to_string()),
+            None => Ok(Tripwire::default()),
+        }
+    }
+
+    pub fn save_tripwire(&self, tripwire: &Tripwire) -> Result<(), String> {
+        let json = serde_json::to_vec(tripwire).map_err(|e| e.to_string())?;
+        self.write(TRIPWIRE, &json)
     }
 
     pub fn save_approvals(&self, approvals: &[Approval]) -> Result<(), String> {

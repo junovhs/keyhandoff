@@ -133,6 +133,20 @@ The content key is random per version. Each slot is ChaCha20-Poly1305 under HKDF
 - **Leaving:** version *n+1* has no slot for the person who left. What they were given before stays with them, so leaving prompts the keeper to rotate those keys with the provider.
 - **What the folder shows:** who is on the team and when it changed, never the keys or their names.
 
+### Team warning (kind 8)
+
+A member's note that one of their programs tried to send a key's placeholder to a destination, which teammates then refuse. Signed by the member (`handoff:team-warning:v0`), not encrypted. Readers accept it only from the keeper or a member of the team's latest state.
+
+| Field | Bytes | Notes |
+|---|---|---|
+| header | 5 | `HOF`, version 0, kind 8 |
+| team id | 16 | |
+| reporter | 32 | Ed25519 public key |
+| time | 8 | Unix seconds, big-endian |
+| destination | 1 + n | length, then a host name or address, at most 253 bytes |
+| culprit | 1 + n | length, then the command that tried, at most 128 bytes |
+| signature | 64 | over everything before it |
+
 ### Open and one-time key lifecycle
 
 - **Open:** find the pending entry by request id; check the expiry; verify the sender's signature; derive the key; decrypt. On success, **destroy the pending entry** (zeroized and removed from storage) before the secret goes to the vault. Every copy of the sealed file is then permanently unopenable.

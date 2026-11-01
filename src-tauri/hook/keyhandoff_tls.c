@@ -6,7 +6,13 @@
  * program's (which code in the program could change), and only when the
  * certificate is valid for one of the key's hosts asks KeyHandoff for the
  * real key, swaps it into a copy of the bytes being encrypted, writes them
- * and wipes the copy. Anywhere else, the placeholder goes out as it is.
+ * and wipes the copy.
+ *
+ * A placeholder going anywhere else is a leak in the act, since nothing
+ * legitimate sends it elsewhere: the write is refused before a byte leaves,
+ * over TLS or a plain socket, and KeyHandoff is told where it was going. It
+ * remembers that destination, and the hook refuses connections to it, and
+ * to those in teammates' warnings, from then on.
  *
  * It interposes OpenSSL's SSL_write and SSL_write_ex, resolving everything it
  * calls at run time, so it needs no OpenSSL headers and works with 1.1 and 3.
@@ -25,7 +31,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -39,6 +49,8 @@ typedef struct stack_st STACK;
 #define TOKEN_HEX 64
 #define MAX_SWAPS 64
 #define MAX_HOSTS 512
+#define MAX_BLOCKED 128
+#define TLSEXT_NAMETYPE_host_name 0
 #define SSL_CTRL_MODE 33
 #define SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER 0x2L
 
@@ -57,7 +69,11 @@ struct swap {
 };
 static struct swap swaps[MAX_SWAPS];
 static int swap_count = -1; /* -1: not asked yet */
+static char *blocked[MAX_BLOCKED];
+static int blocked_count;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+/* Set while this hook talks to KeyHandoff, so its own socket calls pass. */
+static __thread int talking;
 
 __attribute__((constructor)) static void hook_init(void) {
     const char *value = getenv(ENV_NAME);
@@ -96,13 +112,18 @@ static int send_line(const char *line) {
     if (fd < 0) return -1;
     struct sockaddr_un addr = {.sun_family = AF_UNIX};
     memcpy(addr.sun_path, socket_path, strlen(socket_path)); /* shorter than sun_path, checked at load */
-    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+    talking++;
+    int connected = connect(fd, (struct sockaddr *)&addr, sizeof addr);
+    talking--;
+    if (connected < 0) {
         close(fd);
         return -1;
     }
     size_t sent = 0, n = strlen(line);
     while (sent < n) {
+        talking++;
         ssize_t w = send(fd, line + sent, n - sent, MSG_NOSIGNAL);
+        talking--;
         if (w <= 0) {
             close(fd);
             return -1;
@@ -131,7 +152,8 @@ static int ask(const char *line, char *out, size_t cap) {
     return (int)(end - out);
 }
 
-/* The run's placeholders, asked for once: "placeholder\thost,host\tca" per line. */
+/* The run's placeholders, asked for once: "placeholder\thost,host\tca" per
+ * line, and destinations to refuse, "!destination" per line. */
 static void load_swaps(void) {
     if (swap_count >= 0) return;
     swap_count = 0;
@@ -147,7 +169,12 @@ static void load_swaps(void) {
     for (ssize_t r; got + 1 < 64 * 1024 && (r = recv(fd, reply + got, 64 * 1024 - 1 - got, 0)) > 0;) got += (size_t)r;
     close(fd);
     reply[got] = 0;
-    for (char *line = strtok(reply, "\n"); line && swap_count < MAX_SWAPS; line = strtok(0, "\n")) {
+    char *save = 0;
+    for (char *line = strtok_r(reply, "\n", &save); line && swap_count < MAX_SWAPS; line = strtok_r(0, "\n", &save)) {
+        if (*line == '!') {
+            if (blocked_count < MAX_BLOCKED && line[1]) blocked[blocked_count++] = strdup(line + 1);
+            continue;
+        }
         char *hosts = strchr(line, '\t');
         if (!hosts) continue;
         *hosts++ = 0;
@@ -162,6 +189,85 @@ static void load_swaps(void) {
     }
     free(reply);
 }
+
+static void ensure_loaded(void) {
+    if (swap_count >= 0) return;
+    pthread_mutex_lock(&lock);
+    load_swaps();
+    pthread_mutex_unlock(&lock);
+}
+
+static int is_blocked(const char *destination) {
+    for (int i = 0; destination && *destination && i < blocked_count; i++)
+        if (blocked[i] && !strcasecmp(blocked[i], destination)) return 1;
+    return 0;
+}
+
+/* Say so on the program's stderr, past this hook. */
+static void say(const char *what, const char *destination) {
+    REAL(ssize_t, write, (int, const void *, size_t));
+    char line[400];
+    int n = snprintf(line, sizeof line, "KeyHandoff %s %s.\n", what, destination);
+    if (real_write && n > 0) real_write(2, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1);
+}
+
+/* Tell KeyHandoff a placeholder was stopped on its way to `destination`. */
+static void report(const struct swap *s, const char *destination) {
+    char safe[256], request[1024], reply[256];
+    size_t k = 0;
+    for (const char *c = destination; *c && k + 1 < sizeof safe; c++)
+        if ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || strchr(".-:[]_", *c)) safe[k++] = *c;
+    safe[k] = 0;
+    snprintf(request, sizeof request, "{\"alert\":{\"token\":\"%s\",\"placeholder\":\"%s\",\"destination\":\"%s\"}}\n", token, s->placeholder, safe);
+    ask(request, reply, sizeof reply);
+    say("stopped a key's stand-in going to", destination);
+}
+
+/* The first placeholder in `buf`, if any. */
+static const struct swap *placeholder_in(const void *buf, size_t len) {
+    for (int i = 0; buf && i < swap_count; i++)
+        if (memmem(buf, len, swaps[i].placeholder, swaps[i].len)) return &swaps[i];
+    return 0;
+}
+
+/* "1.2.3.4:443" or "[::1]:443" for an internet address; empty otherwise. */
+static void name_address(const struct sockaddr *sa, char *out, size_t cap) {
+    char ip[INET6_ADDRSTRLEN] = "";
+    *out = 0;
+    if (sa && sa->sa_family == AF_INET) {
+        const struct sockaddr_in *in = (const struct sockaddr_in *)sa;
+        inet_ntop(AF_INET, &in->sin_addr, ip, sizeof ip);
+        snprintf(out, cap, "%s:%u", ip, ntohs(in->sin_port));
+    } else if (sa && sa->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)sa;
+        inet_ntop(AF_INET6, &in6->sin6_addr, ip, sizeof ip);
+        snprintf(out, cap, "[%s]:%u", ip, ntohs(in6->sin6_port));
+    }
+}
+
+/* Where an internet socket is connected; empty for anything else. */
+static void peer_of(int fd, char *out, size_t cap) {
+    struct sockaddr_storage ss;
+    socklen_t len = sizeof ss;
+    *out = 0;
+    if (getpeername(fd, (struct sockaddr *)&ss, &len) == 0) name_address((struct sockaddr *)&ss, out, cap);
+}
+
+/* Whether an address, or its bare IP, is a refused destination. */
+static int address_blocked(const char *address) {
+    if (!*address || !blocked_count) return 0;
+    if (is_blocked(address)) return 1;
+    char ip[INET6_ADDRSTRLEN + 2];
+    snprintf(ip, sizeof ip, "%s", address);
+    char *colon = strrchr(ip, ':');
+    if (colon) *colon = 0;
+    char *bare = ip[0] == '[' ? ip + 1 : ip;
+    char *close = strchr(bare, ']');
+    if (close) *close = 0;
+    return is_blocked(bare);
+}
+
+static void wipe(char *copy, size_t len);
 
 /* ---- Checking the connection ---- */
 
@@ -252,19 +358,61 @@ static int fetch(const struct swap *s, const char *host, char *key) {
     return ok;
 }
 
+/* The name a TLS connection was opened for (SNI), or its peer's address. */
+static void destination_of(SSL *ssl, char *out, size_t cap) {
+    REAL(const char *, SSL_get_servername, (const SSL *, int));
+    REAL(int, SSL_get_fd, (const SSL *));
+    const char *name = real_SSL_get_servername ? real_SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name) : 0;
+    if (name && *name) {
+        snprintf(out, cap, "%s", name);
+        return;
+    }
+    *out = 0;
+    if (real_SSL_get_fd) peer_of(real_SSL_get_fd(ssl), out, cap);
+    if (!*out) snprintf(out, cap, "an unknown server");
+}
+
+/* Whether this TLS connection is to a refused destination: by the name it
+ * was opened for, a name its certificate is valid for, or its address. */
+static int tls_blocked(SSL *ssl, const char *destination) {
+    if (!blocked_count) return 0;
+    if (is_blocked(destination)) return 1;
+    REAL(int, SSL_get_fd, (const SSL *));
+    char address[80] = "";
+    if (real_SSL_get_fd) peer_of(real_SSL_get_fd(ssl), address, sizeof address);
+    if (address_blocked(address)) return 1;
+    REAL(X509 *, SSL_get1_peer_certificate, (const SSL *));
+    REAL(X509 *, SSL_get_peer_certificate, (const SSL *));
+    REAL(int, X509_check_host, (X509 *, const char *, size_t, unsigned int, char **));
+    REAL(void, X509_free, (X509 *));
+    X509 *(*peer_cert)(const SSL *) = real_SSL_get1_peer_certificate ? real_SSL_get1_peer_certificate : real_SSL_get_peer_certificate;
+    X509 *leaf = peer_cert ? peer_cert(ssl) : 0;
+    int hit = 0;
+    for (int i = 0; leaf && real_X509_check_host && i < blocked_count && !hit; i++)
+        hit = blocked[i] && real_X509_check_host(leaf, blocked[i], strlen(blocked[i]), 0, 0) == 1;
+    if (leaf && real_X509_free) real_X509_free(leaf);
+    return hit;
+}
+
 /* The bytes to write: `buf` itself, or a copy with each placeholder for a
- * verified host replaced by its key, which the caller wipes and frees. */
+ * verified host replaced by its key, which the caller wipes and frees; or
+ * null to refuse the write, when a placeholder would go anywhere else or the
+ * connection is to a refused destination. */
 static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy) {
     *copy = 0;
     if (!active || !buf || !len) return buf;
-    pthread_mutex_lock(&lock);
-    load_swaps();
-    pthread_mutex_unlock(&lock);
+    ensure_loaded();
+    char destination[256];
+    destination_of(ssl, destination, sizeof destination);
+    const struct swap *leaking = 0;
     for (int i = 0; i < swap_count; i++) {
         const struct swap *s = &swaps[i];
         if (!memmem(buf, len, s->placeholder, s->len)) continue;
         char host[256];
-        if (!verified(ssl, s->hosts, s->ca, host, sizeof host)) continue;
+        if (tls_blocked(ssl, destination) || !verified(ssl, s->hosts, s->ca, host, sizeof host)) {
+            leaking = s;
+            break;
+        }
         char *key = malloc(s->len);
         if (!key) continue;
         if (fetch(s, host, key)) {
@@ -282,6 +430,18 @@ static const void *swapped(SSL *ssl, const void *buf, size_t len, char **copy) {
         }
         explicit_bzero(key, s->len);
         free(key);
+    }
+    if (leaking) {
+        wipe(*copy, len);
+        *copy = 0;
+        report(leaking, destination);
+        return 0;
+    }
+    if (tls_blocked(ssl, destination)) {
+        wipe(*copy, len);
+        *copy = 0;
+        say("refused a connection to", destination);
+        return 0;
     }
     if (*copy) {
         /* A retried write may now come from another buffer. */
@@ -304,6 +464,10 @@ int SSL_write(SSL *ssl, const void *buf, int num) {
     if (!real_SSL_write) return -1;
     char *copy;
     const void *out = swapped(ssl, buf, num > 0 ? (size_t)num : 0, &copy);
+    if (!out) {
+        errno = ECONNREFUSED;
+        return -1;
+    }
     int r = real_SSL_write(ssl, out, num);
     wipe(copy, num > 0 ? (size_t)num : 0);
     return r;
@@ -314,9 +478,106 @@ int SSL_write_ex(SSL *ssl, const void *buf, size_t num, size_t *written) {
     if (!real_SSL_write_ex) return 0;
     char *copy;
     const void *out = swapped(ssl, buf, num, &copy);
+    if (!out) {
+        if (written) *written = 0;
+        errno = ECONNREFUSED;
+        return 0;
+    }
     int r = real_SSL_write_ex(ssl, out, num, written);
     wipe(copy, num);
     return r;
+}
+
+/* ---- Plain sockets ---- */
+
+/* Whether a write on `fd` (to `to`, if given) must be refused: a placeholder
+ * in clear text to an internet address. */
+static int plain_leak(int fd, const struct sockaddr *to, const void *buf, size_t len) {
+    if (!active || talking || !buf || !len) return 0;
+    char destination[80] = "";
+    int named = 0;
+    if (swap_count < 0) {
+        /* Not loaded yet: only an internet socket is worth asking KeyHandoff about. */
+        if (to) name_address(to, destination, sizeof destination);
+        else peer_of(fd, destination, sizeof destination);
+        if (!*destination) return 0;
+        named = 1;
+        ensure_loaded();
+    }
+    const struct swap *s = placeholder_in(buf, len);
+    if (!s) return 0;
+    if (!named) {
+        if (to) name_address(to, destination, sizeof destination);
+        else peer_of(fd, destination, sizeof destination);
+    }
+    if (!*destination) return 0; /* a pipe, a file, a local socket */
+    report(s, destination);
+    errno = ECONNREFUSED;
+    return 1;
+}
+
+ssize_t send(int fd, const void *buf, size_t len, int flags) {
+    REAL(ssize_t, send, (int, const void *, size_t, int));
+    if (plain_leak(fd, 0, buf, len)) return -1;
+    return real_send(fd, buf, len, flags);
+}
+
+ssize_t sendto(int fd, const void *buf, size_t len, int flags, const struct sockaddr *to, socklen_t tolen) {
+    REAL(ssize_t, sendto, (int, const void *, size_t, int, const struct sockaddr *, socklen_t));
+    if (plain_leak(fd, to, buf, len)) return -1;
+    return real_sendto(fd, buf, len, flags, to, tolen);
+}
+
+ssize_t write(int fd, const void *buf, size_t len) {
+    REAL(ssize_t, write, (int, const void *, size_t));
+    if (plain_leak(fd, 0, buf, len)) return -1;
+    return real_write(fd, buf, len);
+}
+
+static int iov_leak(int fd, const struct sockaddr *to, const struct iovec *iov, int count) {
+    for (int i = 0; iov && i < count; i++)
+        if (plain_leak(fd, to, iov[i].iov_base, iov[i].iov_len)) return 1;
+    return 0;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int count) {
+    REAL(ssize_t, writev, (int, const struct iovec *, int));
+    if (iov_leak(fd, 0, iov, count)) return -1;
+    return real_writev(fd, iov, count);
+}
+
+ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
+    REAL(ssize_t, sendmsg, (int, const struct msghdr *, int));
+    if (msg && iov_leak(fd, (const struct sockaddr *)msg->msg_name, msg->msg_iov, (int)msg->msg_iovlen)) return -1;
+    return real_sendmsg(fd, msg, flags);
+}
+
+/* Refused destinations: connections to their addresses, and looking up their names. */
+int connect(int fd, const struct sockaddr *to, socklen_t len) {
+    REAL(int, connect, (int, const struct sockaddr *, socklen_t));
+    if (active && !talking && to && (to->sa_family == AF_INET || to->sa_family == AF_INET6)) {
+        ensure_loaded();
+        char destination[80];
+        name_address(to, destination, sizeof destination);
+        if (address_blocked(destination)) {
+            say("refused a connection to", destination);
+            errno = ECONNREFUSED;
+            return -1;
+        }
+    }
+    return real_connect(fd, to, len);
+}
+
+int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
+    REAL(int, getaddrinfo, (const char *, const char *, const struct addrinfo *, struct addrinfo **));
+    if (active && !talking && node) {
+        ensure_loaded();
+        if (is_blocked(node)) {
+            say("refused a connection to", node);
+            return EAI_NONAME;
+        }
+    }
+    return real_getaddrinfo(node, service, hints, res);
 }
 
 /* ---- Keeping the hook in programs this one starts ---- */
