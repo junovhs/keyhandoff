@@ -48,7 +48,7 @@ fn peer(pipe: HANDLE) -> Option<Peer> {
     let command = super::super::display_command(argv.iter().map(String::as_str));
     // SAFETY: we own the handle.
     let _ = unsafe { CloseHandle(process) };
-    Some(Peer { program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: agent(pid) })
+    Some(Peer { pid, program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: agent(pid) })
 }
 
 /// The AI coding agent among `pid` and the processes that started it, by
@@ -83,6 +83,36 @@ pub fn agent(pid: u32) -> Option<String> {
         pid = *parent;
     }
     None
+}
+
+/// Whether `pid` is `ancestor` or was started, directly or not, by it.
+pub fn descends_from(pid: u32, ancestor: u32) -> bool {
+    use ::windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+    let mut parents = std::collections::HashMap::new();
+    // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return false };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+        while more {
+            parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+            more = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    let mut pid = pid;
+    for _ in 0..64 {
+        if pid == ancestor {
+            return true;
+        }
+        match parents.get(&pid) {
+            Some(&parent) if parent != 0 && parent != pid => pid = parent,
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// Connect to a running KeyHandoff's key pipe, as `keyhandoff run` does.

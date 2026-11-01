@@ -15,7 +15,10 @@ src-tauri/src/
   slots.rs         keyslots.bin: the master key wrapped by passphrase and recovery code
   session.rs       Locked or open: unlock, lock on sleep, screen lock or idle
   tpm.rs           A small TPM 2.0 client: seal and unseal the master key behind a PIN
-  vault.rs         Kept keys, keep times, expiry
+  vault.rs         Kept keys, keep times, expiry, the servers each key is for
+  placeholder.rs   Stand-ins for keys under keyhandoff run, and known servers by prefix
+  run.rs, mask.rs  keyhandoff run, and hiding keys in what it prints
+  hook/            The TLS hook keyhandoff run preloads on Linux (C)
   os/              Per-OS backends: clipboard capture, offer and read, master key,
                    drag-out, one instance per profile, the key socket or pipe
                    and who is asking (linux/, windows/)
@@ -79,7 +82,9 @@ A `.env` pointer such as `DIALPAD_API_KEY=handoff:Dialpad` names a kept key. A l
 
 An approval is a program path, a folder, a key id and a hash of the command (its arguments and the contents of every file they name), kept in `approvals.bin`. When an AI coding agent is among the processes that started the asking program, saved approvals don't count, and "Allow for 30 minutes" is kept in memory only.
 
-`keyhandoff run -- COMMAND` (`run.rs`) is the same request from KeyHandoff's own executable with the exact command it will start, `{"names": […], "run": ["/usr/bin/python3", "report.py"]}`; the app believes `run` only when the asking executable is its own. The runner starts the command with the keys in its environment and passes its stdout and stderr through `mask.rs`, which hides every printed form of each key. A request with any key not yet allowed waits up to 60 seconds for an answer in the window, and one program at a time can wait. Forgetting a key removes its approvals, and a key kept once is destroyed after it's given out. The reply is built in a buffer sized so it never reallocates, and zeroed after it's sent.
+`keyhandoff run -- COMMAND` (`run.rs`) is the same request from KeyHandoff's own executable with the exact command it will start, `{"names": […], "run": ["/usr/bin/python3", "report.py"]}`; the app believes `run` only when the asking executable is its own. The runner starts the command with the keys in its environment and passes its stdout and stderr through `mask.rs`, which hides every printed form of each key.
+
+**Placeholders.** A kept key has the servers it's for (`hosts` in the vault: guessed from a known prefix when it's added, or typed on its row). On Linux, `keyhandoff run` gets a placeholder for such a key (`placeholder.rs`: same prefix and length, random after) and a run token, and starts the program with `LD_PRELOAD` set to the TLS hook (`src-tauri/hook/keyhandoff_tls.c`, built by `build.rs`, embedded in the executable and written to `$XDG_RUNTIME_DIR/keyhandoff-hook/`). The hook interposes `SSL_write`/`SSL_write_ex`; when a write holds a placeholder it verifies the peer's chain against the system roots (and the key's own CA, if set) and checks the certificate against the key's hosts, then asks the key socket `{"swap": {...}}` for the key, swaps it into a copy of the buffer, writes and wipes. The app answers only processes descended from the run's runner, while the runner's connection is open. The hook also wraps `exec*`, `posix_spawn*`, `system` and `popen` to pass the token, which it removes from its own environment at load, to programs it starts. A request with any key not yet allowed waits up to 60 seconds for an answer in the window, and one program at a time can wait. Forgetting a key removes its approvals, and a key kept once is destroyed after it's given out. The reply is built in a buffer sized so it never reallocates, and zeroed after it's sent.
 
 ## Transport: .handoff files
 

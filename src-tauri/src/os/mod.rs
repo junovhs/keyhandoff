@@ -74,6 +74,8 @@ impl MasterKey {
 /// executable and its working folder (`None` when the OS won't say).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Peer {
+    /// The process id; 0 when the OS won't say.
+    pub pid: u32,
     pub program: PathBuf,
     pub folder: Option<PathBuf>,
     /// `python3 report.py`: shown so you recognise the script.

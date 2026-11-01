@@ -11,6 +11,7 @@ mod folder;
 mod mask;
 mod nearby;
 mod os;
+mod placeholder;
 mod pointer;
 mod run;
 mod session;
@@ -437,6 +438,11 @@ fn copy_pointer(app: AppHandle, h: H, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_hosts(app: AppHandle, h: H, id: String, hosts: String) -> Result<(), String> {
+    done(&app, h.set_hosts(&id, &hosts))
+}
+
+#[tauri::command]
 fn set_name(app: AppHandle, h: H, name: String) -> Result<(), String> {
     done(&app, h.set_name(&name))
 }
@@ -547,7 +553,7 @@ pub fn run() {
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
             gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
-            forget, copy_pointer, set_name, answer, dismiss, ready, update_now
+            forget, copy_pointer, set_hosts, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

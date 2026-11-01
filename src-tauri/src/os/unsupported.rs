@@ -90,3 +90,7 @@ pub fn user_name() -> Option<String> {
 pub fn connect_keys(_profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStream>> {
     Err(std::io::Error::other("not supported on this system"))
 }
+
+pub fn descends_from(_pid: u32, _ancestor: u32) -> bool {
+    false
+}

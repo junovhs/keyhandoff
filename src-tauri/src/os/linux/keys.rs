@@ -40,7 +40,7 @@ fn peer(stream: &UnixStream) -> Option<Peer> {
     let argv = args(cred.pid);
     let command = super::super::display_command(argv.iter().map(String::as_str));
     let args = argv.into_iter().skip(1).collect();
-    Some(Peer { program, folder: fs::read_link(proc.join("cwd")).ok(), command, args, agent: agent(cred.pid) })
+    Some(Peer { pid: cred.pid as u32, program, folder: fs::read_link(proc.join("cwd")).ok(), command, args, agent: agent(cred.pid) })
 }
 
 fn args(pid: i32) -> Vec<String> {
@@ -75,6 +75,23 @@ pub fn agent(pid: i32) -> Option<String> {
         pid = ppid;
     }
     None
+}
+
+/// Whether `pid` is `ancestor` or was started, directly or not, by it.
+pub fn descends_from(pid: u32, ancestor: u32) -> bool {
+    let mut pid = pid;
+    for _ in 0..64 {
+        if pid == ancestor {
+            return true;
+        }
+        let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) else { return false };
+        let Some(ppid) = stat.rsplit_once(')').and_then(|(_, rest)| rest.split_whitespace().nth(1)?.parse().ok()) else { return false };
+        if ppid <= 1 {
+            return false;
+        }
+        pid = ppid;
+    }
+    false
 }
 
 /// Connect to a running KeyHandoff's key socket, as `keyhandoff run` does.

@@ -202,6 +202,12 @@ const COMPARE: Record<Order, (a: KeyView, b: KeyView) => number> = {
 
 function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   const [armed, setArmed] = useState<string | null>(null);
+  // The key whose servers are being typed, and what's typed so far.
+  const [hosting, setHosting] = useState<{ id: string; draft: string } | null>(null);
+  const saveHosts = () => {
+    if (hosting) void run(api.setHosts(hosting.id, hosting.draft));
+    setHosting(null);
+  };
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [order, setOrder] = useState<Order>("newest");
@@ -263,10 +269,35 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
             <span className="key-ico"><Icon name="key" /></span>
             <span className="who">
               <span className="nm">{k.label}</span>
-              <span className="meta">
-                {k.from ? `From ${k.from}` : "Yours"}
-                {k.team ? ` · ${k.team}` : ""} · {lifetime(k)}
-              </span>
+              {hosting?.id === k.id ? (
+                <input
+                  className="meta hosts"
+                  autoFocus
+                  value={hosting.draft}
+                  placeholder="api.example.com"
+                  spellCheck={false}
+                  aria-label={`Servers ${k.label} is for`}
+                  onChange={(e) => setHosting({ id: k.id, draft: e.target.value })}
+                  onBlur={saveHosts}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveHosts();
+                    if (e.key === "Escape") setHosting(null);
+                  }}
+                />
+              ) : (
+                <span className="meta">
+                  {k.from ? `From ${k.from}` : "Yours"}
+                  {k.team ? ` · ${k.team}` : ""} · {lifetime(k)}
+                  {" · "}
+                  <button
+                    className="hosts"
+                    onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}
+                    title="Programs started with keyhandoff run get a stand-in that becomes this key only on a connection to these servers."
+                  >
+                    {k.hosts.length ? `Only for ${k.hosts.join(", ")}` : "Set its server"}
+                  </button>
+                </span>
+              )}
             </span>
             {k.from === null && (
               <button className="use" onClick={() => void run(api.replace(k.id))} title="Rotated it with the provider? Catch the new value. Programs using it keep working.">

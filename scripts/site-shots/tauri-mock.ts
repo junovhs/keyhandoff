@@ -6,9 +6,9 @@ const NOW = Math.floor(Date.now() / 1000);
 const DAY = 24 * 60 * 60;
 
 const KEYS: KeyView[] = [
-  { id: "1", label: "Dialpad", from: "Ben", added_at: NOW - DAY, expires_at: null, keep: "keep", team: null },
-  { id: "2", label: "Stripe (billing)", from: "Priya", added_at: NOW - 3 * DAY, expires_at: NOW + 27 * DAY, keep: "days30", team: "Platform" },
-  { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep", team: null },
+  { id: "1", label: "Dialpad", from: "Ben", added_at: NOW - DAY, expires_at: null, keep: "keep", team: null, hosts: [] },
+  { id: "2", label: "Stripe (billing)", from: "Priya", added_at: NOW - 3 * DAY, expires_at: NOW + 27 * DAY, keep: "days30", team: "Platform", hosts: ["api.stripe.com"] },
+  { id: "3", label: "OpenAI", from: null, added_at: NOW - 6 * DAY, expires_at: null, keep: "keep", team: null, hosts: ["api.openai.com"] },
 ];
 
 const ANN: ContactView = { id: "a", name: "Ann", computer: "72ca77a8cc39c3ba", sends_left: 12, nearby: false };

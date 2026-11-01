@@ -11,7 +11,7 @@ mod protect;
 pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
-pub use keys::{connect_keys, listen_for_keys};
+pub use keys::{connect_keys, descends_from, listen_for_keys, socket as key_socket};
 pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};
 
 thread_local! {

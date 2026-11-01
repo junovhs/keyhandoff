@@ -7,7 +7,16 @@
 //! `keyhandoff run` asks the same way and adds the exact command it will
 //! start, `{"names": […], "run": ["/usr/bin/python3", "report.py"]}`. That's
 //! believed only from KeyHandoff's own executable: the approval is then for
-//! that command, which is what really runs.
+//! that command, which is what really runs. A key whose servers are known
+//! comes back as a placeholder, with `"hook": "<token>"`; the runner keeps
+//! the connection open while the program runs, and the run ends when it
+//! closes.
+//!
+//! The TLS hook in that program (`hook/keyhandoff_tls.c`) asks with the
+//! token: `{"hook": "<token>"}` gets one `placeholder<TAB>host,host<TAB>ca`
+//! line per placeholder, then an empty line, and
+//! `{"swap": {"token", "placeholder", "host"}}` gets `ok <key in hex>` or
+//! `no <reason>`, only from a process the runner started.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -24,24 +33,63 @@ const PREFIX: &str = "handoff:";
 
 #[derive(Deserialize)]
 struct Ask {
+    #[serde(default)]
     names: Vec<String>,
     /// From `keyhandoff run`: the program, resolved to a full path, and its arguments.
     #[serde(default)]
     run: Option<Vec<String>>,
+    /// From `keyhandoff run` when it can preload the TLS hook: placeholders are welcome.
+    #[serde(default)]
+    placeholders: bool,
+    /// From the TLS hook: its run's placeholders.
+    #[serde(default)]
+    hook: Option<String>,
+    /// From the TLS hook: the key behind a placeholder, for a verified host.
+    #[serde(default)]
+    swap: Option<SwapAsk>,
+}
+
+#[derive(Deserialize)]
+struct SwapAsk {
+    token: String,
+    placeholder: String,
+    host: String,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
 enum Reply<'a> {
-    Values { values: BTreeMap<&'a str, &'a str> },
-    Error { error: String },
+    Values {
+        values: BTreeMap<&'a str, &'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        hook: Option<&'a str>,
+    },
+    Error {
+        error: String,
+    },
 }
 
 /// Answer one program's connection.
 pub fn serve(handoff: &Handoff, peer: &Peer, mut stream: Box<dyn KeyStream>) {
-    let reply = answer(handoff, peer, &mut *stream);
+    let mut line = String::new();
+    let read = BufReader::new((&mut *stream).take(MAX_ASK_BYTES)).read_line(&mut line);
+    let ask = read.ok().and_then(|_| serde_json::from_str::<Ask>(&line).ok());
+    let mut run = None;
+    let reply = match ask {
+        Some(Ask { hook: Some(token), .. }) => hook_lines(handoff, peer, &token),
+        Some(Ask { swap: Some(swap), .. }) => swap_line(handoff, peer, &swap),
+        Some(ask) if !ask.names.is_empty() && ask.names.len() <= MAX_NAMES => answer(handoff, peer, ask.names, ask.run, ask.placeholders, &mut run),
+        _ => reply(&Reply::Error { error: "KeyHandoff couldn't read the request.".into() }),
+    };
     let _ = stream.write_all(&reply);
     let _ = stream.flush();
+    drop(reply);
+    if let Some(token) = run {
+        // The run lasts as long as the runner's connection.
+        let mut sink = [0u8; 64];
+        while matches!(stream.read(&mut sink), Ok(n) if n > 0) {}
+        handoff.end_run(&token);
+    }
 }
 
 /// Turn a program away with `error`.
@@ -50,14 +98,48 @@ pub fn refuse(mut stream: Box<dyn KeyStream>, error: &str) {
     let _ = stream.flush();
 }
 
-fn answer(handoff: &Handoff, peer: &Peer, stream: &mut dyn KeyStream) -> Zeroizing<Vec<u8>> {
-    let mut line = String::new();
-    let read = BufReader::new(stream.take(MAX_ASK_BYTES)).read_line(&mut line);
-    let (names, run) = match read.ok().and_then(|_| serde_json::from_str::<Ask>(&line).ok()) {
-        Some(ask) if !ask.names.is_empty() && ask.names.len() <= MAX_NAMES => (ask.names, ask.run),
-        _ => return reply(&Reply::Error { error: "KeyHandoff couldn't read the request.".into() }),
-    };
+fn hook_lines(handoff: &Handoff, peer: &Peer, token: &str) -> Zeroizing<Vec<u8>> {
+    let mut out = Zeroizing::new(Vec::new());
+    for (placeholder, hosts, ca) in handoff.hook_swaps(token, peer).unwrap_or_default() {
+        let ca = ca.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+        if ca.contains(['\t', '\n']) {
+            continue;
+        }
+        out.extend_from_slice(format!("{}\t{}\t{}\n", &*placeholder, hosts.join(","), ca).as_bytes());
+    }
+    out.push(b'\n');
+    out
+}
+
+fn swap_line(handoff: &Handoff, peer: &Peer, swap: &SwapAsk) -> Zeroizing<Vec<u8>> {
+    match handoff.swap(&swap.token, peer, &swap.placeholder, &swap.host) {
+        Ok(secret) => {
+            let mut out = Zeroizing::new(Vec::with_capacity(4 + 2 * secret.expose().len()));
+            out.extend_from_slice(b"ok ");
+            for b in secret.expose() {
+                out.extend_from_slice(&[HEX[(b >> 4) as usize], HEX[(b & 15) as usize]]);
+            }
+            out.push(b'\n');
+            out
+        }
+        Err(error) => Zeroizing::new(format!("no {}\n", error.replace('\n', " ")).into_bytes()),
+    }
+}
+
+const HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// Values for a loader, or for `keyhandoff run`, which may get placeholders
+/// and a hook token (put in `started`).
+fn answer(
+    handoff: &Handoff,
+    peer: &Peer,
+    names: Vec<String>,
+    run: Option<Vec<String>>,
+    placeholders: bool,
+    started: &mut Option<String>,
+) -> Zeroizing<Vec<u8>> {
     let ran;
+    let is_run = run.is_some() && placeholders;
     let peer = match run {
         None => peer,
         Some(argv) => match running(peer, argv) {
@@ -74,14 +156,20 @@ fn answer(handoff: &Handoff, peer: &Peer, stream: &mut dyn KeyStream) -> Zeroizi
         Ok(secrets) => secrets,
         Err(error) => return reply(&Reply::Error { error }),
     };
+    let (secrets, token) = if is_run { handoff.begin_run(peer, &names, secrets) } else { (secrets, None) };
     let mut values = BTreeMap::new();
     for (name, secret) in names.iter().zip(&secrets) {
         let Ok(value) = std::str::from_utf8(secret.expose()) else {
+            if let Some(token) = &token {
+                handoff.end_run(token);
+            }
             return reply(&Reply::Error { error: format!("{name} isn't text, so it can't go in an environment variable.") });
         };
         values.insert(name.as_str(), value);
     }
-    reply(&Reply::Values { values })
+    let out = reply(&Reply::Values { values, hook: token.as_deref() });
+    *started = token;
+    out
 }
 
 /// The program `keyhandoff run` is about to start, in its folder, if the
@@ -99,6 +187,7 @@ fn running(runner: &Peer, argv: Vec<String>) -> Result<Peer, String> {
         return Err("keyhandoff run didn't name a command.".into());
     }
     Ok(Peer {
+        pid: runner.pid,
         command: crate::os::display_command(argv.iter().map(String::as_str)),
         program,
         args: args.to_vec(),
@@ -132,7 +221,7 @@ fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
 /// would leave copies of a value behind), zeroized when dropped.
 fn reply(reply: &Reply) -> Zeroizing<Vec<u8>> {
     let values = match reply {
-        Reply::Values { values } => values.iter().map(|(k, v)| 6 * (k.len() + v.len()) + 8).sum(),
+        Reply::Values { values, .. } => values.iter().map(|(k, v)| 6 * (k.len() + v.len()) + 8).sum(),
         Reply::Error { .. } => 0,
     };
     let mut out = Zeroizing::new(Vec::with_capacity(values + 1024));

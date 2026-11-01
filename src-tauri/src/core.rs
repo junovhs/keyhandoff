@@ -23,6 +23,7 @@ use crate::nearby::{self, Nearby, OnObject};
 use crate::store::{Approval, Contact, FolderTeam, Role, Settings, Store, Team};
 use rand_core::{OsRng, RngCore};
 use crate::vault::{Item, Keep, Vault};
+use zeroize::Zeroizing;
 
 /// Safe Copy disarms itself after this long.
 pub const ARM_TIMEOUT: Duration = Duration::from_secs(60);
@@ -89,6 +90,23 @@ pub enum Answer {
     Deny,
 }
 
+/// A program `keyhandoff run` started with placeholders, until the run ends.
+struct Run {
+    token: [u8; 32],
+    /// The runner's process: only it and processes it started may swap.
+    runner: u32,
+    swaps: Vec<RunSwap>,
+}
+
+struct RunSwap {
+    placeholder: Zeroizing<String>,
+    hosts: Vec<String>,
+    ca: Option<PathBuf>,
+    /// A copy taken when the run started, so a key kept Once still works for
+    /// the whole run and nothing in the vault changes under it.
+    secret: Secret,
+}
+
 /// A program waiting for Allow.
 struct ProgramAsk {
     id: u64,
@@ -145,6 +163,9 @@ struct Core {
     approvals: Vec<Approval>,
     /// Commands an AI agent started, allowed until a time; never saved.
     for_now: Vec<(Approval, u64)>,
+    /// Programs running with placeholders. Locking drops them, and their
+    /// placeholders stop being swapped.
+    runs: Vec<Run>,
     program: Option<ProgramAsk>,
     asks: u64,
 }
@@ -168,6 +189,9 @@ pub struct KeyView {
     pub keep: Keep,
     /// The team it was shared with, if any.
     pub team: Option<String>,
+    /// The servers it's for; a program started by `keyhandoff run` gets a
+    /// placeholder that becomes the key only on a connection to one of them.
+    pub hosts: Vec<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -344,6 +368,7 @@ impl Handoff {
             pairing: None,
             approvals,
             for_now: Vec::new(),
+            runs: Vec::new(),
             program: None,
             asks: 0,
         };
@@ -1117,6 +1142,22 @@ impl Handoff {
         Ok(())
     }
 
+    /// Set the servers a key is for, from what you typed: host names
+    /// separated by commas or spaces. Empty means none, so programs started
+    /// by `keyhandoff run` get the key itself.
+    pub fn set_hosts(&self, id: &str, hosts: &str) -> Result<(), String> {
+        let id = parse_id(id)?;
+        let hosts = hosts
+            .split([',', ' '])
+            .filter(|h| !h.trim().is_empty())
+            .map(|h| crate::placeholder::clean_host(h).ok_or_else(|| format!("{} isn't a server name, like api.stripe.com.", h.trim())))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut core = self.lock();
+        let ca = core.vault.items().iter().find(|i| i.id == id).ok_or("That key is no longer here.")?.ca.clone();
+        core.vault.set_hosts(id, hosts, ca);
+        core.store.save_vault(&core.vault)
+    }
+
     pub fn set_name(&self, name: &str) -> Result<(), String> {
         let name = clean_text(name, MAX_NAME_BYTES).ok_or("Use a short name without special characters.")?;
         let mut core = self.lock();
@@ -1193,6 +1234,63 @@ impl Handoff {
         };
         (self.notify)();
         result
+    }
+
+    /// The values `keyhandoff run` gives the program: for each key whose
+    /// servers are known (set on the key, or from its prefix), a fresh
+    /// placeholder; for the rest, the key itself. Returns them, and the token
+    /// the program's TLS hook asks with when there's a placeholder.
+    pub fn begin_run(&self, runner: &Peer, names: &[String], secrets: Vec<Secret>) -> (Vec<Secret>, Option<String>) {
+        let mut core = self.lock();
+        let mut values = Vec::with_capacity(secrets.len());
+        let mut swaps = Vec::new();
+        for (name, secret) in names.iter().zip(secrets) {
+            let item = core.vault.find(name).and_then(|id| core.vault.items().iter().find(|i| i.id == id));
+            let mut hosts = item.map(|i| i.hosts.clone()).unwrap_or_default();
+            if hosts.is_empty() {
+                hosts = crate::placeholder::known_hosts(secret.expose());
+            }
+            let placeholder = (!hosts.is_empty() && runner.pid != 0).then(|| crate::placeholder::placeholder(secret.expose())).flatten();
+            match placeholder {
+                Some(placeholder) => {
+                    values.push(Secret::new(placeholder.as_bytes().to_vec()));
+                    swaps.push(RunSwap { placeholder, hosts, ca: item.and_then(|i| i.ca.clone()), secret });
+                }
+                None => values.push(secret),
+            }
+        }
+        if swaps.is_empty() {
+            return (values, None);
+        }
+        let mut token = [0u8; 32];
+        OsRng.fill_bytes(&mut token);
+        core.runs.push(Run { token, runner: runner.pid, swaps });
+        (values, Some(hex32(&token)))
+    }
+
+    /// The run is over: its placeholders stop working.
+    pub fn end_run(&self, token: &str) {
+        self.lock().runs.retain(|r| hex32(&r.token) != token);
+    }
+
+    /// For a TLS hook: its run's placeholders, the hosts each may go to, and
+    /// a private CA for them if the key has one.
+    pub fn hook_swaps(&self, token: &str, asker: &Peer) -> Result<Vec<(Zeroizing<String>, Vec<String>, Option<PathBuf>)>, String> {
+        let core = self.lock();
+        let run = core.run_for(token, asker)?;
+        Ok(run.swaps.iter().map(|s| (s.placeholder.clone(), s.hosts.clone(), s.ca.clone())).collect())
+    }
+
+    /// For a TLS hook that verified a connection to `host`: the key behind
+    /// `placeholder`, if `host` is one of its servers.
+    pub fn swap(&self, token: &str, asker: &Peer, placeholder: &str, host: &str) -> Result<Secret, String> {
+        let core = self.lock();
+        let run = core.run_for(token, asker)?;
+        let swap = run.swaps.iter().find(|s| s.placeholder.as_str() == placeholder).ok_or("not a placeholder of this run")?;
+        if !swap.hosts.iter().any(|h| h.eq_ignore_ascii_case(host)) {
+            return Err("not one of this key's servers".into());
+        }
+        Ok(Secret::new(swap.secret.expose().to_vec()))
     }
 
     /// Answer the program waiting for Allow.
@@ -1524,6 +1622,15 @@ impl Core {
         ContactView { id: hex32(&c.identity), name: c.name.clone(), computer, sends_left: c.locks.len(), nearby }
     }
 
+    /// The run with `token`, if `asker` is its runner or was started by it.
+    fn run_for(&self, token: &str, asker: &Peer) -> Result<&Run, String> {
+        let run = self.runs.iter().find(|r| hex32(&r.token) == token).ok_or("this run has ended")?;
+        if asker.pid == 0 || !os::descends_from(asker.pid, run.runner) {
+            return Err("not started by this run".into());
+        }
+        Ok(run)
+    }
+
     /// Whether this exact command may have `key` without asking. With an AI
     /// agent among its starters only a 30-minute allowance counts.
     fn allowed(&self, peer: &Peer, binding: [u8; 32], key: [u8; 16]) -> bool {
@@ -1696,6 +1803,7 @@ fn key_view(item: &Item) -> KeyView {
         expires_at: item.expires_at,
         keep: item.keep,
         team: item.team.clone(),
+        hosts: item.hosts.clone(),
     }
 }
 
@@ -2437,7 +2545,7 @@ mod tests {
     }
 
     fn peer(program: &str, folder: &str) -> Peer {
-        Peer { program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")), args: vec!["report.py".into()], agent: None }
+        Peer { pid: 0, program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")), args: vec!["report.py".into()], agent: None }
     }
 
     /// Wait for a program to be asking, then answer it.
@@ -2691,6 +2799,161 @@ print(c.makefile().readline())"#;
 
         assert!(!files_contain(&project, STRIPE), "the project holds no key");
         let _ = fs::remove_file(sock);
+        let _ = fs::remove_dir_all(me.data);
+    }
+
+    /// TLS servers for the placeholder tests: a test CA, and one server per
+    /// name in `names` on a free local port, each certificate signed by the CA
+    /// except names starting with `self:`, which sign their own. Each server
+    /// writes every request it gets to `<dir>/<name>.got`.
+    #[cfg(target_os = "linux")]
+    pub(crate) struct TlsServers {
+        pub ca: PathBuf,
+        pub ports: Vec<u16>,
+        children: Vec<std::process::Child>,
+    }
+
+    #[cfg(target_os = "linux")]
+    impl TlsServers {
+        pub(crate) fn start(dir: &Path, names: &[&str]) -> Option<Self> {
+            use std::process::{Command, Stdio};
+            let sh = |script: &str| Command::new("sh").arg("-c").arg(script).current_dir(dir).stderr(Stdio::null()).stdout(Stdio::null()).status().ok()?.success().then_some(());
+            sh("openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA")?;
+            let server = r#"import socket, ssl, sys, threading
+name, cert, key, out = sys.argv[1:5]
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(cert, key)
+s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(16)
+print(s.getsockname()[1], flush=True)
+def handle(c):
+    try:
+        t = ctx.wrap_socket(c, server_side=True); data = b""
+        while b"\r\n\r\n" not in data:
+            chunk = t.recv(4096)
+            if not chunk: break
+            data += chunk
+        open(out, "ab").write(data + b"\n----\n")
+        t.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"); t.close()
+    except Exception as e:
+        open(out, "ab").write(b"refused " + repr(e).encode() + b"\n----\n")
+while True:
+    c, _ = s.accept(); threading.Thread(target=handle, args=(c,), daemon=True).start()
+"#;
+            std::fs::write(dir.join("server.py"), server).ok()?;
+            let mut ports = Vec::new();
+            let mut children = Vec::new();
+            for name in names {
+                let (self_signed, host) = match name.strip_prefix("self:") { Some(h) => (true, h), None => (false, *name) };
+                let file = name.replace(':', "_");
+                let sign = if self_signed {
+                    format!("openssl req -x509 -newkey rsa:2048 -nodes -keyout {file}.key -out {file}.pem -days 2 -subj /CN={host} -addext subjectAltName=DNS:{host}")
+                } else {
+                    format!("openssl req -newkey rsa:2048 -nodes -keyout {file}.key -out {file}.csr -subj /CN={host} && printf 'subjectAltName=DNS:{host}' > {file}.ext && openssl x509 -req -in {file}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {file}.pem -days 2 -extfile {file}.ext")
+                };
+                sh(&sign)?;
+                let mut child = Command::new("python3")
+                    .args(["server.py", host, &format!("{file}.pem"), &format!("{file}.key"), &format!("{file}.got")])
+                    .current_dir(dir)
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .ok()?;
+                let mut line = String::new();
+                std::io::BufRead::read_line(&mut std::io::BufReader::new(child.stdout.take()?), &mut line).ok()?;
+                ports.push(line.trim().parse().ok()?);
+                children.push(child);
+            }
+            Some(Self { ca: dir.join("ca.pem"), ports, children })
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    impl Drop for TlsServers {
+        fn drop(&mut self) {
+            for c in &mut self.children {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
+        }
+    }
+
+    /// FEAT-09's check: under `keyhandoff run`, a Python program holding only
+    /// a placeholder sends the same request to a server verified as the key's
+    /// host, which gets the real key, and to others, which get the
+    /// placeholder: one with a valid certificate for another name, the same
+    /// one with the key's host claimed in SNI, and one with a self-signed
+    /// certificate for the key's host. The program's environment never holds
+    /// the key.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn keyhandoff_run_swaps_the_key_in_only_for_its_verified_host() {
+        use crate::run::tests::{finished, start};
+        use std::process::Command;
+        const STRIPE: &[u8] = b"sk_test_51SyntheticSwapKey0123456789abcdefXYZ";
+        if ["python3", "openssl", "setsid"].iter().any(|p| Command::new(p).arg("version").output().is_err()) {
+            eprintln!("skipped: needs python3, openssl and setsid");
+            return;
+        }
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        let project = me.data.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let project = project.canonicalize().unwrap();
+        let servers = TlsServers::start(&project, &["api.stripe.test", "evil.test", "self:api.stripe.test"]).expect("test TLS servers");
+        {
+            let mut core = h.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(servers.ca.clone()));
+        }
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        fs::write(project.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        let script = format!(
+            r#"import os, socket, ssl
+key = os.environ["STRIPE_API_KEY"]
+open("seen-env", "wb").write(open("/proc/self/environ", "rb").read())
+open("seen-value", "w").write(key)
+def send(port, name, verify=True):
+    ctx = ssl.create_default_context(cafile="ca.pem")
+    if not verify:
+        ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    with ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname=name) as t:
+        t.sendall(("POST /v1/charges HTTP/1.1\r\nHost: " + name + "\r\nAuthorization: Bearer " + key + "\r\n\r\n").encode())
+        print(name, t.recv(100)[:15])
+send({good}, "api.stripe.test")
+send({evil}, "evil.test")
+send({evil}, "api.stripe.test", verify=False)
+send({fake}, "api.stripe.test", verify=False)
+"#,
+            good = servers.ports[0],
+            evil = servers.ports[1],
+            fake = servers.ports[2]
+        );
+        fs::write(project.join("pay.py"), script).unwrap();
+
+        let out = start(&project, &profile, &["python3", "pay.py"], None);
+        answer_when_asked(&h, Answer::Always);
+        let (text, code) = finished(&out);
+        assert_eq!(code, 0, "{text}");
+
+        let got = |file: &str| fs::read(project.join(file)).unwrap_or_default();
+        let placeholder = got("seen-value");
+        assert_eq!(placeholder.len(), STRIPE.len());
+        assert!(placeholder.starts_with(b"sk_test_") && placeholder != STRIPE);
+        let contains = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
+        let good = got("api.stripe.test.got");
+        assert!(contains(&good, &[b"Bearer ".as_slice(), STRIPE].concat()), "the key's server gets the key: {}", String::from_utf8_lossy(&good));
+        let evil = got("evil.test.got");
+        assert_eq!(evil.split(|&b| b == b'\n').filter(|l| l.starts_with(b"Authorization")).count(), 2, "{}", String::from_utf8_lossy(&evil));
+        assert!(contains(&evil, &placeholder) && !contains(&evil, STRIPE), "another server gets the placeholder");
+        let fake = got("self_api.stripe.test.got");
+        assert!(contains(&fake, &placeholder) && !contains(&fake, STRIPE), "a self-signed api.stripe.test gets the placeholder");
+        assert!(!contains(&got("seen-env"), STRIPE), "the program's environment never holds the key");
+        let ended = (0..200).any(|_| {
+            std::thread::sleep(Duration::from_millis(10));
+            h.lock().runs.is_empty()
+        });
+        assert!(ended, "the run ended with the runner");
+        drop(servers);
         let _ = fs::remove_dir_all(me.data);
     }
 

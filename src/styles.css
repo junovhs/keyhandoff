@@ -94,6 +94,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .key-row .nm { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .key-row .key-ico { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--accent-ink); flex-shrink: 0; }
 .key-row .meta { font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.key-row .meta button.hosts { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.key-row .meta button.hosts:hover { color: var(--accent-ink); }
+.key-row input.meta.hosts { font: inherit; font-size: 12.5px; color: var(--text); background: transparent; border: 0; border-bottom: 1px solid var(--accent); padding: 0; outline: none; width: 100%; }
 .key-row.contact { width: 100%; text-align: left; }
 .key-row.contact:hover .nm { color: var(--accent-ink); }
 .key-row .who.contact { display: flex; flex-direction: row; align-items: center; gap: 14px; flex: 1; min-width: 0; text-align: left; min-height: 56px; }

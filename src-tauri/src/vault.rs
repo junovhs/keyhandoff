@@ -50,6 +50,16 @@ pub struct Item {
     /// The team it was shared with, if any.
     #[serde(default)]
     pub team: Option<String>,
+    /// The servers it's for. A program started by `keyhandoff run` gets a
+    /// placeholder, swapped for the key only inside a TLS connection whose
+    /// certificate is valid for one of these. Empty: the ones its prefix
+    /// suggests ([`crate::placeholder::known_hosts`]), if any.
+    #[serde(default)]
+    pub hosts: Vec<String>,
+    /// A certificate authority trusted for those hosts besides the system's,
+    /// for a server with a private certificate.
+    #[serde(default)]
+    pub ca: Option<std::path::PathBuf>,
     nonce: [u8; 12],
     sealed: Vec<u8>,
 }
@@ -115,10 +125,20 @@ impl Vault {
             keep,
             expires_at: keep.expires_at(now),
             team: None,
+            hosts: crate::placeholder::known_hosts(secret.expose()),
+            ca: None,
             nonce,
             sealed,
         });
         id
+    }
+
+    /// Set the servers a key is for, and a private CA for them.
+    pub fn set_hosts(&mut self, id: [u8; 16], hosts: Vec<String>, ca: Option<std::path::PathBuf>) -> bool {
+        let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return false };
+        item.hosts = hosts;
+        item.ca = ca;
+        true
     }
 
     /// Put a new value in an existing item: same id, so programs allowed to

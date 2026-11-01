@@ -4,6 +4,13 @@
 //! over the key socket or pipe for the exact command, so the approval covers
 //! that command and the files it names, nothing else.
 //!
+//! A key whose servers are known reaches the program as a placeholder. On
+//! Linux the runner preloads KeyHandoff's TLS hook (`hook/keyhandoff_tls.c`,
+//! built into this executable), which swaps the key in only inside a TLS
+//! connection verified as one of those servers. The runner keeps its
+//! connection to KeyHandoff open while the program runs; closing it ends the
+//! run, and the placeholders stop working.
+//!
 //! The program's stdout and stderr go through a [`Masker`] on their way to
 //! the terminal, for it and everything it starts, so a key it prints shows
 //! as `[KeyHandoff: Stripe hidden]`. Writes to files or the network aren't
@@ -36,6 +43,8 @@ struct Options {
 struct Reply {
     #[serde(default)]
     values: BTreeMap<String, String>,
+    /// The token the TLS hook asks with, when a value is a placeholder.
+    hook: Option<String>,
     error: Option<String>,
 }
 
@@ -89,19 +98,25 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
     let pointers = pointers(&options.env_file);
     let mut env: Vec<(String, Zeroizing<String>)> = Vec::new();
     let mut keys: Vec<(String, Zeroizing<String>)> = Vec::new();
+    // Held open while the program runs: closing it ends the run.
+    let mut _run = None;
     if !pointers.is_empty() {
         let mut names: Vec<&str> = pointers.values().map(String::as_str).collect();
         names.sort();
         names.dedup();
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(options.command[1..].iter().cloned());
-        let mut values = ask(&options.profile, &names, &argv)?;
+        let (mut reply, conn) = ask(&options.profile, &names, &argv)?;
         for (var, name) in &pointers {
-            let value = values.get(name).ok_or_else(|| format!("KeyHandoff didn't send {name}."))?;
+            let value = reply.values.get(name).ok_or_else(|| format!("KeyHandoff didn't send {name}."))?;
             env.push((var.clone(), Zeroizing::new(value.clone())));
         }
-        for (name, value) in std::mem::take(&mut values) {
+        for (name, value) in std::mem::take(&mut reply.values) {
             keys.push((name, Zeroizing::new(value)));
+        }
+        if let Some(token) = reply.hook {
+            env.extend(hook_env(&options.profile, &token)?);
+            _run = Some(conn);
         }
     }
 
@@ -148,18 +163,52 @@ fn pump(mut from: impl Read + Send + 'static, mut to: Out, mut masker: Masker) -
 }
 
 /// Ask the running app for `names`, naming the command that will get them.
-fn ask(profile: &str, names: &[&str], argv: &[String]) -> Result<BTreeMap<String, String>, String> {
+/// Returns the reply and the connection, which a run with placeholders holds.
+fn ask(profile: &str, names: &[&str], argv: &[String]) -> Result<(Reply, Box<dyn crate::os::KeyStream>), String> {
     let mut conn = crate::os::connect_keys(profile).map_err(|_| "KeyHandoff isn't running. Open it and try again.".to_string())?;
-    let mut message = serde_json::to_vec(&serde_json::json!({ "names": names, "run": argv })).map_err(|e| e.to_string())?;
+    let mut message = serde_json::to_vec(&serde_json::json!({ "names": names, "run": argv, "placeholders": cfg!(target_os = "linux") })).map_err(|e| e.to_string())?;
     message.push(b'\n');
     conn.write_all(&message).map_err(|e| e.to_string())?;
     let mut line = Zeroizing::new(String::new());
-    BufReader::new(conn).read_line(&mut line).map_err(|_| "KeyHandoff closed the connection.".to_string())?;
+    BufReader::new(&mut *conn).read_line(&mut line).map_err(|_| "KeyHandoff closed the connection.".to_string())?;
     let reply: Reply = serde_json::from_str(&line).map_err(|_| "KeyHandoff sent something unreadable.".to_string())?;
     match reply.error {
         Some(error) => Err(error),
-        None => Ok(reply.values),
+        None => Ok((reply, conn)),
     }
+}
+
+/// The TLS hook, built from hook/keyhandoff_tls.c by build.rs.
+#[cfg(target_os = "linux")]
+const TLS_HOOK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/libkeyhandoff_tls.so"));
+
+/// The environment that loads the TLS hook into the program: written once
+/// to a private folder in the runtime directory, named by its contents.
+#[cfg(target_os = "linux")]
+fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
+    use sha2::{Digest, Sha256};
+    let dir = crate::os::runtime_dir().join("keyhandoff-hook");
+    crate::os::private_dir(&dir).map_err(|e| format!("couldn't prepare the TLS hook: {e}"))?;
+    let name: String = Sha256::digest(TLS_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect();
+    let path = dir.join(format!("tls-{name}.so"));
+    if std::fs::read(&path).ok().as_deref() != Some(TLS_HOOK) {
+        crate::os::write_private(&path, TLS_HOOK).map_err(|e| format!("couldn't prepare the TLS hook: {e}"))?;
+    }
+    let socket = crate::os::key_socket(profile);
+    let preload = match std::env::var("LD_PRELOAD") {
+        Ok(old) if !old.is_empty() => format!("{}:{old}", path.display()),
+        _ => path.display().to_string(),
+    };
+    Ok(vec![
+        ("LD_PRELOAD".into(), Zeroizing::new(preload)),
+        ("KEYHANDOFF_HOOK".into(), Zeroizing::new(format!("{token}:{}", socket.display()))),
+    ])
+}
+
+/// Placeholders need the TLS hook, which is built for Linux only so far.
+#[cfg(not(target_os = "linux"))]
+fn hook_env(_profile: &str, _token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
+    Err("Placeholders need KeyHandoff's TLS hook, which isn't built for this system yet.".into())
 }
 
 /// Variables whose value is a `handoff:` pointer, from the environment and

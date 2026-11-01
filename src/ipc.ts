@@ -17,6 +17,8 @@ export interface KeyView {
   keep: Keep;
   /** The team it was shared with, if any. */
   team: string | null;
+  /** The servers it's for: under `keyhandoff run` a program gets a stand-in that becomes the key only there. */
+  hosts: string[];
 }
 
 export interface SafeView {
@@ -245,6 +247,7 @@ export const api = {
   setKeep: (id: string, keep: Keep) => invoke<void>("set_keep", { id, keep }),
   forget: (id: string) => invoke<void>("forget", { id }),
   copyPointer: (id: string) => invoke<void>("copy_pointer", { id }),
+  setHosts: (id: string, hosts: string) => invoke<void>("set_hosts", { id, hosts }),
   setName: (name: string) => invoke<void>("set_name", { name }),
   answer: (answer: Answer) => invoke<void>("answer", { answer }),
   dismiss: () => invoke<void>("dismiss"),
