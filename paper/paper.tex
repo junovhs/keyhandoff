@@ -98,20 +98,17 @@ the real key out of the program but
 require routing traffic through a
 man-in-the-middle and only speak HTTP.
 
-We present a design, implemented in
-KeyHandoff, a small desktop key manager,
-in which a program started with
-\texttt{keyhandoff\ run} never holds the
-key. It holds a placeholder with the
-key's prefix and length. A hook in the
-program's own TLS library swaps the real
-key in at the moment a write is
-encrypted, and only on a connection
-whose certificate chain the hook has
-verified itself, against the system's
-roots, as one of the key's servers.
-Because nothing legitimate sends a
-placeholder anywhere else, every
+We present a design in which a program
+never holds the key it uses. It holds a
+placeholder with the key's prefix and
+length. A hook in the program's own TLS
+library swaps the real key in at the
+moment a write is encrypted, and only on
+a connection whose certificate chain the
+hook has verified itself, against the
+system's roots, as one of the key's
+servers. Because nothing legitimate
+sends a placeholder anywhere else, every
 placeholder is also a tripwire. A write
 carrying one elsewhere, as written or in
 common encodings, is refused before a
@@ -121,7 +118,8 @@ then on, and a signed warning reaches
 teammates through a folder they already
 share. Each run gets fresh placeholders,
 so one found later traces back to its
-run.
+run. We implement the design in
+KeyHandoff, a small desktop key manager.
 
 We evaluate coverage across 15 client
 and protocol combinations, 11
@@ -309,18 +307,35 @@ Out of scope, and said plainly in
 \addcontentsline{toc}{section}{3.
 Design}
 
+The design has four parts. A \textbf{key
+service}, a long-running process of the
+developer's, holds the keys and decides
+which programs may use them. A
+\textbf{runner} starts a program with
+its keys. A \textbf{hook}, loaded into
+that program, swaps keys in and watches
+for placeholders leaving. \textbf{Team
+folders}, ordinary folders teammates
+already share, carry signed warnings
+between their key services. In our
+prototype, KeyHandoff is the key
+service, and its
+\texttt{keyhandoff\ run} command is the
+runner.
+
 \subsection*{3.1 Running a program with
 keys}\label{running-a-program-with-keys}
 \addcontentsline{toc}{subsection}{3.1
 Running a program with keys}
 
-\texttt{keyhandoff\ run\ -\/-\ COMMAND}
-reads \texttt{handoff:Name} pointers
-from \texttt{.env} and the environment.
-It asks the running KeyHandoff app for
-those keys over a per-user local socket,
-naming the exact command it will start,
-then starts the command.
+The runner reads pointers to keys (in
+our prototype, lines like
+\texttt{API\_KEY=handoff:Name}) from
+\texttt{.env} and the environment. It
+asks the key service for those keys over
+a per-user local socket, naming the
+exact command it will start, then starts
+the command.
 
 \textbf{Approval is bound to the
 command.} An approval covers the
@@ -331,15 +346,15 @@ interpreter running other code
 (\texttt{python\ -c\ …}), has to ask
 again. The runner's claim about the
 command is believed only when the
-request comes from KeyHandoff's own
-executable, compared by file identity or
-content.
+request comes from the runner's own
+executable, which the key service checks
+by file identity or content.
 
-\textbf{Prompts are AI-aware.}
-KeyHandoff walks the requesting
-process's parent chain. If Claude Code,
-Cursor, Codex, Copilot, Aider, Windsurf
-or Gemini CLI appears in it, saved
+\textbf{Prompts are AI-aware.} The key
+service walks the requesting process's
+parent chain. If Claude Code, Cursor,
+Codex, Copilot, Aider, Windsurf or
+Gemini CLI appears in it, saved
 approvals don't count: the prompt names
 the agent and the exact command, and
 offers ``Allow for 30 minutes'', which
@@ -415,12 +430,12 @@ placeholder, the hook does four things:
   The name asked for in SNI and the
   \texttt{Host} header play no part.
 \item
-  \textbf{Fetch the key.} It asks
-  KeyHandoff for the key, presenting the
-  run's token. KeyHandoff answers only
-  processes descended from the run's
-  runner, and only while the runner is
-  connected.
+  \textbf{Fetch the key.} It asks the
+  key service for the key, presenting
+  the run's token. The key service
+  answers only processes descended from
+  the run's runner, and only while the
+  runner is connected.
 \item
   \textbf{Swap.} It writes the key into
   a private copy of the buffer, writes
@@ -457,8 +472,8 @@ measured each symbol's code length from
 the system's libnghttp2 encoder, rebuilt
 the canonical code from those lengths,
 and checked it byte for byte against
-libnghttp2 on 1,898 random strings
-(\texttt{src-tauri/hook/gen\_hpack\_huffman.py}).
+libnghttp2 on 1,898 random strings; the
+generator is part of the artifact (§9).
 
 \textbf{HTTP Basic auth}
 (\texttt{curl\ -u\ key:}) sends the key
@@ -522,16 +537,16 @@ hashed set of 4-byte windows, probed at
 a stride of the shortest pattern length
 minus three.
 
-\textbf{What happens next.} KeyHandoff
-keeps an alert naming the key, the
-command that tried, and the destination.
-It refuses that destination for later
-runs: by name, by certificate name, and
-by address. It also writes a signed
-warning into each team folder the
-developer is on. Teammates' KeyHandoffs
+\textbf{What happens next.} The key
+service keeps an alert naming the key,
+the command that tried, and the
+destination. It refuses that destination
+for later runs: by name, by certificate
+name, and by address. It also writes a
+signed warning into each team folder the
+developer is on. Teammates' key services
 refuse destinations from warnings signed
-by the team's keeper or members.
+by a member of the team.
 
 \textbf{Lineage.} Every run's
 placeholders are recorded, so a
@@ -547,8 +562,10 @@ Implementation}\label{implementation}
 Implementation}
 
 KeyHandoff is a Tauri app with a Rust
-core and React screens. The parts
-described here are:
+core and React screens. It is both the
+key service and, as
+\texttt{keyhandoff\ run}, the runner.
+The parts described here are:
 
 \begin{itemize}
 \tightlist
@@ -561,9 +578,11 @@ described here are:
 \item
   \textbf{The C hook:}
   \texttt{src-tauri/hook/keyhandoff\_tls.c},
-  about 1,400 lines, compiled by
-  \texttt{build.rs} and embedded in the
-  executable.
+  about 1,400 lines, with its HPACK
+  Huffman table generated by
+  \texttt{gen\_hpack\_huffman.py},
+  compiled by \texttt{build.rs} and
+  embedded in the executable.
 \item
   \textbf{The Node hook:}
   \texttt{keyhandoff\_node.cjs}, about
@@ -791,8 +810,8 @@ Hook, key swapped in every request &
 }
 
 The swap's cost is one local round trip
-to KeyHandoff for the key; the chain
-check is cached per connection.
+to the key service for the key; the
+chain check is cached per connection.
 Measuring forced two fixes:
 
 \begin{itemize}
@@ -834,9 +853,9 @@ fixed. The hook removed its token with
 in the process's first environment
 block, readable at
 \texttt{/proc/self/environ}. Code in the
-program could read it and ask KeyHandoff
-for the key. The test that demonstrates
-this
+program could read it and ask the key
+service for the key. The test that
+demonstrates this
 (\texttt{attacks\_on\_placeholders\_get\_no\_key})
 fails without the fix.
 
@@ -884,7 +903,7 @@ different in kind. The attacker must
 either use the key through its own
 legitimate server, which is visible in
 that provider's logs, or write code that
-targets KeyHandoff's hook specifically.
+targets the hook specifically.
 
 \subsection*{6.2 Why the hook, and not a
 proxy}\label{why-the-hook-and-not-a-proxy}

@@ -6,7 +6,7 @@ Spencer Nunamaker · junovhs@gmail.com · <https://github.com/junovhs/keyhandoff
 
 Developers keep API keys where their tools can read them: in `.env` files, in environment variables, in shell history and logs. Supply-chain malware and, increasingly, AI coding agents read the same places. Vaults and run wrappers (`op run`, `doppler run`) keep keys out of files but hand the real key to the program, where anything in its process can take it. Placeholder proxies keep the real key out of the program but require routing traffic through a man-in-the-middle and only speak HTTP.
 
-We present a design, implemented in KeyHandoff, a small desktop key manager, in which a program started with `keyhandoff run` never holds the key. It holds a placeholder with the key's prefix and length. A hook in the program's own TLS library swaps the real key in at the moment a write is encrypted, and only on a connection whose certificate chain the hook has verified itself, against the system's roots, as one of the key's servers. Because nothing legitimate sends a placeholder anywhere else, every placeholder is also a tripwire. A write carrying one elsewhere, as written or in common encodings, is refused before a byte leaves. The run that tried is named, the destination is refused from then on, and a signed warning reaches teammates through a folder they already share. Each run gets fresh placeholders, so one found later traces back to its run.
+We present a design in which a program never holds the key it uses. It holds a placeholder with the key's prefix and length. A hook in the program's own TLS library swaps the real key in at the moment a write is encrypted, and only on a connection whose certificate chain the hook has verified itself, against the system's roots, as one of the key's servers. Because nothing legitimate sends a placeholder anywhere else, every placeholder is also a tripwire. A write carrying one elsewhere, as written or in common encodings, is refused before a byte leaves. The run that tried is named, the destination is refused from then on, and a signed warning reaches teammates through a folder they already share. Each run gets fresh placeholders, so one found later traces back to its run. We implement the design in KeyHandoff, a small desktop key manager.
 
 We evaluate coverage across 15 client and protocol combinations, 11 reconstructed attacks drawn from documented supply-chain campaigns and AI-agent misuse, overhead, and an adversarial review.
 
@@ -47,13 +47,15 @@ Out of scope, and said plainly in `docs/threats.md`:
 
 ## 3. Design
 
+The design has four parts. A **key service**, a long-running process of the developer's, holds the keys and decides which programs may use them. A **runner** starts a program with its keys. A **hook**, loaded into that program, swaps keys in and watches for placeholders leaving. **Team folders**, ordinary folders teammates already share, carry signed warnings between their key services. In our prototype, KeyHandoff is the key service, and its `keyhandoff run` command is the runner.
+
 ### 3.1 Running a program with keys
 
-`keyhandoff run -- COMMAND` reads `handoff:Name` pointers from `.env` and the environment. It asks the running KeyHandoff app for those keys over a per-user local socket, naming the exact command it will start, then starts the command.
+The runner reads pointers to keys (in our prototype, lines like `API_KEY=handoff:Name`) from `.env` and the environment. It asks the key service for those keys over a per-user local socket, naming the exact command it will start, then starts the command.
 
-**Approval is bound to the command.** An approval covers the program's path, its arguments, and the SHA-256 of every file the arguments name. An edited script, or the same interpreter running other code (`python -c …`), has to ask again. The runner's claim about the command is believed only when the request comes from KeyHandoff's own executable, compared by file identity or content.
+**Approval is bound to the command.** An approval covers the program's path, its arguments, and the SHA-256 of every file the arguments name. An edited script, or the same interpreter running other code (`python -c …`), has to ask again. The runner's claim about the command is believed only when the request comes from the runner's own executable, which the key service checks by file identity or content.
 
-**Prompts are AI-aware.** KeyHandoff walks the requesting process's parent chain. If Claude Code, Cursor, Codex, Copilot, Aider, Windsurf or Gemini CLI appears in it, saved approvals don't count: the prompt names the agent and the exact command, and offers "Allow for 30 minutes", which is never saved, instead of "Always". Name-based detection is a warning; the binding to the command is the guarantee.
+**Prompts are AI-aware.** The key service walks the requesting process's parent chain. If Claude Code, Cursor, Codex, Copilot, Aider, Windsurf or Gemini CLI appears in it, saved approvals don't count: the prompt names the agent and the exact command, and offers "Allow for 30 minutes", which is never saved, instead of "Always". Name-based detection is a warning; the binding to the command is the guarantee.
 
 **Output is masked.** The program's stdout and stderr, and those of everything it starts, pass through a masker. It hides the key or placeholder printed plain, base64 (at each byte offset), hex, percent-encoded or reversed, and any run of 12 or more of those characters, across chunk boundaries.
 
@@ -67,12 +69,12 @@ On Linux the runner preloads a small C library into the program (`LD_PRELOAD`). 
 
 1. **Verify the chain itself.** It checks the peer's certificate chain against the system's default roots and, if set, the key's own CA. It never uses the program's trust settings, `SSL_CERT_FILE` or the verification result the program saw, because code in the program can change all three.
 2. **Check the host.** It checks the leaf certificate against the key's hosts with `X509_check_host`. The name asked for in SNI and the `Host` header play no part.
-3. **Fetch the key.** It asks KeyHandoff for the key, presenting the run's token. KeyHandoff answers only processes descended from the run's runner, and only while the runner is connected.
+3. **Fetch the key.** It asks the key service for the key, presenting the run's token. The key service answers only processes descended from the run's runner, and only while the runner is connected.
 4. **Swap.** It writes the key into a private copy of the buffer, writes that copy (with `SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER`, so a retried write can come from another buffer), and wipes it.
 
 The verification verdict is cached per connection for a minute. The cache key is the connection object together with the leaf certificate's signature bytes, so a reused object talking to another server misses.
 
-**HTTP/2.** HPACK [17] compresses headers, usually with a static Huffman code, before they reach `SSL_write`, so a placeholder in an HTTP/2 header is never there as written. On a connection that negotiated `h2`, the hook follows the frames from the connection preface. It decodes each complete HEADERS block's string literals, swaps the placeholder where the connection is verified, and re-encodes each string with the same representation. Because the key is as long as its placeholder, the dynamic tables on both sides stay in step. The Huffman table was not typed in. We measured each symbol's code length from the system's libnghttp2 encoder, rebuilt the canonical code from those lengths, and checked it byte for byte against libnghttp2 on 1,898 random strings (`src-tauri/hook/gen_hpack_huffman.py`).
+**HTTP/2.** HPACK [17] compresses headers, usually with a static Huffman code, before they reach `SSL_write`, so a placeholder in an HTTP/2 header is never there as written. On a connection that negotiated `h2`, the hook follows the frames from the connection preface. It decodes each complete HEADERS block's string literals, swaps the placeholder where the connection is verified, and re-encodes each string with the same representation. Because the key is as long as its placeholder, the dynamic tables on both sides stay in step. The Huffman table was not typed in. We measured each symbol's code length from the system's libnghttp2 encoder, rebuilt the canonical code from those lengths, and checked it byte for byte against libnghttp2 on 1,898 random strings; the generator is part of the artifact (§9).
 
 **HTTP Basic auth** (`curl -u key:`) sends the key base64-encoded. At the key's own server, the hook decodes the base64 run, swaps, and encodes it again at the same length.
 
@@ -92,17 +94,17 @@ A placeholder headed anywhere but its key's servers is a leak in the act.
 
 It recognises the placeholder as written, in standard base64 nested up to three levels deep at every byte offset, in URL-safe base64, hex, percent-encoding and reversed. Those 47 patterns are scanned in one pass over a hashed set of 4-byte windows, probed at a stride of the shortest pattern length minus three.
 
-**What happens next.** KeyHandoff keeps an alert naming the key, the command that tried, and the destination. It refuses that destination for later runs: by name, by certificate name, and by address. It also writes a signed warning into each team folder the developer is on. Teammates' KeyHandoffs refuse destinations from warnings signed by the team's keeper or members.
+**What happens next.** The key service keeps an alert naming the key, the command that tried, and the destination. It refuses that destination for later runs: by name, by certificate name, and by address. It also writes a signed warning into each team folder the developer is on. Teammates' key services refuse destinations from warnings signed by a member of the team.
 
 **Lineage.** Every run's placeholders are recorded, so a placeholder found later says which key, command and time it came from, even base64-encoded up to three times. A placeholder can turn up in a log, a commit or an agent transcript.
 
 ## 4. Implementation
 
-KeyHandoff is a Tauri app with a Rust core and React screens. The parts described here are:
+KeyHandoff is a Tauri app with a Rust core and React screens. It is both the key service and, as `keyhandoff run`, the runner. The parts described here are:
 
 - **Runner:** `run.rs`, and `mask.rs` for output masking.
 - **Placeholders and hosts:** `placeholder.rs`.
-- **The C hook:** `src-tauri/hook/keyhandoff_tls.c`, about 1,400 lines, compiled by `build.rs` and embedded in the executable.
+- **The C hook:** `src-tauri/hook/keyhandoff_tls.c`, about 1,400 lines, with its HPACK Huffman table generated by `gen_hpack_huffman.py`, compiled by `build.rs` and embedded in the executable.
 - **The Node hook:** `keyhandoff_node.cjs`, about 210 lines.
 - **Signed team warnings:** a new object kind in the sealing crate, `crates/seal/src/warning.rs`.
 
@@ -162,7 +164,7 @@ A Python client keeps one TLS connection open to a local server. It sends 2,000 
 | Hook, nothing to swap | +2 µs | within noise (−3%) |
 | Hook, key swapped in every request | +262 µs | within noise (−13% against a ±20% spread) |
 
-The swap's cost is one local round trip to KeyHandoff for the key; the chain check is cached per connection. Measuring forced two fixes:
+The swap's cost is one local round trip to the key service for the key; the chain check is cached per connection. Measuring forced two fixes:
 
 - **Uploads first ran 80% slower** under the hook, because 47 patterns were each searched separately, on both the plaintext and the ciphertext. The single-pass hashed scan fixed that.
 - **A swapped request first cost about 730 µs,** because the chain was verified every time and the parent chain was walked on every connection.
@@ -173,7 +175,7 @@ We have not yet compared `op run` or a placeholder proxy, and the planned week o
 
 `docs/threats.md` tabulates 21 attacks by an attacker running as the user. Each is classed as stopped, worthless (only a placeholder leaves), gets the key, or out of scope, with a test or a reason.
 
-The review found one real hole, now fixed. The hook removed its token with `unsetenv`, but the token stayed in the process's first environment block, readable at `/proc/self/environ`. Code in the program could read it and ask KeyHandoff for the key. The test that demonstrates this (`attacks_on_placeholders_get_no_key`) fails without the fix.
+The review found one real hole, now fixed. The hook removed its token with `unsetenv`, but the token stayed in the process's first environment block, readable at `/proc/self/environ`. Code in the program could read it and ask the key service for the key. The test that demonstrates this (`attacks_on_placeholders_get_no_key`) fails without the fix.
 
 These attacks still get the key, by design or as stated limits:
 
@@ -189,7 +191,7 @@ No one outside the project has reviewed the table yet.
 
 The common theft paths become harmless: reading the environment or `.env`, printing, uploading, pasting into an agent transcript, committing. Each yields a placeholder that dies with its run, and every send of one through a covered path is stopped and attributed.
 
-What remains open is narrower and different in kind. The attacker must either use the key through its own legitimate server, which is visible in that provider's logs, or write code that targets KeyHandoff's hook specifically.
+What remains open is narrower and different in kind. The attacker must either use the key through its own legitimate server, which is visible in that provider's logs, or write code that targets the hook specifically.
 
 ### 6.2 Why the hook, and not a proxy
 
