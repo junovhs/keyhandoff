@@ -84,7 +84,12 @@ __attribute__((constructor)) static void hook_init(void) {
     memcpy(token, value, TOKEN_HEX);
     strcpy(socket_path, value + TOKEN_HEX + 1);
     snprintf(hook_env, sizeof hook_env, "%s=%s", ENV_NAME, value);
-    unsetenv(ENV_NAME);
+    /* Node runs its own TLS; keyhandoff_node.cjs reads the token there and removes it. */
+    char exe[4096];
+    ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+    exe[n > 0 ? n : 0] = 0;
+    const char *base = strrchr(exe, '/');
+    if (!(base && !strncmp(base + 1, "node", 4))) unsetenv(ENV_NAME);
     hp_init();
     active = 1;
 }

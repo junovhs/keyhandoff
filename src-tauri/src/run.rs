@@ -7,7 +7,8 @@
 //! A key whose servers are known reaches the program as a placeholder. On
 //! Linux the runner preloads KeyHandoff's TLS hook (`hook/keyhandoff_tls.c`,
 //! built into this executable), which swaps the key in only inside a TLS
-//! connection verified as one of those servers. The runner keeps its
+//! connection verified as one of those servers, and has Node.js load
+//! `hook/keyhandoff_node.cjs`, since Node brings its own TLS. The runner keeps its
 //! connection to KeyHandoff open while the program runs; closing it ends the
 //! run, and the placeholders stop working.
 //!
@@ -182,6 +183,10 @@ fn ask(profile: &str, names: &[&str], argv: &[String]) -> Result<(Reply, Box<dyn
 #[cfg(target_os = "linux")]
 const TLS_HOOK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/libkeyhandoff_tls.so"));
 
+/// The Node.js hook (hook/keyhandoff_node.cjs): Node brings its own TLS.
+#[cfg(target_os = "linux")]
+const NODE_HOOK: &[u8] = include_bytes!("../hook/keyhandoff_node.cjs");
+
 /// The environment that loads the TLS hook into the program: written once
 /// to a private folder in the runtime directory, named by its contents.
 #[cfg(target_os = "linux")]
@@ -194,6 +199,14 @@ fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>
     if std::fs::read(&path).ok().as_deref() != Some(TLS_HOOK) {
         crate::os::write_private(&path, TLS_HOOK).map_err(|e| format!("couldn't prepare the TLS hook: {e}"))?;
     }
+    let node = dir.join(format!("node-{}.cjs", Sha256::digest(NODE_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()));
+    if std::fs::read(&node).ok().as_deref() != Some(NODE_HOOK) {
+        crate::os::write_private(&node, NODE_HOOK).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
+    }
+    let node_options = match std::env::var("NODE_OPTIONS") {
+        Ok(old) if !old.is_empty() => format!("--require \"{}\" {old}", node.display()),
+        _ => format!("--require \"{}\"", node.display()),
+    };
     let socket = crate::os::key_socket(profile);
     let preload = match std::env::var("LD_PRELOAD") {
         Ok(old) if !old.is_empty() => format!("{}:{old}", path.display()),
@@ -201,6 +214,7 @@ fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>
     };
     Ok(vec![
         ("LD_PRELOAD".into(), Zeroizing::new(preload)),
+        ("NODE_OPTIONS".into(), Zeroizing::new(node_options)),
         ("KEYHANDOFF_HOOK".into(), Zeroizing::new(format!("{token}:{}", socket.display()))),
     ])
 }

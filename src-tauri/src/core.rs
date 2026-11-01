@@ -3308,7 +3308,7 @@ else:
             cell("curl", "OpenSSL (system), nghttp2", "HTTP/2, body", &["sh", "curl_h2_body.sh"], Some(("curl", "--version")), true),
             cell("curl", "none", "plain HTTP to a stranger", &["sh", "curl_plain.sh"], Some(("curl", "--version")), true),
             cell("Ruby Net::HTTP", "OpenSSL (system)", "HTTP/1.1, header", &["ruby", "ruby_nethttp.rb"], Some(("ruby", "--version")), true),
-            cell("Node.js https", "OpenSSL (built into Node)", "HTTP/1.1, header", &["node", "node_https.mjs"], Some(("node", "--version")), false),
+            cell("Node.js https", "OpenSSL (built into Node)", "HTTP/1.1, header", &["node", "node_https.mjs"], Some(("node", "--version")), true),
             cell("Go net/http", "Go crypto/tls", "HTTP/1.1, header", &["./go_nethttp"], None, false),
         ];
         let read = |file: &str| fs::read_to_string(dir.join(file)).unwrap_or_default();

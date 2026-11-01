@@ -7,6 +7,7 @@ fn main() {
 /// (hook/keyhandoff_tls.c) as a shared library; the app embeds it.
 fn tlshook() {
     println!("cargo:rerun-if-changed=hook/keyhandoff_tls.c");
+    println!("cargo:rerun-if-changed=hook/keyhandoff_node.cjs");
     println!("cargo:rerun-if-changed=hook/hpack_huffman.h");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
         return;

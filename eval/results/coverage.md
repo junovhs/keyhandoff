@@ -16,7 +16,7 @@ The same keyed request, under `keyhandoff run`, to a server verified as the key'
 | curl | OpenSSL (system), nghttp2 | HTTP/2, body | key | the request, without key or placeholder | protected (claimed) |
 | curl | none | plain HTTP to a stranger | - | nothing | protected (claimed) |
 | Ruby Net::HTTP | OpenSSL (system) | HTTP/1.1, header | key | nothing | protected (claimed) |
-| Node.js https | OpenSSL (built into Node) | HTTP/1.1, header | placeholder | placeholder | key safe, not protected |
+| Node.js https | OpenSSL (built into Node) | HTTP/1.1, header | key | nothing | protected (claimed) |
 | Go net/http | Go crypto/tls | HTTP/1.1, header | placeholder | placeholder | key safe, not protected |
 
 Not in this run: Postgres and Redis over TLS (no `psql` or `redis-cli` here), Java (JSSE), Rust with rustls, HTTP/3 (this curl has no QUIC), Windows (schannel). 
