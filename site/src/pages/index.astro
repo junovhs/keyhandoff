@@ -13,7 +13,7 @@ import { scopeAppCss } from "../lib/app-css.mjs";
 import { getLatestRelease, formatSize, ALL_RELEASES } from "../lib/releases.mjs";
 
 const title = "KeyHandoff: API keys, hands off";
-const description = "Your .env is announcing itself. KeyHandoff catches, seals and hands off API keys so they stop living in plain text files and chats. No servers, no accounts.";
+const description = "Hand off API keys without anyone ever seeing them. From the moment a teammate sends you a key to the moment your code uses it, KeyHandoff keeps it hidden. No servers, no accounts.";
 const GITHUB = "https://github.com/junovhs/keyhandoff";
 // Null until the first release; then the end of the page offers its installers.
 const release = await getLatestRelease();
@@ -95,8 +95,8 @@ const INCIDENTS = [
 
     <header class="wrap hero">
       <div class="hero-copy">
-        <h1>Your <code>.env</code> is<br />announcing itself.</h1>
-        <p class="lede">API keys in plain text .env files are easy to find. KeyHandoff removes your keys from the file and seals them in a vault.</p>
+        <h1>Hand off API keys without anyone ever seeing them.</h1>
+        <p class="lede">From the moment a teammate sends you a key to the moment your code uses it, KeyHandoff keeps it hidden.</p>
         <div class="cta">
           <a class="btn primary" href="#download"><Icon name="down" />Download</a>
           <a class="btn secondary" href={GITHUB}>See the code <Icon name="out" /></a>
