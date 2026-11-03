@@ -180,11 +180,15 @@ fn answer(
     };
     // Accept a bare name or the whole pointer.
     let names: Vec<String> = names.iter().map(|n| n.strip_prefix(PREFIX).unwrap_or(n).trim().to_string()).collect();
-    let secrets = match handoff.give(peer, &names) {
-        Ok(secrets) => secrets,
+    let released = if is_run {
+        handoff.give_for_run(peer, &names)
+    } else {
+        handoff.give(peer, &names).map(|secrets| (secrets, None))
+    };
+    let (secrets, token) = match released {
+        Ok(released) => released,
         Err(error) => return reply(&Reply::Error { error }),
     };
-    let (secrets, token) = if is_run { handoff.begin_run(peer, &names, secrets) } else { (secrets, None) };
     let mut values = BTreeMap::new();
     for (name, secret) in names.iter().zip(&secrets) {
         let Ok(value) = std::str::from_utf8(secret.expose()) else {

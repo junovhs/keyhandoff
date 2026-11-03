@@ -102,6 +102,13 @@ struct Run {
     swaps: Vec<RunSwap>,
 }
 
+/// Locally chosen policy, captured with the value before a Once key is removed.
+struct KeyPolicy {
+    label: String,
+    hosts: Vec<String>,
+    ca: Option<PathBuf>,
+}
+
 struct RunSwap {
     label: String,
     placeholder: Zeroizing<String>,
@@ -1224,6 +1231,16 @@ impl Handoff {
     /// approvals don't count: the window always asks, naming the agent, and
     /// offers 30 minutes instead of Always.
     pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
+        self.give_to_program(peer, names, false).map(|(values, _)| values)
+    }
+
+    /// Approve a run and capture its server policy with its key values under
+    /// the same lock, before consuming Once keys or allowing a rename/rotation.
+    pub fn give_for_run(&self, peer: &Peer, names: &[String]) -> Result<(Vec<Secret>, Option<String>), String> {
+        self.give_to_program(peer, names, true)
+    }
+
+    fn give_to_program(&self, peer: &Peer, names: &[String], for_run: bool) -> Result<(Vec<Secret>, Option<String>), String> {
         let binding = peer.binding();
         let (ids, new, id, answer) = {
             let mut core = self.lock();
@@ -1235,7 +1252,7 @@ impl Handoff {
             let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, binding, k)).collect();
             new.dedup();
             if new.is_empty() {
-                return core.release(&ids);
+                return core.release(&ids, for_run.then_some(peer));
             }
             if core.program.is_some() {
                 return Err("KeyHandoff is asking about another program. Try again in a moment.".into());
@@ -1255,65 +1272,20 @@ impl Handoff {
             }
             match answer {
                 Answer::Deny => Err("Not allowed in KeyHandoff.".into()),
-                Answer::Once => core.release(&ids),
-                Answer::Always if peer.agent.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids)),
+                Answer::Once => core.release(&ids, for_run.then_some(peer)),
+                Answer::Always if peer.agent.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids, for_run.then_some(peer))),
                 Answer::Always | Answer::ForNow => {
                     let until = now() + FOR_NOW_SECS;
                     for &key in &new {
                         let approval = Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding) };
                         core.for_now.push((approval, until));
                     }
-                    core.release(&ids)
+                    core.release(&ids, for_run.then_some(peer))
                 }
             }
         };
         (self.notify)();
         result
-    }
-
-    /// The values `keyhandoff run` gives the program: for each key whose
-    /// servers are known (set on the key, or from its prefix), a fresh
-    /// placeholder; for the rest, the key itself. Returns them, and the token
-    /// the program's TLS hook asks with when there's a placeholder.
-    pub fn begin_run(&self, runner: &Peer, names: &[String], secrets: Vec<Secret>) -> (Vec<Secret>, Option<String>) {
-        let mut core = self.lock();
-        let started = now();
-        let mut values = Vec::with_capacity(secrets.len());
-        let mut swaps = Vec::new();
-        for (name, secret) in names.iter().zip(secrets) {
-            let item = core.vault.find(name).and_then(|id| core.vault.items().iter().find(|i| i.id == id));
-            let mut hosts = item.map(|i| i.hosts.clone()).unwrap_or_default();
-            if hosts.is_empty() {
-                hosts = crate::placeholder::known_hosts(secret.expose());
-            }
-            let placeholder = (!hosts.is_empty() && runner.pid != 0).then(|| crate::placeholder::placeholder(secret.expose())).flatten();
-            match placeholder {
-                Some(placeholder) => {
-                    values.push(Secret::new(placeholder.as_bytes().to_vec()));
-                    let label = item.map(|i| i.label.clone()).unwrap_or_else(|| name.clone());
-                    swaps.push(RunSwap { label, placeholder, hosts, ca: item.and_then(|i| i.ca.clone()), secret });
-                }
-                None => values.push(secret),
-            }
-        }
-        if swaps.is_empty() {
-            return (values, None);
-        }
-        let mut token = [0u8; 32];
-        OsRng.fill_bytes(&mut token);
-        let command = runner.command.clone().unwrap_or_else(|| display_name(&runner.program));
-        // The barcode: this run's placeholders, kept so one found later says where it came from.
-        core.tripwire.runs.push(RunRecord {
-            started,
-            command: command.clone(),
-            folder: runner.folder.as_deref().map(home_relative),
-            placeholders: swaps.iter().map(|s| (s.label.clone(), s.placeholder.to_string())).collect(),
-        });
-        let excess = core.tripwire.runs.len().saturating_sub(MAX_RUN_RECORDS);
-        core.tripwire.runs.drain(..excess);
-        let _ = core.store.save_tripwire(&core.tripwire);
-        core.runs.push(Run { token, runner: runner.pid, command, started, swaps });
-        (values, Some(hex32(&token)))
     }
 
     /// The run is over: its placeholders stop working.
@@ -1768,8 +1740,55 @@ impl Core {
         self.store.save_approvals(&self.approvals)
     }
 
+    /// The values `keyhandoff run` gives the program: for each key whose
+    /// servers are known (set on the key, or from its prefix), a fresh
+    /// placeholder; for the rest, the key itself. Returns them, and the token
+    /// the program's TLS hook asks with when there's a placeholder.
+    fn begin_run(&mut self, runner: &Peer, policies: Vec<KeyPolicy>, secrets: Vec<Secret>) -> (Vec<Secret>, Option<String>) {
+        let started = now();
+        let mut values = Vec::with_capacity(secrets.len());
+        let mut swaps = Vec::new();
+        for (policy, secret) in policies.into_iter().zip(secrets) {
+            let KeyPolicy { label, hosts, ca } = policy;
+            let placeholder = (!hosts.is_empty() && runner.pid != 0).then(|| crate::placeholder::placeholder(secret.expose())).flatten();
+            match placeholder {
+                Some(placeholder) => {
+                    values.push(Secret::new(placeholder.as_bytes().to_vec()));
+                    swaps.push(RunSwap { label, placeholder, hosts, ca, secret });
+                }
+                None => values.push(secret),
+            }
+        }
+        if swaps.is_empty() {
+            return (values, None);
+        }
+        let mut token = [0u8; 32];
+        OsRng.fill_bytes(&mut token);
+        let command = runner.command.clone().unwrap_or_else(|| display_name(&runner.program));
+        // The barcode: this run's placeholders, kept so one found later says where it came from.
+        self.tripwire.runs.push(RunRecord {
+            started,
+            command: command.clone(),
+            folder: runner.folder.as_deref().map(home_relative),
+            placeholders: swaps.iter().map(|s| (s.label.clone(), s.placeholder.to_string())).collect(),
+        });
+        let excess = self.tripwire.runs.len().saturating_sub(MAX_RUN_RECORDS);
+        self.tripwire.runs.drain(..excess);
+        let _ = self.store.save_tripwire(&self.tripwire);
+        self.runs.push(Run { token, runner: runner.pid, command, started, swaps });
+        (values, Some(hex32(&token)))
+    }
+
     /// The values for a program. Keys kept Once are then destroyed.
-    fn release(&mut self, ids: &[[u8; 16]]) -> Result<Vec<Secret>, String> {
+    fn release(&mut self, ids: &[[u8; 16]], runner: Option<&Peer>) -> Result<(Vec<Secret>, Option<String>), String> {
+        let policies = if runner.is_some() {
+            ids.iter().map(|id| {
+                let item = self.vault.items().iter().find(|i| i.id == *id).ok_or("That key is no longer here.")?;
+                Ok(KeyPolicy { label: item.label.clone(), hosts: item.hosts.clone(), ca: item.ca.clone() })
+            }).collect::<Result<Vec<_>, String>>()?
+        } else {
+            Vec::new()
+        };
         let secrets = ids
             .iter()
             .map(|&id| self.vault.secret(id).ok_or_else(|| "That key is no longer here.".to_string()))
@@ -1782,7 +1801,10 @@ impl Core {
             self.store.save_vault(&self.vault)?;
             self.prune_approvals()?;
         }
-        Ok(secrets)
+        Ok(match runner {
+            Some(runner) => self.begin_run(runner, policies, secrets),
+            None => (secrets, None),
+        })
     }
 
     fn remember_keep(&mut self, keep: Keep) -> Result<(), String> {
@@ -2829,6 +2851,103 @@ mod tests {
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_once_key_keeps_its_local_server_policy_when_released_to_a_run() {
+        // A recognised prefix used to replace the local policy with its default;
+        // an unknown prefix used to hand the program the real key outright.
+        for key in [b"sk_test_synthetic_once".as_slice(), b"private_synthetic_0123456789abcdefXYZ"] {
+            let me = app("Once");
+            let h = me.handoff.clone();
+            let id = hold(&me, "Private", key);
+            let ca = me.data.join("private-ca.pem");
+            {
+                let mut core = h.lock();
+                core.vault.set_hosts(parse_id(&id).unwrap(), vec![], Some(ca.clone()));
+                core.vault.set_keep(parse_id(&id).unwrap(), Keep::Once);
+            }
+            h.set_hosts(&id, "private.example").unwrap();
+            let runner = Peer { pid: std::process::id(), ..peer("/usr/bin/python3", "/tmp") };
+            let asked = {
+                let (h, runner) = (h.clone(), runner.clone());
+                std::thread::spawn(move || h.give_for_run(&runner, &["Private".into()]))
+            };
+            answer_when_asked(&h, Answer::Once);
+            let (values, token) = asked.join().unwrap().unwrap();
+            let token = token.expect("even a Once key must get a placeholder");
+            assert_ne!(values[0].expose(), key);
+            assert!(h.view().keys.is_empty(), "Once is still consumed");
+            let placeholder = std::str::from_utf8(values[0].expose()).unwrap();
+            let (swaps, _) = h.hook_swaps(&token, &runner).unwrap();
+            assert_eq!(swaps[0].1, ["private.example"]);
+            assert_eq!(swaps[0].2.as_ref(), Some(&ca));
+            assert_eq!(h.swap(&token, &runner, placeholder, "private.example").unwrap().expose(), key);
+            for host in ["api.stripe.com", "evil.test"] {
+                assert!(h.swap(&token, &runner, placeholder, host).is_err(), "the run widened the local policy to {host}");
+            }
+            h.end_run(&token);
+            assert!(h.swap(&token, &runner, placeholder, "private.example").is_err());
+            let _ = fs::remove_dir_all(me.data);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn cards_and_team_updates_cannot_widen_local_server_policy() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let ann = app("Ann");
+        let sender = app("hosts=evil.test");
+        let shared = temp("host-policy-team");
+        fs::create_dir_all(&shared).unwrap();
+        let team = sender.handoff.make_folder_team("hosts=evil.test", &shared).unwrap();
+        ann.handoff.open_path(&shared.join("invite.handoff")).unwrap();
+        ann.handoff.join_team(None).unwrap();
+        let asking = sender.handoff.view().folder_teams[0].asking[0].id.clone();
+        sender.handoff.add_to_team(&team, &asking).unwrap();
+        let source = hold(&sender, "Stripe", b"sk_test_synthetic_old");
+        sender.handoff.share_with_folder_team(&team, &source).unwrap();
+        let received = ann.handoff.view().keys[0].id.clone();
+        ann.handoff.set_hosts(&received, "private.example").unwrap();
+
+        // A card can supply a display name, never a host policy. Extra wire
+        // fields are rejected too, rather than being interpreted as settings.
+        give_card(&sender, &ann);
+        let (card, _) = keyhandoff_seal::create_card(&sender.handoff.lock().identity, "hosts=evil.test", now(), DEFAULT_CARD_TTL, 1).unwrap();
+        let mut forged = card.to_bytes().to_vec();
+        forged.extend_from_slice(b"hosts=evil.test");
+        assert!(keyhandoff_seal::parse_object(&forged).is_err());
+        assert_eq!(ann.handoff.view().keys[0].hosts, ["private.example"]);
+
+        // Even the authenticated keeper's host setting does not travel with
+        // a rotation, and a changed prefix cannot replace the receiver's edit.
+        sender.handoff.set_hosts(&source, "evil.test").unwrap();
+        sender.handoff.replace(&source).unwrap();
+        copy(b"sk-proj-synthetic_rotated_0123456789");
+        sender.handoff.keep_replacement().unwrap();
+        let got = ann.handoff.view().keys[0].clone();
+        assert_eq!(got.id, received);
+        assert_eq!(got.hosts, ["private.example"]);
+        let h = ann.handoff.clone();
+        let runner = Peer { pid: std::process::id(), ..peer("/usr/bin/python3", "/tmp") };
+        let asked = {
+            let (h, runner) = (h.clone(), runner.clone());
+            std::thread::spawn(move || h.give_for_run(&runner, &["Stripe".into()]))
+        };
+        answer_when_asked(&h, Answer::Once);
+        let (values, token) = asked.join().unwrap().unwrap();
+        let token = token.unwrap();
+        let placeholder = std::str::from_utf8(values[0].expose()).unwrap();
+        for host in ["evil.test", "api.openai.com", "api.stripe.com"] {
+            assert!(h.swap(&token, &runner, placeholder, host).is_err(), "untrusted host {host}");
+        }
+        assert_eq!(h.swap(&token, &runner, placeholder, "private.example").unwrap().expose(), b"sk-proj-synthetic_rotated_0123456789");
+        h.end_run(&token);
+        for a in [ann, sender] {
+            let _ = fs::remove_dir_all(a.data);
+        }
+        let _ = fs::remove_dir_all(shared);
+    }
+
     /// FEAT-08's check, for real: `keyhandoff run` (this test binary, started
     /// detached as the runner) gives an approved script its key and masks
     /// every form it prints, from it and from a shell it starts; an edited
@@ -3861,7 +3980,9 @@ else:
             let (h, sock) = (h.clone(), sock.clone());
             std::thread::spawn(move || {
                 let runner = Peer { pid: std::process::id(), program: std::env::current_exe().unwrap(), folder: None, command: None, args: vec![], agent: None };
-                let (_, token) = h.begin_run(&runner, &["Stripe".into()], vec![Secret::new(STRIPE.to_vec())]);
+                let mut core = h.lock();
+                let id = core.vault.find("Stripe").unwrap();
+                let (_, token) = core.release(&[id], Some(&runner)).unwrap();
                 tx.send(token.unwrap()).unwrap();
                 let _ = sock;
             })
