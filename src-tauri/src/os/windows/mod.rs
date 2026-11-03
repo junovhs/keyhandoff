@@ -7,6 +7,7 @@ mod capture;
 mod clipboard;
 mod drag;
 mod instance;
+mod key_stream;
 mod keys;
 mod pipe;
 mod protect;

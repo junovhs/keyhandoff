@@ -26,10 +26,15 @@ pub fn pipe(profile: &str) -> String {
 
 /// Serve programs asking for keys, each connection on its own thread.
 pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
+    let connections = crate::os::KeyConnections::default();
     super::pipe::serve(&pipe(profile), true, BUFFER, "keys", move |stream| {
+        let Some(permit) = connections.enter() else { return };
         let Some(peer) = peer(HANDLE(stream.as_raw_handle())) else { return };
         let serve = serve.clone();
-        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || {
+            let _permit = permit;
+            serve(peer, Box::new(super::key_stream::KeyPipe::new(stream)));
+        });
     })
 }
 
@@ -118,7 +123,7 @@ pub fn descends_from(pid: u32, ancestor: u32) -> bool {
 /// Connect to a running KeyHandoff's key pipe, as `keyhandoff run` does.
 pub fn connect_keys(profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStream>> {
     let pipe = std::fs::OpenOptions::new().read(true).write(true).open(pipe(profile))?;
-    Ok(Box::new(pipe))
+    Ok(Box::new(super::key_stream::KeyPipe::new(pipe)))
 }
 
 fn image_path(process: HANDLE) -> Option<PathBuf> {

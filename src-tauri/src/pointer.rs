@@ -22,7 +22,8 @@
 //! placeholder the hook stopped going somewhere else.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
@@ -30,7 +31,10 @@ use zeroize::Zeroizing;
 use crate::core::Handoff;
 use crate::os::{KeyStream, Peer};
 
-const MAX_ASK_BYTES: u64 = 16 * 1024;
+const MAX_ASK_BYTES: usize = 16 * 1024;
+/// One deadline per frame or reply, unaffected by trickling bytes. Waiting
+/// for unlock/approval and the runner's lifetime do not use this deadline.
+const IO_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_NAMES: usize = 64;
 const PREFIX: &str = "handoff:";
 
@@ -84,9 +88,7 @@ enum Reply<'a> {
 
 /// Answer one program's connection.
 pub fn serve(handoff: &Handoff, peer: &Peer, mut stream: Box<dyn KeyStream>) {
-    let mut line = String::new();
-    let read = BufReader::new((&mut *stream).take(MAX_ASK_BYTES)).read_line(&mut line);
-    let ask = read.ok().and_then(|_| serde_json::from_str::<Ask>(&line).ok());
+    let ask = read_ask(&mut *stream).ok();
     let mut run = None;
     let reply = match ask {
         Some(Ask { hook: Some(token), .. }) => hook_lines(handoff, peer, &token),
@@ -98,21 +100,67 @@ pub fn serve(handoff: &Handoff, peer: &Peer, mut stream: Box<dyn KeyStream>) {
         Some(ask) if !ask.names.is_empty() && ask.names.len() <= MAX_NAMES => answer(handoff, peer, ask.names, ask.run, ask.placeholders, &mut run),
         _ => reply(&Reply::Error { error: "KeyHandoff couldn't read the request.".into() }),
     };
-    let _ = stream.write_all(&reply);
-    let _ = stream.flush();
+    let sent = write_reply(&mut *stream, &reply).is_ok();
     drop(reply);
     if let Some(token) = run {
-        // The run lasts as long as the runner's connection.
+        // A failed reply must not leave an unreachable run alive.
+        // Otherwise the run lasts as long as the runner's connection.
         let mut sink = [0u8; 64];
-        while matches!(stream.read(&mut sink), Ok(n) if n > 0) {}
+        while sent && matches!(stream.read(&mut sink), Ok(n) if n > 0) {}
         handoff.end_run(&token);
     }
 }
 
 /// Turn a program away with `error`.
 pub fn refuse(mut stream: Box<dyn KeyStream>, error: &str) {
-    let _ = stream.write_all(&reply(&Reply::Error { error: error.into() }));
-    let _ = stream.flush();
+    let _ = write_reply(&mut *stream, &reply(&Reply::Error { error: error.into() }));
+}
+
+/// Require a complete newline-terminated frame. A size-limited reader alone
+/// can truncate an oversized frame to valid JSON and accidentally release a key.
+fn read_ask(stream: &mut dyn KeyStream) -> io::Result<Ask> {
+    let deadline = Instant::now() + IO_TIMEOUT;
+    let mut frame = Vec::new();
+    let mut chunk = [0u8; 1024];
+    loop {
+        stream.set_read_timeout(Some(remaining(deadline)?))?;
+        let want = chunk.len().min(MAX_ASK_BYTES + 1 - frame.len());
+        let n = match stream.read(&mut chunk[..want]) {
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if n == 0 {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+        let end = chunk[..n].iter().position(|&b| b == b'\n').map(|i| i + 1);
+        frame.extend_from_slice(&chunk[..end.unwrap_or(n)]);
+        if frame.len() > MAX_ASK_BYTES {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        if end.is_some() {
+            stream.set_read_timeout(None)?;
+            return serde_json::from_slice(&frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e));
+        }
+    }
+}
+
+fn remaining(deadline: Instant) -> io::Result<Duration> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() { Err(io::ErrorKind::TimedOut.into()) } else { Ok(left) }
+}
+
+fn write_reply(stream: &mut dyn KeyStream, mut bytes: &[u8]) -> io::Result<()> {
+    let deadline = Instant::now() + IO_TIMEOUT;
+    while !bytes.is_empty() {
+        stream.set_write_timeout(Some(remaining(deadline)?))?;
+        match stream.write(bytes) {
+            Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
+            Ok(n) => bytes = &bytes[n..],
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    stream.flush()
 }
 
 fn hook_lines(handoff: &Handoff, peer: &Peer, token: &str) -> Zeroizing<Vec<u8>> {
