@@ -170,8 +170,33 @@ pub fn display_command<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<St
 }
 
 /// One connection from a program asking for keys.
-pub trait KeyStream: Read + Write + Send {}
-impl<T: Read + Write + Send> KeyStream for T {}
+pub trait KeyStream: Read + Write + Send {
+    fn set_read_timeout(&mut self, timeout: Option<std::time::Duration>) -> std::io::Result<()>;
+    fn set_write_timeout(&mut self, timeout: Option<std::time::Duration>) -> std::io::Result<()>;
+}
+
+/// Includes connections waiting for unlock, approval, or a running command.
+/// Admission happens before spawning a worker or inspecting its process.
+const MAX_KEY_CONNECTIONS: usize = 64;
+
+#[derive(Clone, Default)]
+struct KeyConnections(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+struct KeyPermit(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+impl KeyConnections {
+    fn enter(&self) -> Option<KeyPermit> {
+        use std::sync::atomic::Ordering;
+        self.0.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| (n < MAX_KEY_CONNECTIONS).then_some(n + 1)).ok()?;
+        Some(KeyPermit(self.0.clone()))
+    }
+}
+
+impl Drop for KeyPermit {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
 
 /// Handles one program's connection; runs on its own thread.
 pub type ServeKeys = std::sync::Arc<dyn Fn(Peer, Box<dyn KeyStream>) + Send + Sync>;

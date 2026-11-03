@@ -2504,6 +2504,26 @@ mod tests {
             sender.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at, None);
         }
 
+        // Malformed transport frames and valid objects of the wrong kind
+        // must leave the listener and Ann's one-time locks usable.
+        {
+            use std::io::{Read, Write};
+            use std::net::{Shutdown, TcpStream};
+            for frame in [vec![0, 0], 0u32.to_be_bytes().to_vec(), u32::MAX.to_be_bytes().to_vec(), vec![0, 0, 0, 8, 1, 2]] {
+                let mut stream = TcpStream::connect(at).unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                stream.write_all(&frame).unwrap();
+                stream.shutdown(Shutdown::Write).unwrap();
+                let mut response = Vec::new();
+                let _ = stream.read_to_end(&mut response);
+                assert!(response.first().is_none_or(|&status| status != 0), "bad frame was accepted");
+            }
+            assert!(nearby::deliver(at, b"garbage").is_err());
+            let (request, _) = keyhandoff_seal::create_request(&ben.handoff.lock().identity, "Ben", now(), DEFAULT_CARD_TTL).unwrap();
+            assert!(nearby::deliver(at, request.to_bytes()).is_err(), "requests aren't sealed keys");
+            assert!(ann.handoff.view().keys.is_empty());
+        }
+
         let key = hold(&ben, "Dialpad", KEY);
         ben.handoff.send_kept(&ann_on_ben, &key).unwrap();
         assert!(ben.handoff.view().safe.nearby, "the Sealed screen offers to send it straight there");
@@ -2849,6 +2869,144 @@ mod tests {
     fn node_loader_gets_the_key_through_the_socket() {
         let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\nconsole.log(process.env.DIALPAD_LIVE_API_KEY);\n";
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
+    }
+
+    #[cfg(any(target_os = "linux", windows))]
+    fn key_client(profile: &str) -> Box<dyn os::KeyStream> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            match os::connect_keys(profile) {
+                Ok(stream) => return stream,
+                Err(e) if std::time::Instant::now() >= deadline => panic!("key listener unavailable: {e}"),
+                Err(_) => std::thread::sleep(Duration::from_millis(10)),
+            }
+        }
+    }
+
+    #[cfg(any(target_os = "linux", windows))]
+    #[test]
+    fn hostile_key_frames_are_refused_without_releasing_a_key() {
+        use std::io::{BufRead, BufReader, Write};
+        let me = app("Hostile frames");
+        let id = hold(&me, "Key", b"synthetic-frame-key");
+        let peer = peer("/usr/bin/python3", "/tmp");
+        {
+            let mut core = me.handoff.lock();
+            core.vault.set_keep(parse_id(&id).unwrap(), Keep::Once);
+            core.allow(&peer, peer.binding(), &[parse_id(&id).unwrap()]).unwrap();
+        }
+        let profile = format!("test-frames-{}", OsRng.next_u32());
+        let h = me.handoff.clone();
+        os::listen_for_keys(&profile, Arc::new(move |_, stream| crate::pointer::serve(&h, &peer, stream))).unwrap();
+        let mut oversized = br#"{"names":["Key"]}"#.to_vec();
+        oversized.resize(16 * 1024, b' ');
+        oversized.extend_from_slice(b"garbage\n");
+        let cases = [
+            oversized, b"{\n".to_vec(), b"\xff\n".to_vec(),
+            b"{\"names\":\"Key\"}\n".to_vec(), b"{\"names\":[false]}\n".to_vec(),
+            br#"{"names":["Key"]}"#.to_vec(),
+        ];
+        for frame in cases {
+            let mut client = key_client(&profile);
+            client.set_read_timeout(Some(Duration::from_secs(7))).unwrap();
+            client.write_all(&frame).unwrap();
+            let mut reply = String::new();
+            BufReader::new(client).read_line(&mut reply).unwrap();
+            let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+            assert!(reply.get("error").is_some(), "a malformed frame released the key");
+            assert_eq!(me.handoff.view().keys.len(), 1, "bad input consumed a Once key");
+            assert!(me.handoff.view().program.is_none());
+        }
+        #[cfg(target_os = "linux")]
+        let _ = fs::remove_file(os::key_socket(&profile));
+        let _ = fs::remove_dir_all(me.data);
+    }
+
+    #[cfg(any(target_os = "linux", windows))]
+    #[test]
+    fn slow_key_connections_are_bounded_cut_off_and_normal_requests_recover() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::sync::atomic::AtomicUsize;
+        use std::time::Instant;
+        let me = app("Key flood");
+        let id = hold(&me, "Key", b"synthetic-flood-key");
+        let peer = peer("/usr/bin/python3", "/tmp");
+        me.handoff.lock().allow(&peer, peer.binding(), &[parse_id(&id).unwrap()]).unwrap();
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let served: os::ServeKeys = {
+            let (h, active, peak) = (me.handoff.clone(), active.clone(), peak.clone());
+            Arc::new(move |_, stream| {
+                let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(count, Ordering::SeqCst);
+                crate::pointer::serve(&h, &peer, stream);
+                active.fetch_sub(1, Ordering::SeqCst);
+            })
+        };
+        let profile = format!("test-flood-{}", OsRng.next_u32());
+        os::listen_for_keys(&profile, served).unwrap();
+        let mut held = Vec::new();
+        for _ in 0..96 {
+            let mut stream = key_client(&profile);
+            stream.set_write_timeout(Some(Duration::from_millis(100))).unwrap();
+            let _ = stream.write_all(b"{");
+            held.push(stream);
+        }
+        let until = Instant::now() + Duration::from_secs(1);
+        while Instant::now() < until && peak.load(Ordering::SeqCst) < 96 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(peak.load(Ordering::SeqCst) <= 64, "idle clients created unbounded workers");
+        let until = Instant::now() + Duration::from_secs(6);
+        while Instant::now() < until && active.load(Ordering::SeqCst) > 0 {
+            for stream in &mut held { let _ = stream.write_all(b" "); }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        assert_eq!(active.load(Ordering::SeqCst), 0, "trickling bytes kept workers alive");
+        drop(held);
+        let mut client = key_client(&profile);
+        client.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        client.write_all(b"{\"names\":[\"Key\"]}\n").unwrap();
+        let mut reply = String::new();
+        BufReader::new(client).read_line(&mut reply).unwrap();
+        let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(reply["values"]["Key"], "synthetic-flood-key");
+        #[cfg(target_os = "linux")]
+        let _ = fs::remove_file(os::key_socket(&profile));
+        let _ = fs::remove_dir_all(me.data);
+    }
+
+    #[cfg(any(target_os = "linux", windows))]
+    #[test]
+    fn a_client_that_never_reads_its_key_reply_is_cut_off() {
+        use std::io::Write;
+        let me = app("Unread reply");
+        let peer = peer("/usr/bin/python3", "/tmp");
+        let mut names = Vec::new();
+        let mut ids = Vec::new();
+        // JSON escaping makes this larger than either transport's output
+        // buffer, so completing the reply requires the client to read it.
+        for n in 0..64 {
+            let name = format!("Key{n}");
+            ids.push(parse_id(&hold(&me, &name, &vec![1u8; 4096])).unwrap());
+            names.push(name);
+        }
+        me.handoff.lock().allow(&peer, peer.binding(), &ids).unwrap();
+        let (done, received) = mpsc::channel();
+        let h = me.handoff.clone();
+        let profile = format!("test-reply-{}", OsRng.next_u32());
+        os::listen_for_keys(&profile, Arc::new(move |_, stream| {
+            crate::pointer::serve(&h, &peer, stream);
+            let _ = done.send(());
+        })).unwrap();
+        let mut client = key_client(&profile);
+        writeln!(client, "{}", serde_json::json!({"names": names})).unwrap();
+        let result = received.recv_timeout(Duration::from_secs(7));
+        drop(client);
+        assert!(result.is_ok(), "a nonreading client held a worker indefinitely");
+        #[cfg(target_os = "linux")]
+        let _ = fs::remove_file(os::key_socket(&profile));
+        let _ = fs::remove_dir_all(me.data);
     }
 
     #[cfg(target_os = "linux")]
