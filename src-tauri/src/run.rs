@@ -309,7 +309,16 @@ fn ignore_interrupts() {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Ctrl+C reaches every program on the console; the program decides, and
+/// the runner stays to pass on its output and exit code.
+#[cfg(windows)]
+fn ignore_interrupts() {
+    // SAFETY: no handler, TRUE: this process ignores Ctrl+C. Programs it
+    // starts get their own default handling back.
+    let _ = unsafe { ::windows::Win32::System::Console::SetConsoleCtrlHandler(None, true) };
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn ignore_interrupts() {}
 
 #[cfg(unix)]
@@ -323,7 +332,7 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
@@ -380,18 +389,37 @@ pub(crate) mod tests {
         let mut spec = vec![profile.to_string(), out.display().to_string()];
         spec.extend(command.iter().map(|s| s.to_string()));
         let me = std::env::current_exe().unwrap();
-        let runner = format!("'{}' run::tests::runner_entry --exact -q >/dev/null 2>&1", me.display());
-        // `; true` keeps the wrapper shell alive as the runner's parent.
-        let shell = wrapper.map(Path::to_path_buf).unwrap_or_else(|| "/bin/sh".into());
-        std::process::Command::new("setsid")
-            .args(["-f", &shell.display().to_string(), "-c", &format!("{runner}; true")])
-            .current_dir(folder)
-            .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
-            .env_remove("CLAUDECODE")
-            .stdin(Stdio::null())
-            .status()
-            .unwrap();
-        out
+        #[cfg(windows)]
+        {
+            // No wrapper shells on Windows: the runner starts straight from here.
+            assert!(wrapper.is_none(), "wrappers are Unix-only");
+            std::process::Command::new(&me)
+                .args(["run::tests::runner_entry", "--exact", "-q"])
+                .current_dir(folder)
+                .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
+                .env_remove("CLAUDECODE")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            return out;
+        }
+        #[cfg(unix)]
+        {
+            let runner = format!("'{}' run::tests::runner_entry --exact -q >/dev/null 2>&1", me.display());
+            // `; true` keeps the wrapper shell alive as the runner's parent.
+            let shell = wrapper.map(Path::to_path_buf).unwrap_or_else(|| "/bin/sh".into());
+            std::process::Command::new("setsid")
+                .args(["-f", &shell.display().to_string(), "-c", &format!("{runner}; true")])
+                .current_dir(folder)
+                .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
+                .env_remove("CLAUDECODE")
+                .stdin(Stdio::null())
+                .status()
+                .unwrap();
+            out
+        }
     }
 
     /// The output and exit code of a run [`start`]ed, once it's done.

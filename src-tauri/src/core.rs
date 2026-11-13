@@ -2830,6 +2830,62 @@ mod tests {
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
     }
 
+    /// `keyhandoff run` on any system: the program's .env holds only a
+    /// pointer; the first run asks naming the exact command, the program gets
+    /// the key and every printed form of it is hidden; the same command then
+    /// runs without asking, and an edited script asks again. On Windows the
+    /// key goes in the program's environment (no TLS hook there yet), so this
+    /// is the whole check there.
+    #[test]
+    fn keyhandoff_run_gives_an_approved_command_its_key_and_hides_it() {
+        use crate::run::tests::{finished, start};
+        use std::process::Command;
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        if Command::new(python).arg("--version").output().is_err() || (cfg!(unix) && Command::new("setsid").arg("--version").output().is_err()) {
+            eprintln!("skipped: no {python} or setsid");
+            return;
+        }
+        // No known prefix and no server set: the key itself, on every system.
+        const SECRET: &[u8] = b"dp_synthetic_RunKey0123456789abcdefXYZ";
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        h.lock().vault.add("Dialpad", None, None, &Secret::new(SECRET.to_vec()), Keep::Forever, now());
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+        let project = me.data.join("project");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join(".env"), "DIALPAD_API_KEY=handoff:Dialpad\n").unwrap();
+        let script = "import base64, os\nk = os.environ['DIALPAD_API_KEY']\nprint('plain', k)\nprint('b64', base64.b64encode(k.encode()).decode())\nprint('hex', k.encode().hex())\nprint('rev', k[::-1])\nprint('len', len(k))\n";
+        fs::write(project.join("report.py"), script).unwrap();
+
+        let out = start(&project, &profile, &[python, "report.py"], None);
+        let shown = answer_when_asked(&h, Answer::Always);
+        let (text, code) = finished(&out);
+        assert_eq!(code, 0, "{text}");
+        // The runner names the program it found on PATH: python.exe on Windows.
+        let named = if cfg!(windows) { format!("{python}.exe report.py") } else { format!("{python} report.py") };
+        assert_eq!(shown.command.as_deref(), Some(named.as_str()), "{shown:?}");
+        assert!(text.contains(&format!("len {}", SECRET.len())), "the script had the key: {text}");
+        assert_eq!(text.matches("[KeyHandoff: Dialpad hidden]").count(), 4, "{text}");
+        for window in SECRET.windows(crate::mask::FRAGMENT) {
+            assert!(!text.contains(std::str::from_utf8(window).unwrap()), "leaked: {text}");
+        }
+
+        // Approved: the same command runs without asking.
+        let (text, code) = finished(&start(&project, &profile, &[python, "report.py"], None));
+        assert_eq!(code, 0, "{text}");
+
+        // An edited script is a different command: it asks again.
+        fs::write(project.join("report.py"), format!("{script}print('edited')\n")).unwrap();
+        let out = start(&project, &profile, &[python, "report.py"], None);
+        answer_when_asked(&h, Answer::Deny);
+        let (text, code) = finished(&out);
+        assert_ne!(code, 0, "denied: {text}");
+        assert!(text.contains("Not allowed"), "{text}");
+        let _ = fs::remove_dir_all(me.data);
+    }
+
     /// FEAT-08's check, for real: `keyhandoff run` (this test binary, started
     /// detached as the runner) gives an approved script its key and masks
     /// every form it prints, from it and from a shell it starts; an edited

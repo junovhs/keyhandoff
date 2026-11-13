@@ -230,6 +230,15 @@ fn is_own_executable(program: &std::path::Path) -> bool {
     if same_file(&exe, program) {
         return true;
     }
+    // The console `keyhandoff` command (src/bin/keyhandoff-cli.rs), which
+    // Windows terminals use because the app is a GUI program: installed as
+    // `bin\keyhandoff.exe` beside the app, or `keyhandoff-cli` in a build folder.
+    if let Some(dir) = exe.parent() {
+        let cli = [dir.join("bin").join(if cfg!(windows) { "keyhandoff.exe" } else { "keyhandoff" }), dir.join(if cfg!(windows) { "keyhandoff-cli.exe" } else { "keyhandoff-cli" })];
+        if cli.iter().any(|c| same_file(c, program)) {
+            return true;
+        }
+    }
     let own = OWN.get_or_init(|| crate::os::file_hash(&exe));
     own.is_some() && crate::os::file_hash(program) == *own
 }
