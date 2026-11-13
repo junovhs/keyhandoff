@@ -135,6 +135,8 @@ keyhandoff run -- python report.py
 
 On Linux the program only ever holds a look-alike key. KeyHandoff swaps the real one in only inside an encrypted connection to the key's own server, after checking that server's certificate itself. A look-alike headed anywhere else is a tripwire: it's stopped before it leaves, and you're told which command tried to send it, and where.
 
+On Windows the installer puts the `keyhandoff` command on your PATH, so this works in any new terminal (cmd, PowerShell, Git Bash). There the program gets the real key in its environment for now, with every printed form of it hidden; look-alikes on Windows wait for the schannel hook.
+
 <details>
 <summary><b>The full walkthrough</b></summary>
 <br>
