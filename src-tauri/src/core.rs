@@ -176,6 +176,15 @@ struct Core {
     tripwire: Tripwire,
     program: Option<ProgramAsk>,
     asks: u64,
+    /// A .env file chosen for import, until imported or closed. Its values
+    /// stay here; the screens get the variable names.
+    import: Option<EnvImport>,
+}
+
+struct EnvImport {
+    file: PathBuf,
+    text: Zeroizing<String>,
+    entries: Vec<crate::envfile::Entry>,
 }
 
 pub struct Handoff {
@@ -342,6 +351,27 @@ pub struct View {
     pub pairing: Option<PairingView>,
     /// The latest attempt to send a placeholder somewhere else, until dismissed.
     pub alert: Option<AlertView>,
+    /// A .env file being imported: its variables, by name.
+    pub import: Option<ImportView>,
+}
+
+/// A .env file chosen for import. Names only: no value reaches the screens.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ImportView {
+    /// `.env`
+    pub file: String,
+    /// `~/tp-dialpad`
+    pub folder: String,
+    pub vars: Vec<ImportVarView>,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ImportVarView {
+    pub var: String,
+    /// It looks like a key, so it starts ticked.
+    pub likely: bool,
+    /// A key you already keep has this exact value: importing points at it.
+    pub kept_as: Option<String>,
 }
 
 /// A program tried to send a key's placeholder somewhere other than the
@@ -398,6 +428,7 @@ impl Handoff {
             tripwire,
             program: None,
             asks: 0,
+            import: None,
         };
         let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
         handoff.lock().tick()?;
@@ -1079,6 +1110,70 @@ impl Handoff {
         core.remember_keep(keep)?;
         core.safe = Safe::Off;
         core.notice = Some(format!("{label} is in your keys."));
+        Ok(())
+    }
+
+    /// Open a .env file for import: its variables are listed by name, and
+    /// nothing changes until [`Handoff::finish_import`].
+    pub fn start_import(&self, file: &Path) -> Result<(), String> {
+        let text = Zeroizing::new(fs::read_to_string(file).map_err(|e| format!("Couldn't read {}: {e}", display_name(file)))?);
+        let entries = crate::envfile::entries(&text);
+        if entries.is_empty() {
+            return Err(format!("{} has no values to import.", display_name(file)));
+        }
+        let mut core = self.lock();
+        core.close_safe();
+        core.import = Some(EnvImport { file: file.to_path_buf(), text, entries });
+        Ok(())
+    }
+
+    pub fn close_import(&self) {
+        self.lock().import = None;
+    }
+
+    /// Seal the chosen variables of the .env file being imported into the
+    /// vault, then rewrite their lines as pointers. A value you already keep
+    /// isn't kept twice: its line points at the key you have. The vault is
+    /// saved before the file changes, so a failed rewrite loses nothing.
+    pub fn finish_import(&self, vars: &[String], keep: Keep) -> Result<(), String> {
+        let mut core = self.lock();
+        let import = core.import.take().ok_or("No .env file is being imported.")?;
+        let name = display_name(&import.file);
+        let now_text = Zeroizing::new(fs::read_to_string(&import.file).map_err(|e| format!("Couldn't read {name}: {e}"))?);
+        if *now_text != *import.text {
+            return Err(format!("{name} changed since you opened it. Import it again."));
+        }
+        let chosen: Vec<&crate::envfile::Entry> = import.entries.iter().filter(|e| vars.contains(&e.var)).collect();
+        if chosen.is_empty() {
+            core.import = Some(import);
+            return Err("Choose at least one key.".into());
+        }
+        let t = now();
+        let mut names = Vec::with_capacity(chosen.len());
+        let mut added = 0;
+        for entry in &chosen {
+            let secret = Secret::new(entry.value.as_bytes().to_vec());
+            let label = match core.kept_with_value(secret.expose()) {
+                Some(label) => label,
+                None => {
+                    let label = core.vault.free_name(&entry.var);
+                    core.vault.add(&label, None, None, &secret, keep, t);
+                    added += 1;
+                    label
+                }
+            };
+            names.push(label);
+        }
+        core.store.save_vault(&core.vault)?;
+        core.remember_keep(keep)?;
+        let done: Vec<_> = chosen.iter().copied().zip(names.iter().map(String::as_str)).collect();
+        let rewritten = crate::envfile::with_pointers(&import.text, &done);
+        os::write_private(&import.file, rewritten.as_bytes()).map_err(|e| format!("Your keys are kept, but {name} couldn't be rewritten: {e}"))?;
+        let n = chosen.len();
+        core.notice = Some(match (n, added) {
+            (1, _) => format!("{name} points to {} now.", names[0]),
+            _ => format!("{n} keys moved out of {name}. It points to them now."),
+        });
         Ok(())
     }
 
@@ -1842,6 +1937,7 @@ impl Core {
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
             nearby: self.nearby.is_some(),
             pairing: self.pairing.as_ref().map(|p| self.pairing_view(p)),
+            import: self.import.as_ref().map(|i| self.import_view(i)),
             alert: self.tripwire.alerts.iter().rev().find(|a| !a.seen).map(|a| AlertView {
                 key: a.key.clone(),
                 command: a.command.clone(),
@@ -1866,6 +1962,27 @@ impl Core {
             members: self.team_members(team).into_iter().map(|c| self.contact_view(c)).collect(),
             keys: self.vault.items().iter().filter(|i| i.team.as_deref() == Some(team.name.as_str())).count(),
         }
+    }
+
+    fn import_view(&self, import: &EnvImport) -> ImportView {
+        ImportView {
+            file: display_name(&import.file),
+            folder: import.file.parent().map(home_relative).unwrap_or_default(),
+            vars: import
+                .entries
+                .iter()
+                .map(|e| ImportVarView {
+                    var: e.var.clone(),
+                    likely: crate::envfile::looks_secret(&e.var, &e.value),
+                    kept_as: self.kept_with_value(e.value.as_bytes()),
+                })
+                .collect(),
+        }
+    }
+
+    /// The name of a kept key whose value is exactly `value`.
+    fn kept_with_value(&self, value: &[u8]) -> Option<String> {
+        self.vault.items().iter().find(|i| self.vault.secret(i.id).is_some_and(|s| s.expose() == value)).map(|i| i.label.clone())
     }
 
     fn program_view(&self, ask: &ProgramAsk) -> ProgramView {
@@ -2828,6 +2945,57 @@ mod tests {
     fn node_loader_gets_the_key_through_the_socket() {
         let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\nconsole.log(process.env.DIALPAD_LIVE_API_KEY);\n";
         loader_gets_the_key_through_the_socket("node", "keyhandoff_env.mjs", ("check.mjs", script));
+    }
+
+    /// FEAT-12: importing a .env seals the chosen values, reuses a key
+    /// already kept with the same value, rewrites only those lines as
+    /// pointers, and the pointers then give a program the same values.
+    #[test]
+    fn importing_a_dotenv_seals_its_keys_and_leaves_pointers() {
+        const DIALPAD: &str = "dp_synthetic_import_0123456789abcdef";
+        const ANTHROPIC: &str = "sk-ant-synthetic-import-abcdef0123456789";
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        // Already kept under another name: the import points at it.
+        h.lock().vault.add("Anthropic", None, None, &Secret::new(ANTHROPIC.as_bytes().to_vec()), Keep::Forever, now());
+        let project = me.data.join("tp-dialpad");
+        fs::create_dir_all(&project).unwrap();
+        let env = project.join(".env");
+        let original = format!("# keys\r\nDIALPAD_API_KEY={DIALPAD}\r\nFORMSITE_API_BASE=https://fs1.formsite.com/api/v2\r\nANTHROPIC_API_KEY=\"{ANTHROPIC}\"\r\nJEV_API_KEY=handoff:Jev\r\n");
+        fs::write(&env, &original).unwrap();
+
+        h.start_import(&env).unwrap();
+        let shown = h.view().import.unwrap();
+        assert_eq!(shown.file, ".env");
+        let vars: Vec<_> = shown.vars.iter().map(|v| (v.var.as_str(), v.likely, v.kept_as.as_deref())).collect();
+        assert_eq!(vars, [("DIALPAD_API_KEY", true, None), ("FORMSITE_API_BASE", false, None), ("ANTHROPIC_API_KEY", true, Some("Anthropic"))]);
+        let screens = serde_json::to_string(&h.view()).unwrap();
+        assert!(!screens.contains(DIALPAD) && !screens.contains(ANTHROPIC), "values never reach the screens");
+
+        h.finish_import(&["DIALPAD_API_KEY".into(), "ANTHROPIC_API_KEY".into()], Keep::Forever).unwrap();
+        assert!(h.view().import.is_none());
+        let after = fs::read_to_string(&env).unwrap();
+        assert_eq!(after, "# keys\r\nDIALPAD_API_KEY=handoff:DIALPAD_API_KEY\r\nFORMSITE_API_BASE=https://fs1.formsite.com/api/v2\r\nANTHROPIC_API_KEY=handoff:Anthropic\r\nJEV_API_KEY=handoff:Jev\r\n");
+        let labels: Vec<_> = h.view().keys.iter().map(|k| k.label.clone()).collect();
+        assert_eq!(labels.len(), 2, "the Anthropic key isn't kept twice: {labels:?}");
+        assert!(!files_contain(&me.data, DIALPAD.as_bytes()) && !files_contain(&me.data, ANTHROPIC.as_bytes()), "no plaintext left on disk");
+
+        // The pointers give a program the values the file held.
+        let script = peer("/usr/bin/python3", &project.display().to_string());
+        let asked = {
+            let (h, script) = (h.clone(), script.clone());
+            std::thread::spawn(move || h.give(&script, &["DIALPAD_API_KEY".into(), "Anthropic".into()]).map(|s| s.iter().map(|s| s.expose().to_vec()).collect::<Vec<_>>()))
+        };
+        answer_when_asked(&h, Answer::Once);
+        assert_eq!(asked.join().unwrap().unwrap(), [DIALPAD.as_bytes().to_vec(), ANTHROPIC.as_bytes().to_vec()]);
+
+        // A file that changed after it was opened isn't rewritten.
+        fs::write(&env, "NEW_TOKEN=tok_synthetic_0123456789\n").unwrap();
+        h.start_import(&env).unwrap();
+        fs::write(&env, "NEW_TOKEN=tok_synthetic_0123456789\nOTHER=1\n").unwrap();
+        assert!(h.finish_import(&["NEW_TOKEN".into()], Keep::Forever).unwrap_err().contains("changed"));
+        assert_eq!(fs::read_to_string(&env).unwrap(), "NEW_TOKEN=tok_synthetic_0123456789\nOTHER=1\n");
+        let _ = fs::remove_dir_all(me.data);
     }
 
     /// `keyhandoff run` on any system: the program's .env holds only a

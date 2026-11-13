@@ -7,6 +7,7 @@
 //! commands, the one window and opening files.
 
 mod core;
+mod envfile;
 mod folder;
 mod mask;
 mod nearby;
@@ -398,6 +399,30 @@ fn keep_own(app: AppHandle, h: H, label: String, keep: Keep) -> Result<(), Strin
     done(&app, h.keep_own(&label, keep))
 }
 
+/// The file picker for a .env file to import. Off the main thread, since it
+/// waits for the person to choose; returns the path, or none if cancelled.
+#[tauri::command]
+async fn pick_env_file(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog().file().set_title("Choose a .env file to import").blocking_pick_file().and_then(|f| f.into_path().ok()).map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+fn start_import(app: AppHandle, h: H, file: String) -> Result<(), String> {
+    done(&app, h.start_import(&PathBuf::from(file)))
+}
+
+#[tauri::command]
+fn finish_import(app: AppHandle, h: H, vars: Vec<String>, keep: Keep) -> Result<(), String> {
+    done(&app, h.finish_import(&vars, keep))
+}
+
+#[tauri::command]
+fn close_import(app: AppHandle, h: H) {
+    h.close_import();
+    changed(&app);
+}
+
 #[tauri::command]
 fn copy_sealed(app: AppHandle, h: H) -> Result<(), String> {
     done(&app, h.copy_sealed())
@@ -552,7 +577,7 @@ pub fn run() {
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_hosts, set_name, answer, dismiss, ready, update_now
         ])
         .setup(move |app| {
