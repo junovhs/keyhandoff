@@ -314,3 +314,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .fact.on svg { color: var(--accent-ink); }
 .inline-ico { display: inline; vertical-align: -2px; }
 .btn-row .btn { min-width: 0; }
+.btn-row.pinned { position: sticky; bottom: -20px; margin-bottom: -20px; padding: 10px 0 20px; background: var(--ground); }
+.flow-ico { width: 52px; height: 52px; border-radius: 14px; }
+.flow { padding-top: 0; }

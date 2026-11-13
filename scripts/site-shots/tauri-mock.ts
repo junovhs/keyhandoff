@@ -106,6 +106,19 @@ const SCENES: Record<string, Partial<View>> = {
   "listening-you": { safe: safe("listening", null) },
   "caught-you": { safe: safe("caught", null) },
   "home-added": { notice: "OpenAI is in your keys." },
+  import: {
+    import: {
+      file: ".env",
+      folder: "~/tp-dialpad",
+      vars: [
+        { var: "DIALPAD_API_KEY", likely: true, kept_as: null },
+        { var: "FORMSITE_API_BASE", likely: false, kept_as: null },
+        { var: "ANTHROPIC_API_KEY", likely: true, kept_as: "Anthropic" },
+        { var: "PIPEDRIVE_API_TOKEN", likely: true, kept_as: null },
+      ],
+    },
+  },
+  "home-imported": { notice: "3 keys moved out of .env. It points to them now." },
   program: {
     program: { name: "python3", path: "/usr/bin/python3", command: "python3 dialpad_report.py", folder: "~/code/report-bot", keys: ["Dialpad"], agent: null },
   },

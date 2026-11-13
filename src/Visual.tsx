@@ -77,7 +77,7 @@ export function ImportSheet({ imp, keep, run }: { imp: ImportView; keep: Keep; r
   const n = chosen.size;
   return (
     <div className="sheet" ref={sheet}>
-      <Flow from={<FileCode2 size={30} strokeWidth={1.5} />} fromLabel={imp.file} to={<Vault size={30} strokeWidth={1.5} />} toLabel="Your keys" />
+      <Flow from={<FileCode2 size={24} strokeWidth={1.5} />} fromLabel={imp.file} to={<Vault size={24} strokeWidth={1.5} />} toLabel="Your keys" />
       <div className="center-text">
         <h2 className="title">Seal these keys</h2>
         <p className="help mono">{imp.folder}</p>
@@ -106,7 +106,7 @@ export function ImportSheet({ imp, keep, run }: { imp: ImportView; keep: Keep; r
       </div>
       <p className="help center">Unticked lines stay as they are. Ticked ones become <span className="mono">handoff:</span> pointers.</p>
       <span className="grow-space" />
-      <div className="btn-row">
+      <div className="btn-row pinned">
         <button className="btn secondary" onClick={() => void run(api.closeImport())}>Cancel</button>
         <button className="btn primary grow" disabled={n === 0} onClick={() => void run(api.finishImport([...chosen], how))}>
           <ShieldCheck size={18} strokeWidth={2} aria-hidden />
