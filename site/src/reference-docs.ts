@@ -219,7 +219,7 @@ export const reference: DocReference = {
             { kind: "callout", tone: "warn", text: "An approval is a decision, not a lock: any program running as you can start the same interpreter in the same folder and match it." },
           ],
           code: [
-            { title: "What the window shows", samples: [{ label: "Prompt", language: "text", code: "python3 wants Dialpad\n\n  /usr/bin/python3\n  python3 dialpad_report.py\n  ~/code/report-bot\n\n[ Deny ]  [ Just this once ]  [ Always allow ]\n" }] },
+            { title: "What the window shows", samples: [{ label: "Prompt", language: "text", code: "python3 wants Dialpad\n\n  /usr/bin/python3\n  python3 dialpad_report.py\n  ~/code/report-bot\n\n[ Deny ]  [ Just once ]  [ Always allow ]\n" }] },
           ],
         },
       ],
