@@ -107,7 +107,7 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
         names.dedup();
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(options.command[1..].iter().cloned());
-        let (mut reply, conn) = ask(&options.profile, &names, &argv)?;
+        let (mut reply, conn) = ask(&options.profile, &names, &argv, hooked(&program))?;
         for (var, name) in &pointers {
             let value = reply.values.get(name).ok_or_else(|| format!("KeyHandoff didn't send {name}."))?;
             env.push((var.clone(), Zeroizing::new(value.clone())));
@@ -165,9 +165,10 @@ fn pump(mut from: impl Read + Send + 'static, mut to: Out, mut masker: Masker) -
 
 /// Ask the running app for `names`, naming the command that will get them.
 /// Returns the reply and the connection, which a run with placeholders holds.
-fn ask(profile: &str, names: &[&str], argv: &[String]) -> Result<(Reply, Box<dyn crate::os::KeyStream>), String> {
+/// `placeholders`: the program can take placeholders, because the hook for it is loaded.
+fn ask(profile: &str, names: &[&str], argv: &[String], placeholders: bool) -> Result<(Reply, Box<dyn crate::os::KeyStream>), String> {
     let mut conn = crate::os::connect_keys(profile).map_err(|_| "KeyHandoff isn't running. Open it and try again.".to_string())?;
-    let mut message = serde_json::to_vec(&serde_json::json!({ "names": names, "run": argv, "placeholders": cfg!(target_os = "linux") })).map_err(|e| e.to_string())?;
+    let mut message = serde_json::to_vec(&serde_json::json!({ "names": names, "run": argv, "placeholders": placeholders })).map_err(|e| e.to_string())?;
     message.push(b'\n');
     conn.write_all(&message).map_err(|e| e.to_string())?;
     let mut line = Zeroizing::new(String::new());
@@ -219,8 +220,53 @@ fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>
     ])
 }
 
-/// Placeholders need the TLS hook, which is built for Linux only so far.
-#[cfg(not(target_os = "linux"))]
+/// On Windows only Node.js is hooked so far (`hook/keyhandoff_node.cjs`,
+/// which needs no native code): placeholders go to a run whose program is
+/// Node or a Node launcher, and every other program gets the key itself.
+#[cfg(windows)]
+const NODE_HOOK: &[u8] = include_bytes!("../hook/keyhandoff_node.cjs");
+
+/// Whether `program` is Node.js or one of the launchers that start it.
+#[cfg(windows)]
+fn hooked(program: &Path) -> bool {
+    let name = program.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    ["node.exe", "npm.cmd", "npx.cmd", "pnpm.cmd", "pnpm.exe", "yarn.cmd", "tsx.cmd"].contains(&name.as_str())
+}
+
+#[cfg(target_os = "linux")]
+fn hooked(_program: &Path) -> bool {
+    true
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn hooked(_program: &Path) -> bool {
+    false
+}
+
+/// The environment that loads the Node.js hook: written once to the temp
+/// folder, named by its contents, with the key pipe to ask over.
+#[cfg(windows)]
+fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
+    use sha2::{Digest, Sha256};
+    let dir = crate::os::runtime_dir().join("keyhandoff-hook");
+    crate::os::private_dir(&dir).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
+    let node = dir.join(format!("node-{}.cjs", Sha256::digest(NODE_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()));
+    if std::fs::read(&node).ok().as_deref() != Some(NODE_HOOK) {
+        crate::os::write_private(&node, NODE_HOOK).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
+    }
+    // NODE_OPTIONS reads backslashes as escapes; Node takes forward slashes.
+    let require = node.display().to_string().replace('\\', "/");
+    let node_options = match std::env::var("NODE_OPTIONS") {
+        Ok(old) if !old.is_empty() => format!("--require \"{require}\" {old}"),
+        _ => format!("--require \"{require}\""),
+    };
+    Ok(vec![
+        ("NODE_OPTIONS".into(), Zeroizing::new(node_options)),
+        ("KEYHANDOFF_HOOK".into(), Zeroizing::new(format!("{token}:{}", crate::os::key_socket(profile)))),
+    ])
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn hook_env(_profile: &str, _token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
     Err("Placeholders need KeyHandoff's TLS hook, which isn't built for this system yet.".into())
 }

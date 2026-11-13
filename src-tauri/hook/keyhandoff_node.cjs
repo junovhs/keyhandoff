@@ -20,6 +20,22 @@ const value = process.env[ENV];
 if (value && /^[0-9a-f]{64}:/.test(value)) {
   delete process.env[ENV];
   install(value.slice(0, 64), value.slice(65));
+  // On Windows there's no C hook to hand the token to programs this one
+  // starts, so do it here, as the C hook does on Linux: a Node program
+  // under `npm run` or started by another Node program gets this hook too.
+  if (process.platform === "win32") passOn(value);
+}
+
+/** Put KEYHANDOFF_HOOK back into the environment of every process this one starts. */
+function passOn(value) {
+  const { ChildProcess } = require("node:child_process");
+  const spawn = ChildProcess.prototype.spawn;
+  ChildProcess.prototype.spawn = function (options) {
+    if (options && Array.isArray(options.envPairs) && !options.envPairs.some((p) => p.startsWith(ENV + "="))) {
+      options.envPairs = [...options.envPairs, `${ENV}=${value}`];
+    }
+    return spawn.call(this, options);
+  };
 }
 
 function install(token, socketPath) {
@@ -194,10 +210,12 @@ function install(token, socketPath) {
       } catch {
         return original.call(socket, writev, data, encoding, cb);
       }
+      // The name the connection was made for is only known once it's up.
+      const named = (socket.servername || destination).toLowerCase();
       for (const swap of hits) {
         const host = verifiedHost(socket, swap);
         if (!host) {
-          await report(swap, destination);
+          await report(swap, named);
           return refuse("KeyHandoff stopped a key's stand-in going somewhere else");
         }
         const key = await keyFor(swap, host);

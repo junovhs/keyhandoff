@@ -3000,6 +3000,76 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
+    /// Placeholders on Windows, for Node.js: under `keyhandoff run` a Node
+    /// program holds only a stand-in; the server verified as the key's host
+    /// (its certificate from the key's own CA) gets the real key, and a
+    /// stranger with a valid certificate for another name gets nothing: the
+    /// write is refused and the attempt recorded.
+    #[cfg(windows)]
+    #[test]
+    fn windows_node_gets_a_stand_in_swapped_only_for_its_verified_host() {
+        use crate::run::tests::{finished, start};
+        use std::process::{Command, Stdio};
+        const STRIPE: &[u8] = b"sk_test_51SyntheticWinNodeKey0123456789abcXYZ";
+        let have = |p: &str, arg: &str| Command::new(p).arg(arg).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
+        if !(have("node", "--version") && have("sh", "--version") && have("openssl", "version")) {
+            eprintln!("skipped: needs node, and sh and openssl (Git for Windows)");
+            return;
+        }
+        let me = app("Win");
+        let h = me.handoff.clone();
+        let dir = me.data.join("node");
+        fs::create_dir_all(&dir).unwrap();
+        let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval/coverage");
+        fs::copy(eval.join("clients/node_https.mjs"), dir.join("node_https.mjs")).unwrap();
+        let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
+        sh("MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
+        let mut servers = Vec::new();
+        let mut ports = serde_json::Map::new();
+        for name in ["api.stripe.test", "evil.test"] {
+            sh(&format!("MSYS_NO_PATHCONV=1 openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
+            let mut child = Command::new("node")
+                .args([eval.join("server.mjs").display().to_string(), name.into(), format!("{name}.pem"), format!("{name}.key"), format!("{name}.jsonl")])
+                .current_dir(&dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            let mut line = String::new();
+            std::io::BufRead::read_line(&mut std::io::BufReader::new(child.stdout.take().unwrap()), &mut line).unwrap();
+            ports.insert(name.into(), serde_json::json!(line.trim().parse::<u16>().unwrap()));
+            servers.push(child);
+        }
+        fs::write(dir.join("matrix.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "ports": ports }).to_string()).unwrap();
+        fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
+        {
+            let mut core = h.lock();
+            let id = core.vault.add("Stripe", None, None, &Secret::new(STRIPE.to_vec()), Keep::Forever, now());
+            core.vault.set_hosts(id, vec!["api.stripe.test".into()], Some(dir.join("ca.pem")));
+        }
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |peer, stream| crate::pointer::serve(&served, &peer, stream))).unwrap();
+
+        let out = start(&dir, &profile, &["node", "node_https.mjs"], None);
+        answer_when_asked(&h, Answer::Once);
+        let (text, code) = finished(&out);
+        for mut s in servers {
+            let _ = s.kill();
+            let _ = s.wait();
+        }
+        assert_eq!(code, 0, "{text}");
+        let key = std::str::from_utf8(STRIPE).unwrap();
+        let got = |name: &str| fs::read_to_string(dir.join(format!("{name}.jsonl"))).unwrap_or_default();
+        assert!(got("api.stripe.test").contains(&format!("Bearer {key}")), "the key's server got the key: {text}\n{}", got("api.stripe.test"));
+        assert!(text.contains("evil.test refused"), "{text}");
+        assert!(!got("evil.test").contains("Bearer"), "the stranger got nothing: {}", got("evil.test"));
+        let alert = h.view().alert.expect("the attempt is recorded");
+        assert_eq!((alert.key.as_str(), alert.destination.as_str()), ("Stripe", "evil.test"));
+        assert!(!text.contains(key), "the program never printed the key: {text}");
+        let _ = fs::remove_dir_all(me.data);
+    }
+
     /// `keyhandoff run` on any system: the program's .env holds only a
     /// pointer; the first run asks naming the exact command, the program gets
     /// the key and every printed form of it is hidden; the same command then

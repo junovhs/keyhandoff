@@ -15,7 +15,7 @@ pub use capture::arm_capture;
 pub use clipboard::{offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
-pub use keys::{agent, connect_keys, descends_from, listen_for_keys};
+pub use keys::{agent, connect_keys, descends_from, listen_for_keys, pipe as key_socket};
 pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};
 
 /// Whether this session's screen is locked (`WTS_SESSIONSTATE_LOCK`, which
