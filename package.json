@@ -1,7 +1,7 @@
 {
   "name": "keyhandoff",
   "private": true,
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "Apache-2.0",
   "version": "0.1.0",
   "type": "module",
   "scripts": {

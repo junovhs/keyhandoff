@@ -3,7 +3,7 @@ name = "keyhandoff"
 version = "0.1.0"
 description = "Hand off and use secrets without anyone seeing them"
 edition = "2021"
-license-file = "../LICENSE.md"
+license = "Apache-2.0"
 # The app; `keyhandoff-cli` is the console `keyhandoff` command for Windows terminals.
 default-run = "keyhandoff"
 

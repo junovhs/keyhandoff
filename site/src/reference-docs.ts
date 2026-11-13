@@ -523,7 +523,7 @@ export const reference: DocReference = {
           question: "How do I build KeyHandoff from source?",
           answer: "KeyHandoff builds with Rust, Node.js and the Tauri prerequisites: npm install, then npm run tauri dev to run with hot reload, or npm run tauri build for an installer. Outside contributions aren't being accepted right now.",
           blocks: [
-            { kind: "p", text: "The app is under the PolyForm Shield License 1.0.0, free to read and use, including at work; the sealing crate is Apache 2.0. The code layout is in [architecture.md](" + GITHUB + "/blob/main/docs/architecture.md)." },
+            { kind: "p", text: "KeyHandoff is open source under the Apache License 2.0, app and sealing crate alike; forks keep the NOTICE file and use their own name (see TRADEMARKS.md). The code layout is in [architecture.md](" + GITHUB + "/blob/main/docs/architecture.md)." },
           ],
           code: [
             { title: "Build", samples: [{ label: "Shell", language: "sh", code: "git clone " + GITHUB + "\ncd keyhandoff\nnpm install\nnpm run tauri dev                    # run with hot reload\nnpm run tauri build                  # installer\nnpm run tauri build -- --no-bundle   # just the binary\n" }] },

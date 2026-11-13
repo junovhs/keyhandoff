@@ -7,7 +7,7 @@
   <a href="https://github.com/junovhs/keyhandoff/actions/workflows/check.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/junovhs/keyhandoff/check.yml?branch=main&style=for-the-badge&labelColor=0b1220&label=checks"></a>
   <img alt="Windows and Linux" src="https://img.shields.io/badge/platform-windows%20%7C%20linux-6aa2ff?style=for-the-badge&labelColor=0b1220">
   <img alt="No servers, no accounts" src="https://img.shields.io/badge/servers-none-14b88a?style=for-the-badge&labelColor=0b1220">
-  <a href="LICENSE.md"><img alt="PolyForm Shield license" src="https://img.shields.io/badge/license-PolyForm%20Shield-a7b0c0?style=for-the-badge&labelColor=0b1220"></a>
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache%202.0-a7b0c0?style=for-the-badge&labelColor=0b1220"></a>
 </p>
 
 <p align="center">
@@ -263,10 +263,9 @@ The banner and GIFs come from the website's own animations. Build the site (`npm
 
 ## License
 
-KeyHandoff is free and open to read, including for use at work.
+KeyHandoff is free and open source under the [Apache License 2.0](LICENSE): use it, change it and ship it, at work or anywhere else. The sealing library, [`crates/seal`](crates/seal), is under the same license.
 
-- The app is under the [PolyForm Shield License 1.0.0](LICENSE.md), which doesn't allow using it in a product that competes with KeyHandoff. It isn't an OSI-approved open source license.
-- The sealing library, [`crates/seal`](crates/seal), is under the [Apache License 2.0](crates/seal/LICENSE), so it can be reviewed and reused freely.
+Forks keep the [NOTICE](NOTICE) file, which credits the original. "KeyHandoff" and its logo are trademarks, so a fork needs its own name and logo: see [TRADEMARKS.md](TRADEMARKS.md).
 
 Copyright © 2026 Spencer Nunamaker. Outside contributions aren't being accepted right now.
 
