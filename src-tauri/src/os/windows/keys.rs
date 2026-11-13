@@ -135,7 +135,23 @@ fn current_dir(process: HANDLE) -> Option<PathBuf> {
     let path = parameter_string(process, 0x38)?;
     // Always ends in a backslash; keep it only for a drive root.
     let path = if path.len() > 3 { path.trim_end_matches('\\') } else { &path };
-    Some(PathBuf::from(path))
+    Some(long_path(path))
+}
+
+/// The long form of `path`: a folder reached through a short 8.3 name
+/// (`C:\Users\SPENCE~1`) is the same folder, so it must look the same to
+/// approvals. Unchanged if Windows can't expand it.
+fn long_path(path: &str) -> PathBuf {
+    use ::windows::core::HSTRING;
+    use ::windows::Win32::Storage::FileSystem::GetLongPathNameW;
+    let short = HSTRING::from(path);
+    let mut buf = vec![0u16; 32 * 1024];
+    // SAFETY: `buf` is writable for its length; the return is the length written.
+    let len = unsafe { GetLongPathNameW(&short, Some(&mut buf)) } as usize;
+    if len == 0 || len >= buf.len() {
+        return PathBuf::from(path);
+    }
+    PathBuf::from(String::from_utf16_lossy(&buf[..len]))
 }
 
 /// Windows quoting, enough for display: spaces split, double quotes group.

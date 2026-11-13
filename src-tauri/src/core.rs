@@ -2741,7 +2741,6 @@ mod tests {
     /// only a pointer, with the loader copied next to it, gets the key over the
     /// socket after Always allow; another process asking over the same socket
     /// gets nothing and a prompt.
-    #[cfg(target_os = "linux")]
     fn loader_gets_the_key_through_the_socket(program: &str, loader: &str, script: (&str, &str)) {
         let script_name = script.0;
         use sha2::{Digest, Sha256};
@@ -2778,7 +2777,8 @@ mod tests {
             assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
             // The script prints the key's hash, then the key itself, which the loader hides.
             let out = String::from_utf8(out.stdout).unwrap();
-            let (hash, printed) = out.trim().split_once('\n').unwrap();
+            let mut lines = out.lines();
+            let (hash, printed) = (lines.next().unwrap(), lines.next().unwrap_or_default());
             assert_eq!(printed, "[KeyHandoff: Dialpad live hidden]");
             hash.to_string()
         };
@@ -2789,17 +2789,19 @@ mod tests {
             let shown = answer_when_asked(&h, Answer::Always);
             assert!(shown.name.starts_with(program.trim_end_matches('3')), "{shown:?}");
             assert_eq!(shown.command, Some(format!("{program} {script_name}")), "the prompt names the script");
-            assert_eq!(shown.folder, Some(home_relative(&project.canonicalize().unwrap())));
+            // Windows canonical paths carry a `\\?\` prefix the prompt never shows.
+            let canonical = project.canonicalize().unwrap();
+            let canonical = canonical.to_str().unwrap().trim_start_matches(r"\\?\");
+            assert_eq!(shown.folder, Some(home_relative(Path::new(canonical))));
             script.join().unwrap()
         });
         assert_eq!(first, expected);
         assert_eq!(run(), expected, "allowed: the second run needs no prompt");
 
         // This test binary is a different program: it gets a prompt and, denied, nothing.
-        let sock = os::runtime_dir().join(format!("handoff-{profile}-keys.sock"));
         let reply = std::thread::scope(|s| {
             let asking = s.spawn(|| {
-                let mut conn = std::os::unix::net::UnixStream::connect(&sock).unwrap();
+                let mut conn = os::connect_keys(&profile).unwrap();
                 conn.write_all(b"{\"names\":[\"Dialpad live\"]}\n").unwrap();
                 let mut line = String::new();
                 BufReader::new(conn).read_line(&mut line).unwrap();
@@ -2811,18 +2813,17 @@ mod tests {
         assert!(reply.contains("\"error\"") && !reply.contains("sk-synthetic"), "{reply}");
 
         assert!(!files_contain(&project, KEY), "the project holds no key");
-        let _ = fs::remove_file(sock);
+        #[cfg(unix)]
+        let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{profile}-keys.sock")));
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn python_loader_gets_the_key_through_the_socket() {
         let script = "import hashlib, os, keyhandoff_env\nkeyhandoff_env.load()\nprint(hashlib.sha256(os.environ['DIALPAD_LIVE_API_KEY'].encode()).hexdigest())\nprint(os.environ['DIALPAD_LIVE_API_KEY'])\n";
-        loader_gets_the_key_through_the_socket("python3", "keyhandoff_env.py", ("check.py", script));
+        loader_gets_the_key_through_the_socket(if cfg!(windows) { "python" } else { "python3" }, "keyhandoff_env.py", ("check.py", script));
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn node_loader_gets_the_key_through_the_socket() {
         let script = "import { createHash } from \"node:crypto\";\nimport { load } from \"./keyhandoff_env.mjs\";\nawait load();\nconsole.log(createHash(\"sha256\").update(process.env.DIALPAD_LIVE_API_KEY).digest(\"hex\"));\nconsole.log(process.env.DIALPAD_LIVE_API_KEY);\n";
