@@ -37,7 +37,7 @@ export const reference: DocReference = {
           guide: "loaders",
           blocks: [
             { kind: "p", text: "Copy [keyhandoff_env.py](" + GITHUB + "/blob/main/loaders/keyhandoff_env.py) next to your script. It uses the standard library only. Call it once at startup, after `load_dotenv()` if you use python-dotenv." },
-            { kind: "p", text: "**Which value wins:** a variable already set to a real value is left alone. A variable set to a `handoff:` pointer, in the environment or in `.env`, is filled. A pointer in `.env` is used only when the variable isn't set, or is itself a pointer." },
+            { kind: "p", text: "**Which value wins:** a variable already set to a real value is left alone. A variable set to a `handoff:` pointer, in the environment or in `.env`, is filled. A pointer in `.env` is used only when the variable isn't set, or is itself a pointer. The file itself still holds the pointer, so code that reads `.env` directly gets `handoff:…`: see [Code that reads .env itself](#reads-env-file)." },
           ],
           fields: [
             { title: "Parameters", fields: [
