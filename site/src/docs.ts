@@ -263,6 +263,7 @@ export const docs = defineDocs({
               blocks: [
                 { kind: "compare", before: { title: ".env before", text: "`DIALPAD_API_KEY=dp_7Qm2vX9kLw4Tz`" }, after: { title: ".env after Import", text: "`DIALPAD_API_KEY=handoff:DIALPAD_API_KEY`" } },
                 { kind: "p", text: "The window lists the file's variables by name only. The ones that look like keys start ticked. A value you already keep is tagged with its name, and its line points at that key instead of saving it twice. Lines you leave unticked, comments and blank lines stay exactly as they were." },
+                { kind: "p", text: "Your programs then get the keys from their environment, through `keyhandoff run` or a loader. Code that reads the value straight from the file gets the pointer instead: see [Code that reads .env itself](#reads-env-file)." },
                 { kind: "callout", tone: "warn", text: "Old copies of the file still hold the keys: git history, backups, your editor's undo. If a key was ever committed, rotate it with the provider and click **Replace**." },
               ],
             },
@@ -362,6 +363,42 @@ export const docs = defineDocs({
                 { kind: "p", text: "This works for programs that use the system's OpenSSL, which covers Python, Ruby, PHP, curl and most command-line tools, and for Node.js, which KeyHandoff hooks separately. Go, Java and Rust programs bring their own encryption, so for now a request from them with a stand-in is refused by the server; clear the key's server to give them the key itself." },
                 { kind: "p", text: "**On Windows**, stand-ins work for Node.js programs (`node`, `npm`, `npx`, `pnpm`, `yarn`, `tsx`). Other programs, Python included, get the key itself for now, with every printed form of it hidden." },
                 { kind: "p", text: "`--env` picks another file than `.env`, and `--profile` another profile. The command's exit code is passed back." },
+                { kind: "callout", tone: "note", text: "Your program has to read the key from its environment. Code that opens `.env` and reads the value itself gets `handoff:Stripe` instead. See [Code that reads .env itself](#reads-env-file)." },
+              ],
+            },
+            {
+              id: "reads-env-file",
+              title: "Code that reads .env itself",
+              question: "Why does my program get handoff:… instead of the key?",
+              answer: "KeyHandoff puts keys in your program's environment, not in the .env file, which only holds the pointer. Code that reads the value straight from the file gets the pointer text. Make it use the environment's value when one is set and the file's otherwise. Most .env libraries already work that way.",
+              keywords: ["dotenv", "dotenv_values", "override", "env_file", "pointer", "handoff:", "invalid key", "401"],
+              blocks: [
+                {
+                  kind: "table",
+                  head: ["How the code reads .env", "Under KeyHandoff"],
+                  rows: [
+                    ["`load_dotenv()` (python-dotenv), `dotenv` / `dotenv/config` (Node.js), `node --env-file`", "Works. A variable already set in the environment wins."],
+                    ["Vite, Next.js and other frameworks that load .env for you", "Works, for the same reason."],
+                    ["`load_dotenv(override=True)`, `dotenv.config({ override: true })`", "Gets the pointer: the file overwrites the key."],
+                    ["`dotenv_values()`, `dotenv.parse()`, or your own code that opens `.env`", "Gets the pointer: it never looks at the environment."],
+                    ["docker compose `env_file:`, an editor's run settings", "Pass the pointer along. Set the variable from the environment instead."],
+                  ],
+                },
+                { kind: "p", text: "The fix is usually one line: read the environment first and fall back to the file." },
+                {
+                  kind: "tabs",
+                  label: "Language",
+                  group: "language",
+                  panes: [
+                    { key: "python", label: "Python", blocks: [
+                      { kind: "code", language: "python", code: "import os\nfrom dotenv import dotenv_values\n\n# Before: the file only\nenv = dotenv_values(\".env\")\n\n# After: the environment wins, the file fills the gaps\nenv = {**dotenv_values(\".env\"), **os.environ}\n" },
+                    ] },
+                    { key: "node", label: "Node.js", blocks: [
+                      { kind: "code", language: "js", code: "import dotenv from \"dotenv\";\n\n// Before: overwrites what KeyHandoff set\ndotenv.config({ override: true });\n\n// After: leaves set variables alone\ndotenv.config();\n" },
+                    ] },
+                  ],
+                },
+                { kind: "p", text: "Check before you [import a .env file](#import-env): search your code for where it reads `.env`. Lines you leave unticked stay as they were, so a value only file-reading code uses can stay in the file until you fix it." },
               ],
             },
             {
@@ -455,6 +492,7 @@ export const docs = defineDocs({
                 { kind: "details", summary: "You've used up Ann's card. Ask Ann for a new one.", text: "Every key sent uses one of the card's locks. Ask them for a new card copy and open it." },
                 { kind: "details", summary: "Not allowed in KeyHandoff.", text: "You chose Deny, or nobody answered within {fact:programWait}. Run the program again and choose Always allow or Just once." },
                 { kind: "details", summary: "No kept key is named …", text: "The name after handoff: doesn't match a key. Check the spelling on the key's row, or use Copy .env line." },
+                { kind: "details", summary: "The server says the key is invalid, or it got handoff:…", text: "Your code read the value straight from .env, which only holds the pointer. Make it read the environment first: see [Code that reads .env itself](#reads-env-file)." },
                 { kind: "details", summary: "Too many wrong PINs", text: "The TPM is refusing tries for a while. Use your passphrase, then try the PIN later." },
                 { kind: "details", summary: "Nothing was caught", text: "Safe Copy saw no copy within {fact:safeCopyTime}. Click Try again and copy the key with the page's copy button or Ctrl C." },
               ],
