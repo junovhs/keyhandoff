@@ -1121,9 +1121,11 @@ impl Handoff {
         if entries.is_empty() {
             return Err(format!("{} has no values to import.", display_name(file)));
         }
+        // The full, long path, so the sheet shows `~/tp-dialpad` rather than a short 8.3 name.
+        let file = fs::canonicalize(file).ok().and_then(|p| p.to_str().map(|s| PathBuf::from(s.trim_start_matches(r"\\?\")))).unwrap_or_else(|| file.to_path_buf());
         let mut core = self.lock();
         core.close_safe();
-        core.import = Some(EnvImport { file: file.to_path_buf(), text, entries });
+        core.import = Some(EnvImport { file, text, entries });
         Ok(())
     }
 
