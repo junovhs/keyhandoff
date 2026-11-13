@@ -155,6 +155,16 @@ export interface View {
   pairing: PairingView | null;
   /** The latest attempt to send a key's stand-in somewhere else, until dismissed. */
   alert: AlertView | null;
+  /** A .env file being imported: its variables by name. Values stay in Rust. */
+  import: ImportView | null;
+}
+
+export interface ImportView {
+  /** `.env` */
+  file: string;
+  /** `~/tp-dialpad` */
+  folder: string;
+  vars: { var: string; likely: boolean; kept_as: string | null }[];
 }
 
 /** A program tried to send a key's stand-in somewhere other than its servers, and was stopped. */
@@ -253,6 +263,13 @@ export const api = {
   retry: () => invoke<void>("retry"),
   paste: () => invoke<void>("paste"),
   keepOwn: (label: string, keep: Keep) => invoke<void>("keep_own", { label, keep }),
+  /** Pick a .env file, then list its variables (names only) for import. */
+  importEnv: async () => {
+    const file = await invoke<string | null>("pick_env_file");
+    if (file) await invoke<void>("start_import", { file });
+  },
+  finishImport: (vars: string[], keep: Keep) => invoke<void>("finish_import", { vars, keep }),
+  closeImport: () => invoke<void>("close_import"),
   copySealed: () => invoke<void>("copy_sealed"),
   copyRequest: () => invoke<void>("copy_request"),
   dragOut: (what: "sealed" | "request") => invoke<void>("drag_out", { what }),

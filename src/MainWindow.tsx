@@ -22,6 +22,8 @@ import {
 import { enter, stagger } from "./motion";
 import { Gate } from "./Gate";
 import { SafeCopy } from "./SafeCopy";
+import { CodeSheet, ImportSheet, StartTiles } from "./Visual";
+import { Bot, FileCode2, FileInput, Folder, KeyRound, RefreshCw, SquareTerminal } from "lucide-react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +79,7 @@ export function MainWindow() {
   // Send a key: open at the person-or-team list, or straight at someone's keys.
   const [sending, setSending] = useState<To | "pick" | null>(null);
   const [security, setSecurity] = useState(false);
+  const [code, setCode] = useState(false);
   // The team being edited, "new" for a new one.
   const [editing, setEditing] = useState<TeamView | "new" | null>(null);
 
@@ -108,7 +111,7 @@ export function MainWindow() {
       </header>
       <main className="stage" ref={stage}>
         {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} />}
+        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} onCode={() => setCode(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
@@ -130,6 +133,8 @@ export function MainWindow() {
         />
       )}
       {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
+      {view && code && !safeOn && <CodeSheet view={view} onClose={() => setCode(false)} />}
+      {view?.import && !safeOn && <ImportSheet imp={view.import} keep={view.keep} run={run} />}
       {view?.alert && !view.program && <AlertSheet alert={view.alert} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
       {toast && (
@@ -144,7 +149,7 @@ export function MainWindow() {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-function Home({ view, run, onSend, onSecurity }: { view: View; run: Run; onSend: () => void; onSecurity: () => void }) {
+function Home({ view, run, onSend, onSecurity, onCode }: { view: View; run: Run; onSend: () => void; onSecurity: () => void; onCode: () => void }) {
   const n = view.keys.length;
   return (
     <>
@@ -156,6 +161,16 @@ function Home({ view, run, onSend, onSecurity }: { view: View; run: Run; onSend:
         <button className="btn primary grow" onClick={() => void run(api.add())}>Add a key</button>
         <button className="btn secondary grow" onClick={onSend}>Send a key</button>
       </div>
+      {n > 0 && (
+        <div className="tools-row">
+          <button className="quiet" onClick={() => void run(api.importEnv())}>
+            <FileInput size={15} strokeWidth={1.75} aria-hidden /> Import .env
+          </button>
+          <button className="quiet" onClick={onCode}>
+            <SquareTerminal size={15} strokeWidth={1.75} aria-hidden /> Use in code
+          </button>
+        </div>
+      )}
       <Vault keys={view.keys} run={run} />
       <Me name={view.name} run={run} onSecurity={onSecurity} />
     </>
@@ -214,13 +229,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [order, setOrder] = useState<Order>("newest");
   if (keys.length === 0) {
-    return (
-      <ol className="steps">
-        <li><span className="n">1</span><span><b>Add a key</b>: copy it from any page, and it's sealed here. It's never shown.</span></li>
-        <li><span className="n">2</span><span><b>Get keys from people</b>: send them <b>Your card</b>, at the bottom. They only need it once.</span></li>
-        <li><span className="n">3</span><span><b>Send a key</b>: open someone's card once, then send them keys any time.</span></li>
-      </ol>
-    );
+    return <StartTiles run={run} />;
   }
   const tools = keys.length >= TOOLS_FROM;
   const q = query.trim().toLowerCase();
@@ -302,12 +311,12 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
               )}
             </span>
             {k.from === null && (
-              <button className="use" onClick={() => void run(api.replace(k.id))} title="Rotated it with the provider? Catch the new value. Programs using it keep working.">
-                Replace
+              <button className="use ico" aria-label={`Replace ${k.label}`} onClick={() => void run(api.replace(k.id))} title="Replace: rotated it with the provider? Catch the new value. Programs using it keep working.">
+                <RefreshCw size={15} strokeWidth={1.75} aria-hidden />
               </button>
             )}
-            <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
-              Copy .env line
+            <button className="use ico" aria-label={`Copy a .env line for ${k.label}`} onClick={() => void run(api.copyPointer(k.id))} title="Copy .env line: it points at the key, it doesn't hold it.">
+              <FileCode2 size={15} strokeWidth={1.75} aria-hidden />
             </button>
             <button
               className={`forget ${armed === k.id ? "sure" : ""}`}
@@ -546,28 +555,33 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
           <h2 className="display md">{program.name}</h2>
         </div>
       </div>
-      <div className="chip">
-        <Icon name="file" />
-        <span className="mono">{program.command ?? program.name}</span>
+      <div className="facts">
+        <div className="fact" title="The exact command">
+          <SquareTerminal size={17} strokeWidth={1.75} aria-hidden />
+          <span className="mono">{program.command ?? program.name}</span>
+        </div>
+        <div className="fact" title="The folder it runs in">
+          <Folder size={17} strokeWidth={1.75} aria-hidden />
+          <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>
+        </div>
+        <div className="fact on" title="The keys it asks for">
+          <KeyRound size={17} strokeWidth={1.75} aria-hidden />
+          <span>{program.keys.join(", ")}</span>
+        </div>
       </div>
-      <p className="lede">
-        It asks for{" "}
-        {program.keys.map((k, i) => (
-          <span key={k}>{i > 0 && ", "}<strong>{k}</strong></span>
-        ))}{" "}
-        from <span className="mono">{program.folder ?? "a folder KeyHandoff can't see"}</span>.
-      </p>
       <p className="help">
-        {agent
-          ? `${agent} started this. Read the command: it gets the key exactly as written. KeyHandoff asks every time an AI agent runs a command, unless you allow this one for 30 minutes.`
-          : "Always allow covers this exact command in this folder. If the script changes, or the same program runs anything else, KeyHandoff asks again."}
+        {agent ? (
+          <><Bot size={13} strokeWidth={2} aria-hidden className="inline-ico" /> {agent} started it, so it asks every time unless you allow 30 minutes.</>
+        ) : (
+          "Always covers this exact command in this folder. A changed script asks again."
+        )}
       </p>
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void run(api.answer("deny"))}>Deny</button>
-        <button className="btn secondary" onClick={() => void run(api.answer("once"))}>Just this once</button>
+        <button className="btn secondary" onClick={() => void run(api.answer("once"))}>Just once</button>
         {agent ? (
-          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("30min"))}>Allow for 30 minutes</button>
+          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("30min"))}>Allow 30 min</button>
         ) : (
           <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
         )}

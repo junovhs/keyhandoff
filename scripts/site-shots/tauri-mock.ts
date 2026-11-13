@@ -59,6 +59,7 @@ const HOME: View = {
   nearby: false,
   pairing: null,
   alert: null,
+  import: null,
 };
 
 const SCENES: Record<string, Partial<View>> = {
