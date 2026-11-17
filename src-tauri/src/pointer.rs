@@ -162,7 +162,8 @@ fn answer(
     started: &mut Option<String>,
 ) -> Zeroizing<Vec<u8>> {
     let ran;
-    let is_run = run.is_some() && placeholders;
+    let from_runner = run.is_some();
+    let is_run = from_runner && placeholders;
     let mut asking = peer.clone();
     if asking.pid != 0 {
         asking.agent = crate::os::agent(asking.pid);
@@ -180,7 +181,8 @@ fn answer(
     };
     // Accept a bare name or the whole pointer.
     let names: Vec<String> = names.iter().map(|n| n.strip_prefix(PREFIX).unwrap_or(n).trim().to_string()).collect();
-    let secrets = match handoff.give(peer, &names) {
+    let result = if from_runner { handoff.give_run(peer, &names) } else { handoff.give(peer, &names) };
+    let secrets = match result {
         Ok(secrets) => secrets,
         Err(error) => return reply(&Reply::Error { error }),
     };

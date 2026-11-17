@@ -107,7 +107,10 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
         names.dedup();
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(options.command[1..].iter().cloned());
-        let (mut reply, conn) = ask(&options.profile, &names, &argv, hooked(&program))?;
+        let placeholders = hooked(&program);
+        #[cfg(all(windows, test))]
+        let placeholders = placeholders || std::env::var_os("KEYHANDOFF_TEST_PROXY_PORT").is_some();
+        let (mut reply, conn) = ask(&options.profile, &names, &argv, placeholders)?;
         for (var, name) in &pointers {
             let value = reply.values.get(name).ok_or_else(|| format!("KeyHandoff didn't send {name}."))?;
             env.push((var.clone(), Zeroizing::new(value.clone())));
@@ -248,6 +251,14 @@ fn hooked(_program: &Path) -> bool {
 #[cfg(windows)]
 fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
     use sha2::{Digest, Sha256};
+    #[cfg(test)]
+    if let Ok(port) = std::env::var("KEYHANDOFF_TEST_PROXY_PORT") {
+        let port: u16 = port.parse().map_err(|_| "Invalid loopback fixture port")?;
+        return Ok(vec![
+            ("HTTPS_PROXY".into(), Zeroizing::new(format!("http://127.0.0.1:{port}"))),
+            ("NO_PROXY".into(), Zeroizing::new(String::new())),
+        ]);
+    }
     let dir = crate::os::runtime_dir().join("keyhandoff-hook");
     crate::os::private_dir(&dir).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
     let node = dir.join(format!("node-{}.cjs", Sha256::digest(NODE_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()));
@@ -431,6 +442,10 @@ pub(crate) mod tests {
     /// (a shell to stand in for an agent) if given. Returns where its output
     /// and exit code will be.
     pub(crate) fn start(folder: &Path, profile: &str, command: &[&str], wrapper: Option<&Path>) -> PathBuf {
+        start_with_env(folder, profile, command, wrapper, &[])
+    }
+
+    pub(crate) fn start_with_env(folder: &Path, profile: &str, command: &[&str], wrapper: Option<&Path>, env: &[(&str, &str)]) -> PathBuf {
         let out = folder.join(format!("run-{}.out", rand_core::RngCore::next_u32(&mut rand_core::OsRng)));
         let mut spec = vec![profile.to_string(), out.display().to_string()];
         spec.extend(command.iter().map(|s| s.to_string()));
@@ -443,6 +458,7 @@ pub(crate) mod tests {
                 .args(["run::tests::runner_entry", "--exact", "-q"])
                 .current_dir(folder)
                 .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
+                .envs(env.iter().copied())
                 .env_remove("CLAUDECODE")
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -460,6 +476,7 @@ pub(crate) mod tests {
                 .args(["-f", &shell.display().to_string(), "-c", &format!("{runner}; true")])
                 .current_dir(folder)
                 .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
+                .envs(env.iter().copied())
                 .env_remove("CLAUDECODE")
                 .stdin(Stdio::null())
                 .status()

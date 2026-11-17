@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, Weak};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyhandoff_seal::{
     armor, create_invite, join, seal_team, Bundle, Card, Error as SealError, Identity, Invite, Keyring, Membership, Object, Payload,
@@ -88,6 +88,7 @@ pub enum Answer {
     /// This command, for 30 minutes: what's offered when an AI agent started it.
     #[serde(rename = "30min")]
     ForNow,
+    Session,
     Once,
     Deny,
 }
@@ -112,11 +113,40 @@ struct RunSwap {
     secret: Secret,
 }
 
+/// A verified agent process instance and the runner's resolved working directory.
+#[derive(Clone, PartialEq, Eq)]
+struct SessionScope {
+    process: os::AgentProcess,
+    folder: PathBuf,
+}
+
+struct SessionGrant {
+    id: u64,
+    scope: SessionScope,
+    agent: String,
+    folder_label: String,
+    keys: Vec<[u8; 16]>,
+    expires: Instant,
+    command: Option<[u8; 32]>,
+    recent: Vec<String>,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct SessionGrantView {
+    id: u64,
+    session: String,
+    recent: Vec<String>,
+    folder: String,
+    keys: Vec<String>,
+    until: u64,
+}
+
 /// A program waiting for Allow.
 struct ProgramAsk {
     id: u64,
     peer: Peer,
     keys: Vec<[u8; 16]>,
+    session: Option<SessionScope>,
     reply: mpsc::Sender<Answer>,
 }
 
@@ -166,8 +196,8 @@ struct Core {
     pairing: Option<Pairing>,
     /// Commands allowed to get a key when they run in a folder.
     approvals: Vec<Approval>,
-    /// Commands an AI agent started, allowed until a time; never saved.
-    for_now: Vec<(Approval, u64)>,
+    /// In-memory approvals for a verified agent process and working directory.
+    grants: Vec<SessionGrant>,
     /// Programs running with placeholders. Locking drops them, and their
     /// placeholders stop being swapped.
     runs: Vec<Run>,
@@ -236,6 +266,9 @@ pub struct SafeView {
 /// A program asking for kept keys, waiting for Allow.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ProgramView {
+    pub id: u64,
+    pub session: Option<String>,
+    pub session_image: Option<String>,
     /// `python3`, `node.exe`.
     pub name: String,
     pub path: String,
@@ -340,6 +373,7 @@ pub struct View {
     pub notice: Option<String>,
     pub problem: Option<String>,
     pub program: Option<ProgramView>,
+    pub session_grants: Vec<SessionGrantView>,
     pub contacts: Vec<ContactView>,
     /// Whose card was just opened.
     pub added: Option<ContactView>,
@@ -423,11 +457,11 @@ impl Handoff {
             nearby: None,
             pairing: None,
             approvals,
-            for_now: Vec::new(),
+            grants: Vec::new(),
             runs: Vec::new(),
             tripwire,
             program: None,
-            asks: 0,
+            asks: OsRng.next_u64() >> 13,
             import: None,
         };
         let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
@@ -1313,14 +1347,22 @@ impl Handoff {
         self.lock().problem = Some(text);
     }
 
-    /// A program asks for kept keys by name (`handoff:Name` pointers). Keys
-    /// it was allowed in this folder come back at once; otherwise the window
-    /// asks, and this waits for the answer. Approval is per command, folder
-    /// and key ([`Peer::binding`]), because allowing `python3` alone would
-    /// allow every script. When an AI agent started the program, saved
-    /// approvals don't count: the window always asks, naming the agent, and
-    /// offers 30 minutes instead of Always.
     pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
+        self.give_scoped(peer, names, None)
+    }
+
+    pub fn give_run(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
+        #[cfg(windows)]
+        let session = peer.agent.as_deref().and_then(|agent| Some(SessionScope {
+            process: os::agent_session(peer.pid, agent)?,
+            folder: peer.folder.as_ref()?.canonicalize().ok()?,
+        }));
+        #[cfg(not(windows))]
+        let session = None;
+        self.give_scoped(peer, names, session)
+    }
+
+    fn give_scoped(&self, peer: &Peer, names: &[String], session: Option<SessionScope>) -> Result<Vec<Secret>, String> {
         let binding = peer.binding();
         let (ids, new, id, answer) = {
             let mut core = self.lock();
@@ -1329,10 +1371,17 @@ impl Handoff {
                 .iter()
                 .map(|n| core.vault.find(n).ok_or_else(|| format!("No kept key is named {n}.")))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, binding, k)).collect();
+            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, session.as_ref(), binding, k)).collect();
+            new.sort_unstable();
             new.dedup();
             if new.is_empty() {
-                return core.release(&ids);
+                let secrets = core.release(&ids)?;
+                if session.is_some() {
+                    core.record_session_use(peer, session.as_ref(), binding, &ids);
+                    drop(core);
+                    (self.notify)();
+                }
+                return Ok(secrets);
             }
             if core.program.is_some() {
                 return Err("KeyHandoff is asking about another program. Try again in a moment.".into());
@@ -1340,30 +1389,40 @@ impl Handoff {
             let (reply, answer) = mpsc::channel();
             core.asks += 1;
             let id = core.asks;
-            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), reply });
+            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), session: session.clone(), reply });
             (ids, new, id, answer)
         };
         (self.notify)();
         let answer = answer.recv_timeout(PROGRAM_TIMEOUT).unwrap_or(Answer::Deny);
-        let result = {
+        let result = (|| {
             let mut core = self.lock();
             if core.program.as_ref().is_some_and(|a| a.id == id) {
                 core.program = None;
             }
-            match answer {
-                Answer::Deny => Err("Not allowed in KeyHandoff.".into()),
-                Answer::Once => core.release(&ids),
-                Answer::Always if peer.agent.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids)),
-                Answer::Always | Answer::ForNow => {
-                    let until = now() + FOR_NOW_SECS;
-                    for &key in &new {
-                        let approval = Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding) };
-                        core.for_now.push((approval, until));
+            // A grant for another key in this request may have been revoked or
+            // expired while the newly requested keys were on screen.
+            if ids.iter().any(|k| !new.contains(k) && !core.allowed(peer, session.as_ref(), binding, *k)) {
+                Err("An approval changed. Run the command again.".into())
+            } else {
+                let secrets = match (answer, &session, &peer.agent) {
+                    (Answer::Deny, _, _) => Err("Not allowed in KeyHandoff.".into()),
+                    (Answer::Always, _, None) => core.allow(peer, binding, &new).and_then(|()| core.release(&ids)),
+                    (Answer::Session | Answer::ForNow, Some(scope), Some(agent)) => {
+                        let secrets = core.release(&ids)?;
+                        core.grants.push(SessionGrant {
+                            id, scope: scope.clone(), agent: agent.clone(), keys: new, recent: Vec::new(),
+                            folder_label: home_relative(peer.folder.as_deref().unwrap_or(&scope.folder)),
+                            expires: Instant::now() + Duration::from_secs(FOR_NOW_SECS), command: (answer == Answer::ForNow).then_some(binding),
+                        });
+                        Ok(secrets)
                     }
-                    core.release(&ids)
-                }
+                    // A stale or unsupported duration choice can authorize only this request.
+                    _ => core.release(&ids),
+                }?;
+                core.record_session_use(peer, session.as_ref(), binding, &ids);
+                Ok(secrets)
             }
-        };
+        })();
         (self.notify)();
         result
     }
@@ -1482,9 +1541,23 @@ impl Handoff {
         Ok(Secret::new(swap.secret.expose().to_vec()))
     }
 
-    /// Answer the program waiting for Allow.
+    /// Remove this grant before another runner can use it.
+    pub fn revoke_session(&self, id: u64) {
+        self.lock().grants.retain(|grant| grant.id != id);
+        (self.notify)();
+    }
+
     pub fn answer(&self, answer: Answer) -> Result<(), String> {
-        let ask = self.lock().program.take().ok_or("No program is waiting.")?;
+        let id = self.lock().program.as_ref().ok_or("No program is waiting.")?.id;
+        self.answer_request(id, answer)
+    }
+
+    pub fn answer_request(&self, id: u64, answer: Answer) -> Result<(), String> {
+        let mut core = self.lock();
+        if !core.program.as_ref().is_some_and(|ask| ask.id == id) {
+            return Err("This request has ended.".into());
+        }
+        let ask = core.program.take().ok_or("No program is waiting.")?;
         let _ = ask.reply.send(answer);
         Ok(())
     }
@@ -1840,12 +1913,24 @@ impl Core {
         Ok(run)
     }
 
-    /// Whether this exact command may have `key` without asking. With an AI
-    /// agent among its starters only a 30-minute allowance counts.
-    fn allowed(&self, peer: &Peer, binding: [u8; 32], key: [u8; 16]) -> bool {
-        let fits = |a: &Approval| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding);
-        let t = now();
-        self.for_now.iter().any(|(a, until)| *until > t && fits(a)) || (peer.agent.is_none() && self.approvals.iter().any(fits))
+    fn record_session_use(&mut self, peer: &Peer, scope: Option<&SessionScope>, binding: [u8; 32], ids: &[[u8; 16]]) {
+        let Some(scope) = scope else { return };
+        for grant in &mut self.grants {
+            if grant.scope == *scope && grant.command.is_none_or(|b| b == binding) && grant.keys.iter().any(|key| ids.contains(key)) {
+                if grant.recent.len() == 20 {
+                    grant.recent.remove(0);
+                }
+                grant.recent.push(peer.command.clone().unwrap_or_else(|| display_name(&peer.program)));
+            }
+        }
+    }
+
+    fn allowed(&self, peer: &Peer, session: Option<&SessionScope>, binding: [u8; 32], key: [u8; 16]) -> bool {
+        if peer.agent.is_some() {
+            return self.grants.iter().any(|g| Some(&g.scope) == session && g.expires > Instant::now()
+                && g.keys.contains(&key) && g.command.is_none_or(|c| c == binding));
+        }
+        self.approvals.iter().any(|a| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding))
     }
 
     fn allow(&mut self, peer: &Peer, binding: [u8; 32], keys: &[[u8; 16]]) -> Result<(), String> {
@@ -1861,7 +1946,6 @@ impl Core {
         let vault = &self.vault;
         let kept = |a: &Approval| a.command.is_some() && vault.items().iter().any(|i| i.id == a.key);
         self.approvals.retain(kept);
-        self.for_now.retain(|(a, _)| kept(a));
         self.store.save_approvals(&self.approvals)
     }
 
@@ -1896,7 +1980,7 @@ impl Core {
             self.stop_pairing();
         }
         let t = now();
-        self.for_now.retain(|(_, until)| *until > t);
+        self.grants.retain(|grant| grant.expires > Instant::now());
         if self.vault.purge(t) > 0 {
             self.store.save_vault(&self.vault)?;
             if self.accepted.is_some_and(|id| !self.vault.items().iter().any(|i| i.id == id)) {
@@ -1932,6 +2016,13 @@ impl Core {
             asked: self.asked.as_ref().map(|p| display_name(p)),
             notice: self.notice.clone(),
             problem: self.problem.clone(),
+            session_grants: self.grants.iter().filter(|g| g.expires > Instant::now()).filter_map(|g| {
+                let keys: Vec<_> = g.keys.iter().filter_map(|id| self.vault.items().iter().find(|i| i.id == *id)).map(|i| i.label.clone()).collect();
+                (!keys.is_empty()).then(|| SessionGrantView {
+                    id: g.id, session: format!("{} · PID {}", g.agent, g.scope.process.pid),
+                    folder: g.folder_label.clone(), keys, until: now() + g.expires.saturating_duration_since(Instant::now()).as_secs(), recent: g.recent.clone(),
+                })
+            }).collect(),
             program: self.program.as_ref().map(|a| self.program_view(a)),
             contacts: self.contacts.iter().map(|c| self.contact_view(c)).collect(),
             added: self.added.and_then(|id| self.contacts.iter().find(|c| c.identity == id)).map(|c| self.contact_view(c)),
@@ -1990,6 +2081,9 @@ impl Core {
     fn program_view(&self, ask: &ProgramAsk) -> ProgramView {
         let labels = ask.keys.iter().filter_map(|id| self.vault.items().iter().find(|i| i.id == *id)).map(|i| i.label.clone());
         ProgramView {
+            id: ask.id,
+            session_image: ask.session.as_ref().map(|s| s.process.image.display().to_string()),
+            session: ask.session.as_ref().map(|s| format!("{} · PID {}", ask.peer.agent.as_deref().unwrap_or("Agent"), s.process.pid)),
             name: display_name(&ask.peer.program),
             path: ask.peer.program.to_string_lossy().into_owned(),
             command: ask.peer.command.clone(),
@@ -2912,10 +3006,19 @@ mod tests {
             let canonical = project.canonicalize().unwrap();
             let canonical = canonical.to_str().unwrap().trim_start_matches(r"\\?\");
             assert_eq!(shown.folder, Some(home_relative(Path::new(canonical))));
-            script.join().unwrap()
+            (script.join().unwrap(), shown.agent.is_some())
         });
-        assert_eq!(first, expected);
-        assert_eq!(run(), expected, "allowed: the second run needs no prompt");
+        assert_eq!(first.0, expected);
+        if first.1 {
+            // A loader started by an agent has no verified runner session.
+            std::thread::scope(|s| {
+                let script = s.spawn(run);
+                answer_when_asked(&h, Answer::Once);
+                assert_eq!(script.join().unwrap(), expected);
+            });
+        } else {
+            assert_eq!(run(), expected, "allowed: the second run needs no prompt");
+        }
 
         // This test binary is a different program: it gets a prompt and, denied, nothing.
         let reply = std::thread::scope(|s| {
@@ -3000,47 +3103,68 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
-    /// Placeholders on Windows, for Node.js: under `keyhandoff run` a Node
-    /// program holds only a stand-in; the server verified as the key's host
-    /// (its certificate from the key's own CA) gets the real key, and a
-    /// stranger with a valid certificate for another name gets nothing: the
-    /// write is refused and the attempt recorded.
     #[cfg(windows)]
-    #[test]
-    fn windows_node_gets_a_stand_in_swapped_only_for_its_verified_host() {
-        use crate::run::tests::{finished, start};
+    mod windows_proxy;
+
+    #[cfg(windows)]
+    struct WindowsTlsFixture {
+        children: Vec<std::process::Child>,
+        ports: serde_json::Map<String, serde_json::Value>,
+    }
+
+    #[cfg(windows)]
+    impl Drop for WindowsTlsFixture {
+        fn drop(&mut self) {
+            for child in &mut self.children {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn windows_tls_fixture(dir: &Path) -> Option<WindowsTlsFixture> {
         use std::process::{Command, Stdio};
-        const STRIPE: &[u8] = b"sk_test_51SyntheticWinNodeKey0123456789abcXYZ";
         let have = |p: &str, arg: &str| Command::new(p).arg(arg).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
         if !(have("node", "--version") && have("sh", "--version") && have("openssl", "version")) {
             eprintln!("skipped: needs node, and sh and openssl (Git for Windows)");
-            return;
+            return None;
         }
-        let me = app("Win");
-        let h = me.handoff.clone();
-        let dir = me.data.join("node");
-        fs::create_dir_all(&dir).unwrap();
         let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval/coverage");
-        fs::copy(eval.join("clients/node_https.mjs"), dir.join("node_https.mjs")).unwrap();
-        let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
+        let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
         sh("MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
-        let mut servers = Vec::new();
-        let mut ports = serde_json::Map::new();
+        let mut servers = WindowsTlsFixture { children: Vec::new(), ports: serde_json::Map::new() };
         for name in ["api.stripe.test", "evil.test"] {
             sh(&format!("MSYS_NO_PATHCONV=1 openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
             let mut child = Command::new("node")
                 .args([eval.join("server.mjs").display().to_string(), name.into(), format!("{name}.pem"), format!("{name}.key"), format!("{name}.jsonl")])
-                .current_dir(&dir)
+                .current_dir(dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .spawn()
                 .unwrap();
             let mut line = String::new();
             std::io::BufRead::read_line(&mut std::io::BufReader::new(child.stdout.take().unwrap()), &mut line).unwrap();
-            ports.insert(name.into(), serde_json::json!(line.trim().parse::<u16>().unwrap()));
-            servers.push(child);
+            servers.ports.insert(name.into(), serde_json::json!(line.trim().parse::<u16>().unwrap()));
+            servers.children.push(child);
         }
-        fs::write(dir.join("matrix.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "ports": ports }).to_string()).unwrap();
+        Some(servers)
+    }
+
+    /// Exercise the production Node hook with the Windows TLS fixture.
+    #[cfg(windows)]
+    #[test]
+    fn windows_node_gets_a_stand_in_swapped_only_for_its_verified_host() {
+        use crate::run::tests::{finished, start};
+        const STRIPE: &[u8] = b"sk_test_51SyntheticWinNodeKey0123456789abcXYZ";
+        let me = app("Win");
+        let h = me.handoff.clone();
+        let dir = me.data.join("node");
+        fs::create_dir_all(&dir).unwrap();
+        let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval/coverage");
+        fs::copy(eval.join("clients/node_https.mjs"), dir.join("node_https.mjs")).unwrap();
+        let Some(servers) = windows_tls_fixture(&dir) else { return };
+        fs::write(dir.join("matrix.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "ports": servers.ports }).to_string()).unwrap();
         fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
         {
             let mut core = h.lock();
@@ -3054,10 +3178,7 @@ mod tests {
         let out = start(&dir, &profile, &["node", "node_https.mjs"], None);
         answer_when_asked(&h, Answer::Once);
         let (text, code) = finished(&out);
-        for mut s in servers {
-            let _ = s.kill();
-            let _ = s.wait();
-        }
+        drop(servers);
         assert_eq!(code, 0, "{text}");
         let key = std::str::from_utf8(STRIPE).unwrap();
         let got = |name: &str| fs::read_to_string(dir.join(format!("{name}.jsonl"))).unwrap_or_default();
@@ -3112,8 +3233,16 @@ mod tests {
             assert!(!text.contains(std::str::from_utf8(window).unwrap()), "leaked: {text}");
         }
 
-        // Approved: the same command runs without asking.
-        let (text, code) = finished(&start(&project, &profile, &[python, "report.py"], None));
+        eprintln!("Baseline on {}: identical command {}, edited script prompts", std::env::consts::OS,
+            if shown.agent.is_none() { "reuses Always" } else { "requires fresh approval under an agent" });
+        // A regular exact-command approval is reusable. An agent cannot turn
+        // an Always answer into a persistent grant, even for an identical argv.
+        let repeated = start(&project, &profile, &[python, "report.py"], None);
+        if shown.agent.is_some() {
+            let again = answer_when_asked(&h, Answer::Once);
+            assert_eq!(shown.command, again.command);
+        }
+        let (text, code) = finished(&repeated);
         assert_eq!(code, 0, "{text}");
 
         // An edited script is a different command: it asks again.
@@ -3126,12 +3255,94 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_session_grants_follow_the_runner_and_stop_at_the_scope_boundary() {
+        use crate::run::tests::finished;
+        use std::io::Write;
+        use std::process::{Child, Command, Stdio};
+
+        let me = app("Session");
+        let h = &me.handoff;
+        let profile = format!("test-{}", OsRng.next_u32());
+        let served = h.clone();
+        os::listen_for_keys(&profile, Arc::new(move |p, stream| crate::pointer::serve(&served, &p, stream))).unwrap();
+        for label in ["First", "Second"] {
+            h.lock().vault.add(label, None, None, &Secret::new(b"synthetic-session-key".to_vec()), Keep::Forever, now());
+        }
+        let folder = me.data.join("project");
+        let other = me.data.join("other");
+        for dir in [&folder, &other] {
+            fs::create_dir(dir).unwrap();
+            fs::write(dir.join(".env"), "TEST_KEY=handoff:First\n").unwrap();
+        }
+
+        // Like the existing Linux agent fixture, the shell stands in for an agent.
+        // Keep it alive across runner launches. Windows supplies every PID and birth time.
+        let agent = me.data.join("codex.exe");
+        fs::copy(std::env::var_os("ComSpec").unwrap(), &agent).unwrap();
+        let launch = |args: &[&str]| {
+            Command::new(&agent).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
+        };
+        let mut first = launch(&[]);
+        let mut second = launch(&[]);
+        let mut shared = launch(&["/Q"]);
+        let runner = std::env::current_exe().unwrap();
+        let request = |shell: &mut Child, dir: &Path, tag: &str, answer: Option<Answer>| {
+            let out = dir.join(format!("{}.out", OsRng.next_u32()));
+            let script = format!("import os; assert os.environ['TEST_KEY'] == 'synthetic-session-key'; print('{tag}')");
+            let spec = serde_json::json!([profile, out, "python", "-c", script]);
+            fs::write(dir.join("spec.json"), spec.to_string()).unwrap();
+            let input = shell.stdin.as_mut().unwrap();
+            writeln!(input, "cd /d \"{}\"\r", dir.display()).unwrap();
+            writeln!(input, "set /p KEYHANDOFF_TEST_RUN=<spec.json\r").unwrap();
+            writeln!(input, "\"{}\" run::tests::runner_entry --exact -q\r", runner.display()).unwrap();
+            let shown = answer.map(|answer| answer_when_asked(h, answer));
+            let (output, code) = finished(&out);
+            if answer == Some(Answer::Deny) {
+                assert_ne!(code, 0);
+                assert!(output.contains("Not allowed"), "{output}");
+            } else {
+                assert_eq!(code, 0, "{output}");
+                assert!(output.contains(tag), "{output}");
+            }
+            shown
+        };
+        let preceding_asks = h.lock().asks;
+        let shown = request(&mut first, &folder, "one", Some(Answer::Session)).unwrap();
+        assert_eq!(shown.session, Some(format!("Codex · PID {}", first.id())));
+        assert_eq!(shown.keys, ["First"]);
+        request(&mut first, &folder, "two", None);
+        request(&mut first, &folder, "three", None);
+        assert_eq!(h.lock().asks - preceding_asks, 1, "three distinct commands, one prompt");
+        assert_eq!(h.view().session_grants[0].recent.len(), 3);
+        request(&mut second, &folder, "one", Some(Answer::Deny));
+        request(&mut first, &other, "one", Some(Answer::Deny));
+        fs::write(folder.join(".env"), "TEST_KEY=handoff:Second\n").unwrap();
+        assert_eq!(request(&mut first, &folder, "one", Some(Answer::Deny)).unwrap().keys, ["Second"]);
+        fs::write(folder.join(".env"), "TEST_KEY=handoff:First\n").unwrap();
+        let grant = h.view().session_grants[0].id;
+        h.revoke_session(grant);
+        request(&mut first, &folder, "after-revoke", Some(Answer::Session));
+        h.lock().grants[0].expires = Instant::now();
+        request(&mut first, &folder, "after-expiry", Some(Answer::Deny));
+        assert!(request(&mut shared, &folder, "unverified", Some(Answer::Session)).unwrap().session.is_none());
+        request(&mut shared, &folder, "unverified", Some(Answer::Deny));
+        request(&mut first, &folder, "exact", Some(Answer::ForNow));
+        request(&mut first, &folder, "exact", None);
+        request(&mut first, &folder, "edited", Some(Answer::Deny));
+        for mut shell in [first, second, shared] {
+            drop(shell.stdin.take());
+            shell.wait().unwrap();
+        }
+        fs::remove_dir_all(me.data).unwrap();
+    }
+
     /// FEAT-08's check, for real: `keyhandoff run` (this test binary, started
     /// detached as the runner) gives an approved script its key and masks
     /// every form it prints, from it and from a shell it starts; an edited
     /// script asks again; and a run whose parent chain includes a process
-    /// named `claude` always asks, names Claude Code, and gets 30 minutes
-    /// rather than Always.
+    /// named `claude` prompts again without a verified session.
     #[cfg(target_os = "linux")]
     #[test]
     fn keyhandoff_run_binds_approval_to_the_command_names_agents_and_masks_output() {
@@ -3194,8 +3405,7 @@ print("len", len(k))
         assert!(h.view().program.is_none());
 
         // Under a process named claude it asks anyway, names Claude Code, and
-        // Always becomes 30 minutes: the next agent run is silent, and the
-        // saved approval is still the plain one.
+        // A name alone cannot establish a grant across separate agent processes.
         let agent_dir = me.data.join("agent");
         fs::create_dir_all(&agent_dir).unwrap();
         let claude = agent_dir.join("claude");
@@ -3204,7 +3414,7 @@ print("len", len(k))
         let (shown, text, code) = wait_or_answer(&out, Some(Answer::Always));
         assert_eq!(shown.unwrap().agent.as_deref(), Some("Claude Code"));
         assert_eq!(code, 0, "{text}");
-        let (_, _, code) = wait_or_answer(&start(&project, &profile, &["python3", "report.py"], Some(&claude)), None);
+        let (_, _, code) = wait_or_answer(&start(&project, &profile, &["python3", "report.py"], Some(&claude)), Some(Answer::Once));
         assert_eq!(code, 0);
         assert_eq!(h.lock().approvals.len(), 1, "an agent's Always isn't saved");
 

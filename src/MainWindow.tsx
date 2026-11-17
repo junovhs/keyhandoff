@@ -171,6 +171,24 @@ function Home({ view, run, onSend, onSecurity, onCode }: { view: View; run: Run;
           </button>
         </div>
       )}
+      {view.session_grants.length > 0 && (
+        <section className="session-grants" aria-label="Active grants">
+          {view.session_grants.map((grant) => (
+            <div className="session-grant" key={grant.id}>
+              <div className="grant-head">
+                <strong>{grant.session}</strong>
+                <button className="btn secondary small" onClick={() => void run(api.revokeSession(grant.id))}>Revoke grant</button>
+              </div>
+              <span className="mono">{grant.folder}</span>
+              <span>{grant.keys.join(", ")} · until {new Date(grant.until * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+              <details>
+                <summary>Recent commands ({grant.recent.length})</summary>
+                <ol>{grant.recent.map((command, index) => <li className="mono" key={index}>{command}</li>)}</ol>
+              </details>
+            </div>
+          ))}
+        </section>
+      )}
       <Vault keys={view.keys} run={run} />
       <Me name={view.name} run={run} onSecurity={onSecurity} />
     </>
@@ -571,19 +589,28 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
       </div>
       <p className="help">
         {agent ? (
-          <><Bot size={13} strokeWidth={2} aria-hidden className="inline-ico" /> {agent} started it, so it asks every time unless you allow 30 minutes.</>
+          <><Bot size={13} strokeWidth={2} aria-hidden className="inline-ico" /> {program.session
+            ? program.session + ". Allow any command from this session to use the listed keys in this folder for 30 minutes."
+            : agent + " started this command. KeyHandoff could not verify a dedicated session. Approval covers this request only."}</>
         ) : (
           "Always covers this exact command in this folder. A changed script asks again."
         )}
       </p>
+      {program.session_image && (
+        <details className="help"><summary>Agent executable</summary><span className="mono">{program.session_image}</span></details>
+      )}
+      {program.session && (
+        <button className="quiet" onClick={() => void run(api.answer(program.id, "30min"))}>Allow only this command for 30 min</button>
+      )}
       <span className="grow-space" />
       <div className="btn-row">
-        <button className="btn secondary" onClick={() => void run(api.answer("deny"))}>Deny</button>
-        <button className="btn secondary" onClick={() => void run(api.answer("once"))}>Just once</button>
-        {agent ? (
-          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("30min"))}>Allow 30 min</button>
-        ) : (
-          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer("always"))}>Always allow</button>
+        <button className="btn secondary" onClick={() => void run(api.answer(program.id, "deny"))}>Deny</button>
+        <button className="btn secondary" onClick={() => void run(api.answer(program.id, "once"))}>Just once</button>
+        {program.session && (
+          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow session</button>
+        )}
+        {!agent && (
+          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
         )}
       </div>
     </div>

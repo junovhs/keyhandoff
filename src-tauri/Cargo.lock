@@ -2219,6 +2219,7 @@ dependencies = [
  "libc",
  "mdns-sd",
  "rand_core",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",

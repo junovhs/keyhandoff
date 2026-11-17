@@ -70,6 +70,14 @@ impl MasterKey {
     }
 }
 
+/// OS-observed identity of a dedicated agent process. Creation time distinguishes recycled PIDs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentProcess {
+    pub pid: u32,
+    pub created: u64,
+    pub image: PathBuf,
+}
+
 /// A local program asking for kept keys, as the OS reports it: its
 /// executable and its working folder (`None` when the OS won't say).
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -305,6 +305,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .cmd:hover { border-color: #444; }
 .cmd svg { color: var(--text-2); flex-shrink: 0; }
 .key-row .use.ico { width: 30px; padding: 0; display: grid; place-items: center; }
+.session-grants { display: grid; gap: 6px; max-height: 32%; overflow-y: auto; }
+.session-grant { display: grid; gap: 4px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.grant-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.session-grant .mono { overflow-wrap: anywhere; }
+.session-grant summary { cursor: pointer; }
+.session-grant ol { padding-left: 20px; }
 .facts { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .fact { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text); }
 .fact:last-child { border-bottom: 0; }

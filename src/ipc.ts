@@ -43,6 +43,9 @@ export interface SafeView {
 
 /** A program asking for kept keys, waiting for Allow. */
 export interface ProgramView {
+  id: number;
+  session: string | null;
+  session_image: string | null;
   /** `python3`, `node.exe`. */
   name: string;
   path: string;
@@ -56,7 +59,7 @@ export interface ProgramView {
 }
 
 /** `30min`: offered instead of Always when an AI agent started the program. */
-export type Answer = "always" | "30min" | "once" | "deny";
+export type Answer = "session" | "always" | "30min" | "once" | "deny";
 
 /** Someone whose card you opened. */
 export interface ContactView {
@@ -144,6 +147,7 @@ export interface View {
   /** Something went wrong outside a command, such as opening a file. */
   problem: string | null;
   program: ProgramView | null;
+  session_grants: { id: number; session: string; folder: string; keys: string[]; until: number; recent: string[] }[];
   contacts: ContactView[];
   /** Whose card was just opened. */
   added: ContactView | null;
@@ -279,7 +283,8 @@ export const api = {
   copyPointer: (id: string) => invoke<void>("copy_pointer", { id }),
   setHosts: (id: string, hosts: string) => invoke<void>("set_hosts", { id, hosts }),
   setName: (name: string) => invoke<void>("set_name", { name }),
-  answer: (answer: Answer) => invoke<void>("answer", { answer }),
+  answer: (id: number, answer: Answer) => invoke<void>("answer", { id, answer }),
+  revokeSession: (id: number) => invoke<void>("revoke_session", { id }),
   dismiss: () => invoke<void>("dismiss"),
   ready: () => invoke<void>("ready"),
 };

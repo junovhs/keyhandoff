@@ -3,7 +3,7 @@
 //! working folder from the process parameters in its PEB.
 
 use std::ffi::c_void;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::PathBuf;
 use std::thread;
 
@@ -16,7 +16,7 @@ use ::windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
 };
 
-use crate::os::{Peer, ServeKeys};
+use crate::os::{AgentProcess, Peer, ServeKeys};
 
 const BUFFER: u32 = 64 * 1024;
 
@@ -27,14 +27,18 @@ pub fn pipe(profile: &str) -> String {
 /// Serve programs asking for keys, each connection on its own thread.
 pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
     super::pipe::serve(&pipe(profile), true, BUFFER, "keys", move |stream| {
-        let Some(peer) = peer(HANDLE(stream.as_raw_handle())) else { return };
+        let Some((peer, client)) = peer(HANDLE(stream.as_raw_handle())) else { return };
         let serve = serve.clone();
-        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || {
+            // Pin the pipe client process object so its PID cannot be recycled mid-request.
+            let _client = client;
+            serve(peer, Box::new(stream));
+        });
     })
 }
 
 /// The process on the other end of the pipe.
-fn peer(pipe: HANDLE) -> Option<Peer> {
+fn peer(pipe: HANDLE) -> Option<(Peer, OwnedHandle)> {
     let mut pid = 0u32;
     // SAFETY: `pipe` is a connected server end.
     unsafe { GetNamedPipeClientProcessId(pipe, &mut pid) }.ok()?;
@@ -42,13 +46,12 @@ fn peer(pipe: HANDLE) -> Option<Peer> {
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, pid) }
         .or_else(|_| unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) })
         .ok()?;
+    let client = unsafe { OwnedHandle::from_raw_handle(process.0) };
     let program = image_path(process);
     let folder = program.as_ref().and_then(|_| current_dir(process));
     let argv = program.as_ref().and_then(|_| parameter_string(process, 0x70)).map(|line| split_command_line(&line)).unwrap_or_default();
     let command = super::super::display_command(argv.iter().map(String::as_str));
-    // SAFETY: we own the handle.
-    let _ = unsafe { CloseHandle(process) };
-    Some(Peer { pid, program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: None })
+    Some((Peer { pid, program: program?, folder, command, args: argv.into_iter().skip(1).collect(), agent: None }, client))
 }
 
 /// The AI coding agent among `pid` and the processes that started it, by
@@ -83,6 +86,59 @@ pub fn agent(pid: u32) -> Option<String> {
         pid = *parent;
     }
     None
+}
+
+/// Identify a dedicated interactive CLI process. A desktop host or app-server
+/// can multiplex chats in one process and cannot establish this scope.
+pub fn agent_session(mut pid: u32, expected: &str) -> Option<AgentProcess> {
+    use ::windows::Win32::Foundation::FILETIME;
+    use ::windows::Win32::System::Threading::GetProcessTimes;
+
+    let mut child_birth = u64::MAX;
+    for _ in 0..64 {
+        let access = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ;
+        let handle = unsafe { OpenProcess(access, false, pid) }.ok()?;
+        // Keep this process object alive throughout all queries on this link.
+        let _owned = unsafe { OwnedHandle::from_raw_handle(handle.0) };
+        let (mut birth, mut exit, mut kernel, mut user) = (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+        unsafe { GetProcessTimes(handle, &mut birth, &mut exit, &mut kernel, &mut user) }.ok()?;
+        let birth = (u64::from(birth.dwHighDateTime) << 32) | u64::from(birth.dwLowDateTime);
+        if birth >= child_birth || exit.dwLowDateTime != 0 || exit.dwHighDateTime != 0 {
+            return None;
+        }
+        let image = image_path(handle)?;
+        let name = image.file_name()?.to_str()?;
+        if let Some(agent) = super::super::agent_named(name) {
+            if agent != expected || !(name.eq_ignore_ascii_case("codex.exe") || name.eq_ignore_ascii_case("claude.exe")) {
+                return None;
+            }
+            let argv = split_command_line(&parameter_string(handle, 0x70)?);
+            // A bare interactive CLI or a single Codex exec job. Other modes
+            // (including app-server and Desktop helpers) stay request-only.
+            let dedicated = argv.len() == 1 || (name.eq_ignore_ascii_case("codex.exe") && argv.get(1).is_some_and(|a| a == "exec"));
+            if !dedicated || !console_image(&image)? {
+                return None;
+            }
+            return Some(AgentProcess { pid, created: birth, image });
+        }
+        let info = process_info(handle)?;
+        child_birth = birth;
+        pid = info.InheritedFromUniqueProcessId.try_into().ok()?;
+    }
+    None
+}
+
+fn console_image(path: &std::path::Path) -> Option<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    // PE header offset, followed by signature, COFF header and optional header.
+    file.seek(SeekFrom::Start(0x3c)).ok()?;
+    let mut offset = [0; 4];
+    file.read_exact(&mut offset).ok()?;
+    file.seek(SeekFrom::Start(u32::from_le_bytes(offset).into())).ok()?;
+    let mut header = [0; 94];
+    file.read_exact(&mut header).ok()?;
+    Some(&header[..4] == b"PE\0\0" && u16::from_le_bytes([header[92], header[93]]) == 3)
 }
 
 /// Whether `pid` is `ancestor` or was started, directly or not, by it.
@@ -174,9 +230,7 @@ fn split_command_line(line: &str) -> Vec<String> {
     args
 }
 
-/// A UNICODE_STRING inside the process parameters, at its x64 offset.
-#[cfg(target_pointer_width = "64")]
-fn parameter_string(process: HANDLE, offset: usize) -> Option<String> {
+fn process_info(process: HANDLE) -> Option<PROCESS_BASIC_INFORMATION> {
     // SAFETY: all-zero is a valid PROCESS_BASIC_INFORMATION (null pointers, zero fields).
     let mut info: PROCESS_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
     let size = std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32;
@@ -185,6 +239,13 @@ fn parameter_string(process: HANDLE, offset: usize) -> Option<String> {
     if status.is_err() {
         return None;
     }
+    Some(info)
+}
+
+/// A UNICODE_STRING inside the process parameters, at its x64 offset.
+#[cfg(target_pointer_width = "64")]
+fn parameter_string(process: HANDLE, offset: usize) -> Option<String> {
+    let info = process_info(process)?;
     let params: usize = read(process, info.PebBaseAddress as usize + 0x20)?;
     let bytes: u16 = read(process, params + offset)?;
     let buffer: usize = read(process, params + offset + 8)?;
