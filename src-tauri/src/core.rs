@@ -209,6 +209,7 @@ struct Core {
     /// A .env file chosen for import, until imported or closed. Its values
     /// stay here; the screens get the variable names.
     import: Option<EnvImport>,
+    import_receipt: Option<ImportReceipt>,
 }
 
 struct EnvImport {
@@ -387,6 +388,15 @@ pub struct View {
     pub alert: Option<AlertView>,
     /// A .env file being imported: its variables, by name.
     pub import: Option<ImportView>,
+    pub import_receipt: Option<ImportReceipt>,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct ImportReceipt {
+    pub file: String,
+    pub folder: String,
+    pub pointers: Vec<String>,
+    pub added: usize,
 }
 
 /// A .env file chosen for import. Names only: no value reaches the screens.
@@ -463,6 +473,7 @@ impl Handoff {
             program: None,
             asks: OsRng.next_u64() >> 13,
             import: None,
+            import_receipt: None,
         };
         let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
         handoff.lock().tick()?;
@@ -1159,12 +1170,15 @@ impl Handoff {
         let file = fs::canonicalize(file).ok().and_then(|p| p.to_str().map(|s| PathBuf::from(s.trim_start_matches(r"\\?\")))).unwrap_or_else(|| file.to_path_buf());
         let mut core = self.lock();
         core.close_safe();
+        core.import_receipt = None;
         core.import = Some(EnvImport { file, text, entries });
         Ok(())
     }
 
     pub fn close_import(&self) {
-        self.lock().import = None;
+        let mut core = self.lock();
+        core.import = None;
+        core.import_receipt = None;
     }
 
     /// Seal the chosen variables of the .env file being imported into the
@@ -1205,10 +1219,14 @@ impl Handoff {
         let done: Vec<_> = chosen.iter().copied().zip(names.iter().map(String::as_str)).collect();
         let rewritten = crate::envfile::with_pointers(&import.text, &done);
         os::write_private(&import.file, rewritten.as_bytes()).map_err(|e| format!("Your keys are kept, but {name} couldn't be rewritten: {e}"))?;
-        let n = chosen.len();
-        core.notice = Some(match (n, added) {
-            (1, _) => format!("{name} points to {} now.", names[0]),
-            _ => format!("{n} keys moved out of {name}. It points to them now."),
+        core.import_receipt = Some(ImportReceipt {
+            file: name,
+            folder: import.file.parent().map(home_relative).unwrap_or_default(),
+            // Only rewritten assignments may reach the preview. Other lines can contain secrets.
+            pointers: rewritten.lines().zip(import.text.lines())
+                .filter(|(after, before)| after != before)
+                .map(|(after, _)| after.to_owned()).collect(),
+            added,
         });
         Ok(())
     }
@@ -2030,6 +2048,7 @@ impl Core {
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
             nearby: self.nearby.is_some(),
             pairing: self.pairing.as_ref().map(|p| self.pairing_view(p)),
+            import_receipt: self.import_receipt.clone(),
             import: self.import.as_ref().map(|i| self.import_view(i)),
             alert: self.tripwire.alerts.iter().rev().find(|a| !a.seen).map(|a| AlertView {
                 key: a.key.clone(),
@@ -3079,6 +3098,11 @@ mod tests {
 
         h.finish_import(&["DIALPAD_API_KEY".into(), "ANTHROPIC_API_KEY".into()], Keep::Forever).unwrap();
         assert!(h.view().import.is_none());
+        let receipt = h.view().import_receipt.unwrap();
+        assert_eq!(receipt.added, 1);
+        assert_eq!(receipt.pointers, ["DIALPAD_API_KEY=handoff:DIALPAD_API_KEY", "ANTHROPIC_API_KEY=handoff:Anthropic"]);
+        h.close_import();
+        assert!(h.view().import_receipt.is_none());
         let after = fs::read_to_string(&env).unwrap();
         assert_eq!(after, "# keys\r\nDIALPAD_API_KEY=handoff:DIALPAD_API_KEY\r\nFORMSITE_API_BASE=https://fs1.formsite.com/api/v2\r\nANTHROPIC_API_KEY=handoff:Anthropic\r\nJEV_API_KEY=handoff:Jev\r\n");
         let labels: Vec<_> = h.view().keys.iter().map(|k| k.label.clone()).collect();

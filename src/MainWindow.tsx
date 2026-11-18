@@ -22,8 +22,8 @@ import {
 import { enter, stagger } from "./motion";
 import { Gate } from "./Gate";
 import { SafeCopy } from "./SafeCopy";
-import { CodeSheet, ImportSheet, StartTiles } from "./Visual";
-import { Bot, FileCode2, FileInput, Folder, KeyRound, RefreshCw, SquareTerminal } from "lucide-react";
+import { CodeSheet, ImportResult, ImportSheet, ImportStart } from "./Visual";
+import { Bot, ChevronDown, FileInput, Folder, IdCard, KeyRound, Plus, Send, Settings, SquareTerminal } from "lucide-react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,9 +49,9 @@ export function MainWindow() {
   // Typing anywhere, "/" or Ctrl+F jumps to the key search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement;
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
       const mod = e.ctrlKey || e.metaKey;
-      if (!typing && mod && e.key.toLowerCase() === "v" && !document.querySelector(".gate")) {
+      if (!typing && mod && e.key.toLowerCase() === "v" && !document.querySelector(".sheet, .safe, .gate")) {
         e.preventDefault();
         void run(api.paste());
         return;
@@ -78,10 +78,15 @@ export function MainWindow() {
   const safeOn = view !== null && view.safe.state !== "off";
   // Send a key: open at the person-or-team list, or straight at someone's keys.
   const [sending, setSending] = useState<To | "pick" | null>(null);
+  const [card, setCard] = useState(false);
   const [security, setSecurity] = useState(false);
   const [code, setCode] = useState(false);
   // The team being edited, "new" for a new one.
   const [editing, setEditing] = useState<TeamView | "new" | null>(null);
+
+  const overlay = Boolean(view && (safeOn || sending || editing || security || code || card || view.accepted || view.invited ||
+    view.pairing || view.asked || view.added || view.import || view.import_receipt || view.alert || view.program));
+  useEffect(() => { if (stage.current) stage.current.inert = overlay; }, [overlay]);
 
   return (
     <div className="app">
@@ -111,7 +116,7 @@ export function MainWindow() {
       </header>
       <main className="stage" ref={stage}>
         {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} onCode={() => setCode(true)} />}
+        {view && !safeOn && <Home view={view} run={run} onCard={() => setCard(true)} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} onCode={() => setCode(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
@@ -132,8 +137,22 @@ export function MainWindow() {
           onClose={() => setEditing(null)}
         />
       )}
+      {view && card && !safeOn && (
+        <section className="sheet" role="dialog" aria-modal="true" aria-labelledby="card-title">
+          <IdCard size={40} aria-hidden />
+          <h2 className="title" id="card-title">My receiving card</h2>
+          <strong>{view.name}</strong>
+          <p className="lede">Give this card to someone so they can send you a key.</p>
+          <span className="grow-space" />
+          <div className="btn-row">
+            <button className="btn secondary" onClick={() => setCard(false)}>Back</button>
+            <button autoFocus className="btn primary grow" onClick={() => void run(api.copyCard().then(() => setCard(false)))}>Copy receiving card</button>
+          </div>
+        </section>
+      )}
       {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
       {view && code && !safeOn && <CodeSheet view={view} onClose={() => setCode(false)} />}
+      {view?.import_receipt && !safeOn && <ImportResult receipt={view.import_receipt} run={run} />}
       {view?.import && !safeOn && <ImportSheet imp={view.import} keep={view.keep} run={run} />}
       {view?.alert && !view.program && <AlertSheet alert={view.alert} />}
       {view?.program && <ProgramSheet program={view.program} run={run} />}
@@ -149,17 +168,17 @@ export function MainWindow() {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-function Home({ view, run, onSend, onSecurity, onCode }: { view: View; run: Run; onSend: () => void; onSecurity: () => void; onCode: () => void }) {
+function Home({ view, run, onSend, onSecurity, onCode, onCard }: { onCard: () => void; view: View; run: Run; onSend: () => void; onSecurity: () => void; onCode: () => void }) {
   const n = view.keys.length;
   return (
     <>
-      <div className="hero">
-        <h1 className="display sm">{n === 0 ? "No keys yet." : "Your keys"}</h1>
-        <p className="lede">{n === 0 ? "Add a key, or send one to someone." : summary(view.keys)}</p>
+      <div className="vault-heading">
+        <h1 className="display sm">Your keys</h1>
+        <p className="lede">{n === 0 ? "Keep your first key on this machine." : summary(view.keys)}</p>
       </div>
-      <div className="btn-row">
-        <button className="btn primary grow" onClick={() => void run(api.add())}>Add a key</button>
-        <button className="btn secondary grow" onClick={onSend}>Send a key</button>
+      <div className="btn-row vault-actions">
+        <button className="btn primary grow" onClick={() => void run(api.add())}><Plus size={17} aria-hidden />Add a key</button>
+        <button className="btn secondary grow" onClick={onSend}><Send size={16} aria-hidden />Send a key</button>
       </div>
       {n > 0 && (
         <div className="tools-row">
@@ -174,23 +193,19 @@ function Home({ view, run, onSend, onSecurity, onCode }: { view: View; run: Run;
       {view.session_grants.length > 0 && (
         <section className="session-grants" aria-label="Active grants">
           {view.session_grants.map((grant) => (
-            <div className="session-grant" key={grant.id}>
-              <div className="grant-head">
-                <strong>{grant.session}</strong>
-                <button className="btn secondary small" onClick={() => void run(api.revokeSession(grant.id))}>Revoke grant</button>
-              </div>
-              <span className="mono">{grant.folder}</span>
-              <span>{grant.keys.join(", ")} · until {new Date(grant.until * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-              <details>
-                <summary>Recent commands ({grant.recent.length})</summary>
-                <ol>{grant.recent.map((command, index) => <li className="mono" key={index}>{command}</li>)}</ol>
-              </details>
-            </div>
+            <details className="session-grant" key={grant.id}>
+              <summary><strong>{grant.session}</strong> · Review access</summary>
+              <p>{grant.keys.join(", ")} in <span className="mono">{grant.folder}</span></p>
+              <p>Allowed until {new Date(grant.until * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+              <strong>Recent commands</strong>
+              <ol>{grant.recent.map((command, index) => <li className="mono" key={index}>{command}</li>)}</ol>
+              <button className="btn secondary small" onClick={() => void run(api.revokeSession(grant.id))}>Revoke access</button>
+            </details>
           ))}
         </section>
       )}
       <Vault keys={view.keys} run={run} />
-      <Me name={view.name} run={run} onSecurity={onSecurity} />
+      <Me onCard={onCard} name={view.name} run={run} onSecurity={onSecurity} />
     </>
   );
 }
@@ -200,17 +215,13 @@ function summary(keys: KeyView[]): string {
   const now = Date.now() / 1000;
   const soon = keys.filter((k) => k.expires_at !== null && k.expires_at - now < 7 * 24 * 60 * 60).length;
   const once = keys.filter((k) => k.keep === "once").length;
-  const parts = [`${keys.length} ${keys.length === 1 ? "key" : "keys"}`];
+  const parts = [`${keys.length} ${keys.length === 1 ? "key" : "keys"} sealed on this machine`];
   if (soon > 0) parts.push(`${soon} ${soon === 1 ? "expires" : "expire"} this week`);
   else if (once > 0) parts.push(`${once} ${once === 1 ? "opens" : "open"} once`);
-  else parts.push("all sealed on this computer");
   return parts.join(" · ");
 }
 
 const SEARCH_ID = "key-search";
-/** Search, filters and sort appear once the list is long enough to need them. */
-const TOOLS_FROM = 6;
-
 type Filter = "all" | "others" | "yours" | "expiring";
 type Order = "newest" | "az" | "expiring";
 
@@ -220,7 +231,6 @@ const FILTERS: { id: Filter; label: string; test: (k: KeyView) => boolean }[] = 
   { id: "yours", label: "Yours", test: (k) => k.from === null },
   { id: "expiring", label: "Expiring", test: (k) => k.keep !== "keep" },
 ];
-const NEXT_ORDER: Record<Order, Order> = { newest: "az", az: "expiring", expiring: "newest" };
 const ORDER_LABEL: Record<Order, string> = { newest: "Newest", az: "A–Z", expiring: "Expiring first" };
 
 /** Once-only keys first, then the soonest to expire, then kept keys. */
@@ -236,117 +246,88 @@ const COMPARE: Record<Order, (a: KeyView, b: KeyView) => number> = {
 };
 
 function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
   // The key whose servers are being typed, and what's typed so far.
   const [hosting, setHosting] = useState<{ id: string; draft: string } | null>(null);
   const saveHosts = () => {
-    if (hosting) void run(api.setHosts(hosting.id, hosting.draft));
-    setHosting(null);
+    if (hosting) void run(api.setHosts(hosting.id, hosting.draft).then(() => setHosting(null)));
   };
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [order, setOrder] = useState<Order>("newest");
   if (keys.length === 0) {
-    return <StartTiles run={run} />;
+    return <ImportStart run={run} />;
   }
-  const tools = keys.length >= TOOLS_FROM;
   const q = query.trim().toLowerCase();
   const pass = FILTERS.find((f) => f.id === filter)!.test;
-  const shown = tools
-    ? keys
-        .filter((k) => pass(k) && (!q || k.label.toLowerCase().includes(q) || (k.from ?? "").toLowerCase().includes(q)))
-        .sort(COMPARE[order])
-    : keys;
+  const shown = keys.filter((key) => pass(key) &&
+    [key.label, key.from, key.team, ...key.hosts].some((field) => field?.toLowerCase().includes(q))).sort(COMPARE[order]);
   return (
     <div className="vault">
-      {tools && (
-        <>
-          <div className="search">
-            <Icon name="search" />
-            <input
-              id={SEARCH_ID}
-              type="search"
-              value={query}
-              placeholder={`Search ${keys.length} keys`}
-              aria-label="Search keys"
-              spellCheck={false}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setQuery("");
-                  e.currentTarget.blur();
-                }
-              }}
-            />
-            <button className="order" onClick={() => setOrder(NEXT_ORDER[order])} title="Change the order">
-              {ORDER_LABEL[order]}
-            </button>
-          </div>
-          <div className="chips" role="group" aria-label="Show">
-            {FILTERS.map((f) => (
-              <button key={f.id} className={filter === f.id ? "on" : ""} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
-                {f.label} <span>{keys.filter(f.test).length}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <div className="search">
+        <Icon name="search" />
+        <input
+          id={SEARCH_ID}
+          type="search"
+          value={query}
+          placeholder={`Search ${keys.length} ${keys.length === 1 ? "key" : "keys"}`}
+          aria-label="Search keys"
+          spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setQuery("");
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        <select aria-label="Filter keys" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
+          {FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+        </select>
+        <select aria-label="Sort keys" value={order} onChange={(e) => setOrder(e.target.value as Order)}>
+          {Object.entries(ORDER_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+      </div>
       {shown.length === 0 && <p className="help no-match">No keys match{q ? ` \u201c${query.trim()}\u201d` : ""}.</p>}
       <div className="keys">
         {shown.map((k) => (
-          <div className="key-row" key={k.id} title={describe(k)}>
-            <span className="key-ico"><Icon name="key" /></span>
-            <span className="who">
-              <span className="nm">{k.label}</span>
-              {hosting?.id === k.id ? (
-                <input
-                  className="meta hosts"
-                  autoFocus
-                  value={hosting.draft}
-                  placeholder="api.example.com"
-                  spellCheck={false}
-                  aria-label={`Servers ${k.label} is for`}
-                  onChange={(e) => setHosting({ id: k.id, draft: e.target.value })}
-                  onBlur={saveHosts}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveHosts();
-                    if (e.key === "Escape") setHosting(null);
-                  }}
-                />
-              ) : (
-                <span className="meta">
-                  {k.from ? `From ${k.from}` : "Yours"}
-                  {k.team ? ` · ${k.team}` : ""} · {lifetime(k)}
-                  {" · "}
-                  <button
-                    className="hosts"
-                    onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}
-                    title="Programs started with keyhandoff run get a stand-in that becomes this key only on a connection to these servers."
-                  >
-                    {k.hosts.length ? `Only for ${k.hosts.join(", ")}` : "Set its server"}
+          <div className="vault-entry" key={k.id}>
+            <button className="entry-heading" aria-expanded={expanded === k.id} onClick={() => {
+              setExpanded(expanded === k.id ? null : k.id);
+              setArmed(null);
+              setHosting(null);
+            }}>
+              <span className="entry-text">
+                <strong className="mono">{k.label}</strong>
+                <small>{[k.from && `Received from ${k.from}`, k.team, k.hosts.length ? `Only for ${k.hosts.join(", ")}` : null,
+                  k.keep !== "keep" ? lifetime(k) : null].filter(Boolean).join(" · ") || "Added by you"}</small>
+              </span>
+              <ChevronDown size={15} aria-hidden />
+            </button>
+            {expanded === k.id && (
+              <div className="entry-details">
+                <p>{describe(k)} · {lifetime(k)}</p>
+                {hosting?.id === k.id ? (
+                  <form onSubmit={(e) => { e.preventDefault(); saveHosts(); }}>
+                    <label>Allowed servers<input autoFocus value={hosting.draft} placeholder="api.example.com"
+                      spellCheck={false} onChange={(e) => setHosting({ id: k.id, draft: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Escape") setHosting(null); }} /></label>
+                    <button type="submit">Save</button><button type="button" onClick={() => setHosting(null)}>Cancel</button>
+                  </form>
+                ) : (
+                  <button onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}>
+                    {k.hosts.length ? "Edit allowed servers" : "Set allowed server"}
                   </button>
-                </span>
-              )}
-            </span>
-            {k.from === null && (
-              <button className="use ico" aria-label={`Replace ${k.label}`} onClick={() => void run(api.replace(k.id))} title="Replace: rotated it with the provider? Catch the new value. Programs using it keep working.">
-                <RefreshCw size={15} strokeWidth={1.75} aria-hidden />
-              </button>
+                )}
+                <button onClick={() => void run(api.copyPointer(k.id))}>Copy pointer</button>
+                {k.from === null && <button onClick={() => void run(api.replace(k.id))}>Replace stored value</button>}
+                <button className={armed === k.id ? "confirm-forget" : ""} onBlur={() => setArmed(null)}
+                  onClick={() => armed === k.id ? void run(api.forget(k.id)) : setArmed(k.id)}>
+                  {armed === k.id ? "Confirm removal" : "Remove from vault"}
+                </button>
+              </div>
             )}
-            <button className="use ico" aria-label={`Copy a .env line for ${k.label}`} onClick={() => void run(api.copyPointer(k.id))} title="Copy .env line: it points at the key, it doesn't hold it.">
-              <FileCode2 size={15} strokeWidth={1.75} aria-hidden />
-            </button>
-            <button
-              className={`forget ${armed === k.id ? "sure" : ""}`}
-              aria-label={`Forget ${k.label}`}
-              onClick={() => {
-                if (armed === k.id) void run(api.forget(k.id));
-                else setArmed(k.id);
-              }}
-              onBlur={() => setArmed(null)}
-            >
-              {armed === k.id ? "Forget for good?" : <Icon name="close" />}
-            </button>
           </div>
         ))}
       </div>
@@ -354,9 +335,10 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   );
 }
 
-function Me({ name, run, onSecurity }: { name: string; run: Run; onSecurity: () => void }) {
+function Me({ name, run, onSecurity, onCard }: { onCard: () => void; name: string; run: Run; onSecurity: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
+
   const save = () => {
     setEditing(false);
     if (draft.trim() && draft !== name) void run(api.setName(draft));
@@ -376,18 +358,12 @@ function Me({ name, run, onSecurity }: { name: string; run: Run; onSecurity: () 
           />
         ) : (
           <button onClick={() => { setDraft(name); setEditing(true); }} title="Shown on your card">
-            You are <b>{name}</b>
+            <b>{name}</b>
           </button>
         )}
-        <span> · </span>
-        <button onClick={() => void run(api.copyCard())} title="Copy your card to send to people who'll send you keys">
-          <b>Your card</b>
-        </button>
-        <span> · </span>
-        <button onClick={onSecurity} title="How KeyHandoff opens">
-          <b>Security</b>
-        </button>
+        <button className="card-link" onClick={onCard}><IdCard size={15} aria-hidden />My receiving card</button>
       </span>
+      <button onClick={onSecurity} aria-label="Security settings" title="Security settings"><Settings size={17} aria-hidden /></button>
       <button className="paste" onClick={() => void run(api.paste())} title="Paste a .handoff file">
         Paste a file <kbd>Ctrl V</kbd>
       </button>
@@ -605,9 +581,9 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={() => void run(api.answer(program.id, "deny"))}>Deny</button>
-        <button className="btn secondary" onClick={() => void run(api.answer(program.id, "once"))}>Just once</button>
+        <button className="btn secondary" onClick={() => void run(api.answer(program.id, "once"))}>Allow once</button>
         {program.session && (
-          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow session</button>
+          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow for 30 minutes</button>
         )}
         {!agent && (
           <button className="btn primary grow" autoFocus onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
@@ -721,15 +697,19 @@ type To = { team: boolean; id: string; name: string; folder?: boolean };
 function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run; start: To | null; onEdit: (t: TeamView | "new") => void; onClose: () => void }) {
   const sheet = useRef<HTMLDivElement>(null);
   const [to, setTo] = useState<To | null>(start);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   // The contact whose Forget was clicked once; a second click forgets them.
   const [armed, setArmed] = useState<string | null>(null);
   useEffect(() => void enter(sheet.current, "rise", 360), [to === null]);
   const { contacts, teams } = view;
   if (to) {
-    const send = (key: KeyView) =>
-      void run(
-        to.folder ? api.shareWithFolderTeam(to.id, key.id) : to.team ? api.sendKeptToTeam(to.id, key.id) : api.sendKept(to.id, key.id),
-      ).then(onClose);
+    const selected = view.keys.find((k) => k.id === picked);
+    const send = (key: KeyView) => {
+      setBusy(true);
+      const action = to.folder ? api.shareWithFolderTeam(to.id, key.id) : to.team ? api.sendKeptToTeam(to.id, key.id) : api.sendKept(to.id, key.id);
+      void run(action.then(onClose)).finally(() => setBusy(false));
+    };
     return (
       <div className="sheet" ref={sheet}>
         <div className="hero">
@@ -739,7 +719,7 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         {view.keys.length ? (
           <div className="keys">
             {view.keys.map((k) => (
-              <button key={k.id} className="key-row contact" onClick={() => send(k)}>
+              <button key={k.id} className="key-row contact send-choice" aria-pressed={picked === k.id} onClick={() => setPicked(k.id)}>
                 <span className="key-ico"><Icon name="key" /></span>
                 <span className="who">
                   <span className="nm">{k.label}</span>
@@ -756,7 +736,10 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         )}
         <span className="grow-space" />
         <div className="btn-row">
-          <button className="btn secondary grow" onClick={() => setTo(null)}>Back</button>
+          <button className="btn secondary" disabled={busy} onClick={() => { setPicked(null); setTo(null); }}>Back</button>
+          {selected && <button className="btn primary grow send-confirm" disabled={busy} onClick={() => send(selected)}>
+            {to.folder ? "Share" : "Seal"} {selected.label} {to.folder ? "with" : "for"} {to.name}
+          </button>}
         </div>
       </div>
     );

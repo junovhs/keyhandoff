@@ -15,6 +15,7 @@
   --ok: #2fd567;
   --warn: #ffb020;
   --accent: #2f6bff; --accent-2: #5a5cff; --accent-ink: #6b95ff;
+  --handoff-finish: linear-gradient(135deg, #9df6e0 4%, #858afc 42%, #e3b5eb 74%, #b0e8df);
   --accent-grad: linear-gradient(100deg, var(--accent), var(--accent-2));
   --font: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, monospace;
@@ -262,13 +263,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 }
 
 /* Picture-first screens (Visual.tsx) */
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 6px 14px; border: 1px solid var(--line-strong); border-radius: 12px; text-align: center; transition: background calc(.15s / var(--tempo)), border-color calc(.15s / var(--tempo)); }
-.tile:hover { background: var(--raised); border-color: #444; }
-.tile-ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--accent-ink); background: rgba(47, 107, 255, .1); margin-bottom: 4px; }
-.tile:first-child .tile-ico { background: var(--accent-grad); color: #fff; }
-.tile-title { font-size: 13.5px; font-weight: 600; }
-.tile-sub { font-size: 11.5px; color: var(--text-3); }
 .tools-row { display: flex; gap: 18px; margin-top: -6px; }
 .tools-row .quiet { display: inline-flex; align-items: center; gap: 6px; }
 .flow { display: flex; align-items: center; justify-content: center; gap: 18px; padding-top: 8px; }
@@ -323,3 +317,64 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .btn-row.pinned { position: sticky; bottom: -20px; margin-bottom: -20px; padding: 10px 0 20px; background: var(--ground); }
 .flow-ico { width: 52px; height: 52px; border-radius: 14px; }
 .flow { padding-top: 0; }
+
+/* Vault chrome is separate from the native window controls. */
+.stage:has(.vault-heading) { gap: 12px; }
+.vault-heading { position: relative; padding: 4px 68px 2px 0; }
+.vault-heading::after {
+  content: ""; position: absolute; top: 0; right: -19px; width: 68px; height: 40px;
+  background: var(--handoff-finish);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 68% 100%, 68% 68%, 35% 68%, 35% 34%, 0 34%);
+  pointer-events: none;
+}
+.vault-heading .lede { font-size: 13px; margin-top: 5px; }
+.vault-actions .primary { background: #e7e6f3; color: #181722; }
+.vault-actions .primary:hover { background: #fff; }
+.vault-actions .secondary { background: #101014; }
+.vault-actions .secondary:hover { background: var(--raised); }
+.vault-actions + .tools-row { margin: 0; }
+.import-start { display: flex; align-items: center; gap: 14px; padding: 18px 14px; text-align: left; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.import-start span { flex: 1; }
+.import-start small, .entry-text small { display: block; color: var(--text-2); font-size: 12px; }
+.import-start:hover, .entry-heading:hover { background: var(--raised); }
+.vault { gap: 8px; }
+.vault .keys { flex: 1; }
+.vault-entry { border-bottom: 1px solid var(--line); }
+.entry-heading { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 6px; }
+.entry-heading:focus-visible { outline-offset: -2px; }
+.entry-text { flex: 1; min-width: 0; }
+.entry-text strong, .entry-text small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.entry-text strong { font-size: 13.5px; font-weight: 550; }
+.entry-heading svg { color: var(--text-3); flex-shrink: 0; }
+.entry-heading[aria-expanded=true] svg { transform: rotate(180deg); }
+.vault-entry:has(.entry-details) { background: #101014; border-radius: 8px; }
+.entry-details { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 12px; }
+.entry-details p { width: 100%; margin: 0 0 4px; overflow-wrap: anywhere; font-size: 12px; color: var(--text-2); }
+.entry-details button { padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 12px; }
+.entry-details button:hover { background: var(--raised); }
+.entry-details .confirm-forget { color: #ffb9bf; }
+.entry-details form { width: 100%; display: flex; align-items: end; gap: 4px; }
+.entry-details label { font-size: 12px; color: var(--text-2); flex: 1; min-width: 0; }
+.entry-details input { width: 100%; display: block; background: var(--ground); color: var(--text); padding: 5px 7px; border: 1px solid var(--line-strong); border-radius: 5px; }
+.foot { flex-shrink: 0; border-top: 1px solid var(--line); padding-top: 9px; gap: 6px 10px; }
+.foot .me { flex: 1; display: flex; min-width: 0; gap: 3px; align-items: flex-start; flex-direction: column; }
+.me > button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me .card-link { display: inline-flex; align-items: center; gap: 5px; }
+.foot > .paste { order: -1; }
+.foot .me { order: -2; }
+.search select { appearance: auto; field-sizing: content; max-width: 102px; background: var(--surface); color: var(--text-2); border: 0; border-left: 1px solid var(--line-strong); font: 12px var(--font); padding: 4px; }
+.search select:focus-visible { outline: 2px solid var(--accent-ink); }
+.search:has(select) { gap: 6px; }
+
+.send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 3px 0 #c6c0f1; padding-inline: 8px; }
+.send-confirm { min-width: 0; white-space: normal; height: auto; min-height: 44px; padding-block: 6px; overflow-wrap: anywhere; }
+.session-grant { display: block; }
+.session-grant summary { overflow-wrap: anywhere; }
+.session-grant p { margin: 5px 0; }
+.receipt-check { color: var(--ok); }
+.pointer-preview { min-height: 0; overflow: auto; padding: 12px; border: 1px solid var(--line-strong); border-radius: 8px; }
+.pointer-preview summary { cursor: pointer; }
+.pointer-preview pre { user-select: text; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 var(--mono); }
+.receipt .mono { overflow-wrap: anywhere; }
+.safe.sealed .safe-stage .display { background: var(--handoff-finish); background-clip: text; color: transparent; }
+@media (forced-colors: active) { .safe.sealed .safe-stage .display { color: CanvasText; } }

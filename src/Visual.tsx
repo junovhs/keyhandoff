@@ -5,11 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
-  ClipboardCopy,
   Copy,
   FileCode2,
   FileInput,
-  IdCard,
   KeyRound,
   Link2,
   ShieldCheck,
@@ -17,30 +15,41 @@ import {
   Vault,
 } from "lucide-react";
 import { Icon } from "./art";
-import { api, KEEP_CHOICES, type ImportView, type Keep, type View } from "./ipc";
+import { api, KEEP_CHOICES, type ImportReceipt, type ImportView, type Keep, type View } from "./ipc";
 import { enter } from "./motion";
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
 const ICON = { size: 22, strokeWidth: 1.75, "aria-hidden": true } as const;
 
-/** No keys yet: three ways in, as tiles. */
-export function StartTiles({ run }: { run: Run }) {
-  const tiles = [
-    { icon: <ClipboardCopy {...ICON} />, title: "Copy a key", sub: "from any page", act: () => void run(api.add()) },
-    { icon: <FileInput {...ICON} />, title: "Import a .env", sub: "keys out of a file", act: () => void run(api.importEnv()) },
-    { icon: <IdCard {...ICON} />, title: "Get keys", sub: "send your card", act: () => void run(api.copyCard()) },
-  ];
+export function ImportStart({ run }: { run: Run }) {
   return (
-    <div className="tiles">
-      {tiles.map((t) => (
-        <button key={t.title} className="tile" onClick={t.act}>
-          <span className="tile-ico">{t.icon}</span>
-          <span className="tile-title">{t.title}</span>
-          <span className="tile-sub">{t.sub}</span>
-        </button>
-      ))}
-    </div>
+    <button className="import-start" onClick={() => void run(api.importEnv())}>
+      <FileInput size={22} aria-hidden />
+      <span><strong>Import a .env file</strong><small>Seal its keys and leave pointers in your project.</small></span>
+      <ArrowRight size={16} aria-hidden />
+    </button>
+  );
+}
+
+export function ImportResult({ receipt, run }: { receipt: ImportReceipt; run: Run }) {
+  const count = receipt.pointers.length;
+  const reused = count - receipt.added;
+  return (
+    <section className="sheet receipt" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
+      <span className="receipt-check"><Check size={24} aria-hidden /></span>
+      <h2 id="receipt-title" className="display md">File updated</h2>
+      <p className="lede">{receipt.file} now contains {count} {count === 1 ? "pointer" : "pointers"}.</p>
+      <p className="help mono">{receipt.folder}</p>
+      <p>{receipt.added} {receipt.added === 1 ? "key" : "keys"} sealed{reused > 0 && ` · ${reused} linked to existing keys`}.</p>
+      <details className="pointer-preview">
+        <summary>View updated file</summary>
+        <p className="help">Showing the pointer lines written to {receipt.file}.</p>
+        <pre>{receipt.pointers.join("\n")}</pre>
+      </details>
+      <span className="grow-space" />
+      <button autoFocus className="btn primary" onClick={() => void run(api.closeImport())}>Done</button>
+    </section>
   );
 }
 
@@ -74,6 +83,7 @@ export function ImportSheet({ imp, keep, run }: { imp: ImportView; keep: Keep; r
       else next.add(name);
       return next;
     });
+  const [busy, setBusy] = useState(false);
   const n = chosen.size;
   return (
     <div className="sheet" ref={sheet}>
@@ -108,7 +118,7 @@ export function ImportSheet({ imp, keep, run }: { imp: ImportView; keep: Keep; r
       <span className="grow-space" />
       <div className="btn-row pinned">
         <button className="btn secondary" onClick={() => void run(api.closeImport())}>Cancel</button>
-        <button className="btn primary grow" disabled={n === 0} onClick={() => void run(api.finishImport([...chosen], how))}>
+        <button className="btn primary grow" disabled={busy || n === 0} onClick={() => { setBusy(true); void run(api.finishImport([...chosen], how)).finally(() => setBusy(false)); }}>
           <ShieldCheck size={18} strokeWidth={2} aria-hidden />
           {n === 0 ? "Pick a key" : `Seal ${n} ${n === 1 ? "key" : "keys"}`}
         </button>

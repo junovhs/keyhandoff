@@ -161,6 +161,14 @@ export interface View {
   alert: AlertView | null;
   /** A .env file being imported: its variables by name. Values stay in Rust. */
   import: ImportView | null;
+  import_receipt: ImportReceipt | null;
+}
+
+export interface ImportReceipt {
+  file: string;
+  folder: string;
+  pointers: string[];
+  added: number;
 }
 
 export interface ImportView {
