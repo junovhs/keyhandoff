@@ -238,6 +238,9 @@ export function useGate(): GateView | null {
 
 export const api = {
   view: () => invoke<View>("view"),
+  prepareCard: () => invoke<void>("prepare_card"),
+  saveCard: () => invoke<boolean>("save_card_file"),
+  openFile: () => invoke<void>("open_handoff_file"),
   copyCard: () => invoke<void>("copy_card"),
   saveTeam: (id: string | null, name: string, members: string[]) => invoke<string>("save_team", { id, name, members }),
   deleteTeam: (id: string) => invoke<void>("delete_team", { id }),

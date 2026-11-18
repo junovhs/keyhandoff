@@ -253,6 +253,38 @@ fn view(s: S) -> Result<View, String> {
 }
 
 #[tauri::command]
+fn prepare_card(app: AppHandle, h: H) -> Result<(), String> {
+    done(&app, h.prepare_card())
+}
+
+#[tauri::command]
+async fn save_card_file(app: AppHandle, h: H) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (file, card) = h.drag_source("request").ok_or("Create a receiving card first.")?;
+    drop(h);
+    let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("Receiving card.handoff");
+    let picked = app.dialog().file().set_title("Save receiving card").set_file_name(name)
+        .add_filter("KeyHandoff card", &["handoff"]).blocking_save_file();
+    let Some(picked) = picked else { return Ok(false) };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(path, card).map_err(|e| format!("Could not save the card: {e}"))?;
+    Ok(true)
+}
+
+#[tauri::command]
+async fn open_handoff_file(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().set_title("Open a KeyHandoff file")
+        .add_filter("KeyHandoff", &["handoff"]).blocking_pick_file();
+    if let Some(file) = picked {
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        let session = app.state::<Arc<Session>>();
+        done(&app, session.touch(now_ms())?.open_path(&path))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn copy_card(app: AppHandle, h: H) -> Result<(), String> {
     done(&app, h.copy_card())
 }
@@ -582,7 +614,7 @@ pub fn run() {
         .manage(Started(started))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_hosts, set_name, answer, revoke_session, dismiss, ready, update_now
         ])
         .setup(move |app| {

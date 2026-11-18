@@ -319,53 +319,82 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .flow { padding-top: 0; }
 
 /* Vault chrome is separate from the native window controls. */
-.stage:has(.vault-heading) { gap: 12px; }
-.vault-heading { position: relative; padding: 4px 68px 2px 0; }
-.vault-heading::after {
-  content: ""; position: absolute; top: 0; right: -19px; width: 68px; height: 40px;
-  background: var(--handoff-finish);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 68% 100%, 68% 68%, 35% 68%, 35% 34%, 0 34%);
+/* The foil belongs to the frame. The window buttons sit on its dark end. */
+.app:has(.vault-heading) {
+  --foil: radial-gradient(ellipse at 12% 112%, #9ff8ed 2%, transparent 38%),
+    radial-gradient(ellipse at 81% -38%, #93f3f1 5%, transparent 45%),
+    linear-gradient(122deg, #c6a8fe 4%, #aebaff 29%, #efb6d9 56%, #b899ff 79%, #c4f0e6);
+}
+.app:has(.vault-heading)::before {
+  content: ""; position: absolute; right: 0; top: 0; width: clamp(96px, 24%, 164px); height: 72px;
+  background: linear-gradient(180deg, #101422aa, transparent 90%), var(--foil);
+  clip-path: polygon(0 0,100% 0,100% 100%,68% 100%,68% 73%,34% 73%,34% 46%,0 46%);
   pointer-events: none;
 }
-.vault-heading .lede { font-size: 13px; margin-top: 5px; }
-.vault-actions .primary { background: #e7e6f3; color: #181722; }
-.vault-actions .primary:hover { background: #fff; }
-.vault-actions .secondary { background: #101014; }
-.vault-actions .secondary:hover { background: var(--raised); }
+.titlebar { position: relative; }
+.titlebar > button { color: white; }
+.app:has(.vault-heading) .titlebar > button:last-child, .app:has(.vault-heading) .titlebar > button:nth-last-child(2) {
+  color: white; filter: drop-shadow(0 1px 2px #15131b); }
+.stage:has(.vault-heading) { gap: 12px; padding-bottom: 0; }
+.vault-heading { display: flex; align-items: center; gap: 11px; padding: 4px 28px 5px 0; }
+.vault-heading .display { font-size: clamp(25px, 5vw, 34px); }
+.vault-heading .lede { font-size: 13px; margin-top: 3px; }
+.vault-seal { display: grid; place-items: center; width: 35px; height: 42px; color: #cbbbf5; flex-shrink: 0; }
+.vault-seal svg { grid-area: 1 / 1; }
+.vault-seal svg:first-child { width: 38px; height: 42px; stroke-width: 1.5; }
+.vault-seal svg:last-child { width: 13px; color: #faf9ff; }
+.vault-actions .primary { background: var(--foil); color: #191524; border: 1px solid #d7c9f1; }
+.vault-actions .primary:hover { filter: brightness(1.06); }
+.vault-actions .secondary { border-color: #43424d; }
 .vault-actions + .tools-row { margin: 0; }
 .import-start { display: flex; align-items: center; gap: 14px; padding: 18px 14px; text-align: left; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
 .import-start span { flex: 1; }
 .import-start small, .entry-text small { display: block; color: var(--text-2); font-size: 12px; }
 .import-start:hover, .entry-heading:hover { background: var(--raised); }
 .vault { gap: 8px; }
-.vault .keys { flex: 1; }
-.vault-entry { border-bottom: 1px solid var(--line); }
-.entry-heading { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 6px; }
-.entry-heading:focus-visible { outline-offset: -2px; }
-.entry-text { flex: 1; min-width: 0; }
-.entry-text strong, .entry-text small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.entry-text strong { font-size: 13.5px; font-weight: 550; }
-.entry-heading svg { color: var(--text-3); flex-shrink: 0; }
-.entry-heading[aria-expanded=true] svg { transform: rotate(180deg); }
-.vault-entry:has(.entry-details) { background: #101014; border-radius: 8px; }
-.entry-details { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 12px; }
-.entry-details p { width: 100%; margin: 0 0 4px; overflow-wrap: anywhere; font-size: 12px; color: var(--text-2); }
-.entry-details button { padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 12px; }
-.entry-details button:hover { background: var(--raised); }
-.entry-details .confirm-forget { color: #ffb9bf; }
-.entry-details form { width: 100%; display: flex; align-items: end; gap: 4px; }
-.entry-details label { font-size: 12px; color: var(--text-2); flex: 1; min-width: 0; }
-.entry-details input { width: 100%; display: block; background: var(--ground); color: var(--text); padding: 5px 7px; border: 1px solid var(--line-strong); border-radius: 5px; }
-.foot { flex-shrink: 0; border-top: 1px solid var(--line); padding-top: 9px; gap: 6px 10px; }
-.foot .me { flex: 1; display: flex; min-width: 0; gap: 3px; align-items: flex-start; flex-direction: column; }
-.me > button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.me .card-link { display: inline-flex; align-items: center; gap: 5px; }
-.foot > .paste { order: -1; }
-.foot .me { order: -2; }
-.search select { appearance: auto; field-sizing: content; max-width: 102px; background: var(--surface); color: var(--text-2); border: 0; border-left: 1px solid var(--line-strong); font: 12px var(--font); padding: 4px; }
-.search select:focus-visible { outline: 2px solid var(--accent-ink); }
-.search:has(select) { gap: 6px; }
-
+.vault { position: relative; }
+.vault .search { background: #0c0c11; border-color: #34343e; }
+.sort-menu { position: relative; border-left: 1px solid var(--line-strong); padding-left: 8px; }
+.sort-menu summary { display: flex; align-items: center; gap: 6px; padding: 5px; cursor: pointer; color: #dedce7; font-size: 12px; }
+.sort-menu summary::-webkit-details-marker { display: none; }
+.sort-options { position: absolute; right: -4px; top: 32px; z-index: 2; width: 180px; border: 1px solid #42424d; border-radius: 10px; padding: 10px; background: #141419; box-shadow: 0 8px 20px #0008; }
+.sort-options label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px; }
+.sort-options select { background: #222129; color: var(--text); font: inherit; border: 1px solid #393842; border-radius: 4px; }
+.key-ledger { min-height: 0; overflow: auto; flex: 1; padding-inline: 7px 2px; position: relative; }
+.key-ledger::before { content: ""; position: absolute; top: 0; left: 0; width: 2px; height: min(100%,var(--ledger-height)); background: linear-gradient(#c69eea,#8ac9df,#f2caaf,#b5a4ee); }
+.key-ledger, .sheet { scrollbar-width: thin; scrollbar-color: #46444f transparent; }
+.ledger-row { display: flex; gap: 10px; align-items: center; height: 38px; border-bottom: 1px solid #24232c; position: relative; }
+.ledger-key { display: grid; place-items: center; height: 26px; width: 28px; flex-shrink: 0; border-radius: 7px; background: linear-gradient(130deg,#22232c,#101016); color: #e8e7f0; }
+.ledger-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.ledger-tools { display: flex; gap: 3px; margin-left: auto; }
+.ledger-tools button, .dock-settings { display: grid; place-items: center; border: 1px solid transparent; border-radius: 7px; }
+.ledger-tools button { width: 26px; height: 26px; border-color: #393842; color: #e2dfe9; background: #111116; }
+.ledger-tools svg { width: 14px; height: 14px; }
+.ledger-tools button:hover, .dock-settings:hover { background: #26242d; border-color: #63616c; }
+@media (hover: hover) {
+  .ledger-tools { position: absolute; right: 0; opacity: 0; pointer-events: none; }
+  .ledger-row:hover .ledger-tools, .ledger-row:focus-within .ledger-tools { position: static; opacity: 1; pointer-events: auto; }
+}
+.identity-dock { margin: auto -20px 0; padding: 14px 17px; border-top: 1px solid #35323e; background: linear-gradient(110deg,#101016,#07070a 70%); display: grid; grid-template-columns: auto minmax(0,1fr) 38px; align-items: center; gap: clamp(8px,2.6vw,18px); flex-shrink: 0; }
+.pocket-card, .card-file { color: #fff; border: 1px solid #a397bf; background: radial-gradient(ellipse at 0% 120%,#467c8f 0%,transparent 48%), radial-gradient(ellipse at 110% -30%,#91d5ce 1%,transparent 42%), radial-gradient(ellipse at 105% 115%,#9b74b8,transparent 41%), linear-gradient(140deg,#72658e,#272240 43%,#272640 70%,#544d83); }
+.pocket-card { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 9px; padding: 0 11px; min-height: 52px; font-size: 14px; font-weight: 650; }
+.pocket-card span { text-align: left; line-height: 1.15; }
+.pocket-card small { display: block; margin-top: 4px; font: 10px var(--mono); color: #ded7ee; }
+.pocket-card:hover { filter: brightness(1.15); }
+.dock-name { font-size: clamp(14px,2.8vw,20px); line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.dock-settings { width: 38px; height: 40px; }
+.preferences form, .vault-dialog form { display: grid; gap: 12px; }
+.preferences .name-in { min-width: 0; flex: 1; }
+.pref-link, .about-version { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-block-start: 1px solid var(--line); }
+.pref-link svg:last-child, .about-version span { margin-left: auto; }
+.about-version span { color: var(--text-2); }
+.card-file { display: grid; justify-items: start; gap: 10px; border-radius: 14px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
+.card-file small { color: #e1deeb; }
+.vault-dialog { width: min(360px,92vw); background: #16151c; color: var(--text); border: 1px solid #514d5c; border-radius: 14px; padding: 20px; }
+.vault-dialog::backdrop { background: #000a; }
+.vault-dialog label { display: grid; gap: 7px; }
+.vault-dialog p { overflow-wrap: anywhere; }
+@media(min-width: 540px) { .identity-dock { min-height: 86px; } .pocket-card { min-width: 170px; min-height: 55px; } .key-ledger { --row-height: 44px; } .ledger-row { height: 44px; } }
 .send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 3px 0 #c6c0f1; padding-inline: 8px; }
 .send-confirm { min-width: 0; white-space: normal; height: auto; min-height: 44px; padding-block: 6px; overflow-wrap: anywhere; }
 .session-grant { display: block; }

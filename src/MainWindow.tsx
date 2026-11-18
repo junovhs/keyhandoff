@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Glyph, Icon, Logo, useDragOut } from "./art";
 import {
@@ -23,7 +24,7 @@ import { enter, stagger } from "./motion";
 import { Gate } from "./Gate";
 import { SafeCopy } from "./SafeCopy";
 import { CodeSheet, ImportResult, ImportSheet, ImportStart } from "./Visual";
-import { Bot, ChevronDown, FileInput, Folder, IdCard, KeyRound, Plus, Send, Settings, SquareTerminal } from "lucide-react";
+import { ArrowUpRight, Bot, Check, ChevronDown, Copy, Download, FileInput, Folder, FolderOpen, IdCard, KeyRound, LockKeyhole, Plus, RefreshCw, Send, Server, Settings, Shield, SquareTerminal, X } from "lucide-react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -51,13 +52,13 @@ export function MainWindow() {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
       const mod = e.ctrlKey || e.metaKey;
-      if (!typing && mod && e.key.toLowerCase() === "v" && !document.querySelector(".sheet, .safe, .gate")) {
+      if (!typing && mod && e.key.toLowerCase() === "v" && !document.querySelector(".sheet, .safe, .gate, dialog[open]")) {
         e.preventDefault();
         void run(api.paste());
         return;
       }
       const search = document.getElementById(SEARCH_ID);
-      const covered = document.querySelector(".sheet, .safe, .gate") !== null;
+      const covered = document.querySelector(".sheet, .safe, .gate, dialog[open]") !== null;
       if (typing || covered || !(search instanceof HTMLInputElement)) return;
       if ((mod && e.key.toLowerCase() === "f") || e.key === "/") {
         e.preventDefault();
@@ -78,13 +79,13 @@ export function MainWindow() {
   const safeOn = view !== null && view.safe.state !== "off";
   // Send a key: open at the person-or-team list, or straight at someone's keys.
   const [sending, setSending] = useState<To | "pick" | null>(null);
-  const [card, setCard] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [security, setSecurity] = useState(false);
   const [code, setCode] = useState(false);
   // The team being edited, "new" for a new one.
   const [editing, setEditing] = useState<TeamView | "new" | null>(null);
 
-  const overlay = Boolean(view && (safeOn || sending || editing || security || code || card || view.accepted || view.invited ||
+  const overlay = Boolean(view && (safeOn || sending || editing || security || code || settings || view.accepted || view.invited ||
     view.pairing || view.asked || view.added || view.import || view.import_receipt || view.alert || view.program));
   useEffect(() => { if (stage.current) stage.current.inert = overlay; }, [overlay]);
 
@@ -116,7 +117,7 @@ export function MainWindow() {
       </header>
       <main className="stage" ref={stage}>
         {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onCard={() => setCard(true)} onSend={() => setSending("pick")} onSecurity={() => setSecurity(true)} onCode={() => setCode(true)} />}
+        {view && !safeOn && <Home view={view} run={run} onCard={() => void run(api.prepareCard())} onSend={() => setSending("pick")} onSettings={() => setSettings(true)} onCode={() => setCode(true)} />}
       </main>
       {view && safeOn && <SafeCopy view={view} />}
       {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
@@ -137,19 +138,7 @@ export function MainWindow() {
           onClose={() => setEditing(null)}
         />
       )}
-      {view && card && !safeOn && (
-        <section className="sheet" role="dialog" aria-modal="true" aria-labelledby="card-title">
-          <IdCard size={40} aria-hidden />
-          <h2 className="title" id="card-title">My receiving card</h2>
-          <strong>{view.name}</strong>
-          <p className="lede">Give this card to someone so they can send you a key.</p>
-          <span className="grow-space" />
-          <div className="btn-row">
-            <button className="btn secondary" onClick={() => setCard(false)}>Back</button>
-            <button autoFocus className="btn primary grow" onClick={() => void run(api.copyCard().then(() => setCard(false)))}>Copy receiving card</button>
-          </div>
-        </section>
-      )}
+      {view && settings && !safeOn && !security && <SettingsSheet view={view} run={run} onSecurity={() => setSecurity(true)} onClose={() => setSettings(false)} />}
       {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
       {view && code && !safeOn && <CodeSheet view={view} onClose={() => setCode(false)} />}
       {view?.import_receipt && !safeOn && <ImportResult receipt={view.import_receipt} run={run} />}
@@ -168,28 +157,30 @@ export function MainWindow() {
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
-function Home({ view, run, onSend, onSecurity, onCode, onCard }: { onCard: () => void; view: View; run: Run; onSend: () => void; onSecurity: () => void; onCode: () => void }) {
+function Home({ view, run, onSend, onSettings, onCode, onCard }: { onCard: () => void; view: View; run: Run; onSend: () => void; onSettings: () => void; onCode: () => void }) {
   const n = view.keys.length;
   return (
     <>
       <div className="vault-heading">
-        <h1 className="display sm">Your keys</h1>
-        <p className="lede">{n === 0 ? "Keep your first key on this machine." : summary(view.keys)}</p>
+        <span className="vault-seal" aria-hidden><Shield /><LockKeyhole /></span>
+        <div><h1 className="display sm">Your secure keys</h1>
+        <p className="lede">{n === 0 ? "Keep your first key on this machine." : summary(view.keys)}</p></div>
       </div>
       <div className="btn-row vault-actions">
         <button className="btn primary grow" onClick={() => void run(api.add())}><Plus size={17} aria-hidden />Add a key</button>
         <button className="btn secondary grow" onClick={onSend}><Send size={16} aria-hidden />Send a key</button>
       </div>
-      {n > 0 && (
-        <div className="tools-row">
+      <div className="tools-row">
+          <button className="quiet" onClick={() => void run(api.openFile())}><FolderOpen size={15} aria-hidden />Open file</button>
+          {n > 0 && (<>
           <button className="quiet" onClick={() => void run(api.importEnv())}>
             <FileInput size={15} strokeWidth={1.75} aria-hidden /> Import .env
           </button>
           <button className="quiet" onClick={onCode}>
             <SquareTerminal size={15} strokeWidth={1.75} aria-hidden /> Use in code
           </button>
+          </>)}
         </div>
-      )}
       {view.session_grants.length > 0 && (
         <section className="session-grants" aria-label="Active grants">
           {view.session_grants.map((grant) => (
@@ -205,7 +196,7 @@ function Home({ view, run, onSend, onSecurity, onCode, onCard }: { onCard: () =>
         </section>
       )}
       <Vault keys={view.keys} run={run} />
-      <Me onCard={onCard} name={view.name} run={run} onSecurity={onSecurity} />
+      <Me onCard={onCard} name={view.name} onSettings={onSettings} />
     </>
   );
 }
@@ -246,8 +237,8 @@ const COMPARE: Record<Order, (a: KeyView, b: KeyView) => number> = {
 };
 
 function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [armed, setArmed] = useState<string | null>(null);
+
+  const [removing, setRemoving] = useState<KeyView | null>(null);
   // The key whose servers are being typed, and what's typed so far.
   const [hosting, setHosting] = useState<{ id: string; draft: string } | null>(null);
   const saveHosts = () => {
@@ -282,93 +273,82 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
             }
           }}
         />
-        <select aria-label="Filter keys" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-          {FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-        </select>
-        <select aria-label="Sort keys" value={order} onChange={(e) => setOrder(e.target.value as Order)}>
-          {Object.entries(ORDER_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
+        <details className="sort-menu" onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+        }} onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}>
+          <summary>{filter === "all" ? ORDER_LABEL[order] : FILTERS.find(f => f.id === filter)?.label}<ChevronDown size={14}/></summary>
+          <div className="sort-options">
+            <label>Sort<select value={order} onChange={e => setOrder(e.target.value as Order)}>
+              {Object.entries(ORDER_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select></label>
+            <label>Show<select value={filter} onChange={e => setFilter(e.target.value as Filter)}>
+              {FILTERS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select></label>
+          </div>
+        </details>
       </div>
       {shown.length === 0 && <p className="help no-match">No keys match{q ? ` \u201c${query.trim()}\u201d` : ""}.</p>}
-      <div className="keys">
-        {shown.map((k) => (
-          <div className="vault-entry" key={k.id}>
-            <button className="entry-heading" aria-expanded={expanded === k.id} onClick={() => {
-              setExpanded(expanded === k.id ? null : k.id);
-              setArmed(null);
-              setHosting(null);
-            }}>
-              <span className="entry-text">
-                <strong className="mono">{k.label}</strong>
-                <small>{[k.from && `Received from ${k.from}`, k.team, k.hosts.length ? `Only for ${k.hosts.join(", ")}` : null,
-                  k.keep !== "keep" ? lifetime(k) : null].filter(Boolean).join(" · ") || "Added by you"}</small>
-              </span>
-              <ChevronDown size={15} aria-hidden />
-            </button>
-            {expanded === k.id && (
-              <div className="entry-details">
-                <p>{describe(k)} · {lifetime(k)}</p>
-                {hosting?.id === k.id ? (
-                  <form onSubmit={(e) => { e.preventDefault(); saveHosts(); }}>
-                    <label>Allowed servers<input autoFocus value={hosting.draft} placeholder="api.example.com"
-                      spellCheck={false} onChange={(e) => setHosting({ id: k.id, draft: e.target.value })}
-                      onKeyDown={(e) => { if (e.key === "Escape") setHosting(null); }} /></label>
-                    <button type="submit">Save</button><button type="button" onClick={() => setHosting(null)}>Cancel</button>
-                  </form>
-                ) : (
-                  <button onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}>
-                    {k.hosts.length ? "Edit allowed servers" : "Set allowed server"}
-                  </button>
-                )}
-                <button onClick={() => void run(api.copyPointer(k.id))}>Copy pointer</button>
-                {k.from === null && <button onClick={() => void run(api.replace(k.id))}>Replace stored value</button>}
-                <button className={armed === k.id ? "confirm-forget" : ""} onBlur={() => setArmed(null)}
-                  onClick={() => armed === k.id ? void run(api.forget(k.id)) : setArmed(k.id)}>
-                  {armed === k.id ? "Confirm removal" : "Remove from vault"}
-                </button>
-              </div>
-            )}
+      <div className="key-ledger" style={{ "--ledger-height": `calc(${shown.length} * var(--row-height, 38px))` } as React.CSSProperties}>
+        {shown.map(k => (
+          <div className="ledger-row" key={k.id}>
+            <span className="ledger-key" title={describe(k)}><KeyRound size={15} aria-hidden /></span>
+            <span className="ledger-name mono" title={`${describe(k)} · ${lifetime(k)}${k.hosts.length ? " · " + k.hosts.join(", ") : ""}`}>{k.label}</span>
+            <div className="ledger-tools">
+              <button title={k.hosts.length ? `Edit allowed servers: ${k.hosts.join(", ")}` : "Set allowed server"} aria-label={`Set allowed server for ${k.label}`}
+                onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}><Server /></button>
+              {k.from === null && <button title="Replace stored value" aria-label={`Replace stored value for ${k.label}`} onClick={() => void run(api.replace(k.id))}><RefreshCw /></button>}
+              <button title="Copy .env pointer" aria-label={`Copy pointer for ${k.label}`} onClick={() => void run(api.copyPointer(k.id))}><Copy /></button>
+              <button title="Remove from vault" aria-label={`Remove ${k.label} from vault`} onClick={() => setRemoving(k)}><X /></button>
+            </div>
           </div>
         ))}
       </div>
+      {(hosting || removing) && <VaultDialog onClose={() => { setHosting(null); setRemoving(null); }}>
+        {hosting ? <form onSubmit={e => { e.preventDefault(); saveHosts(); }}>
+          <h2 className="title">Allowed servers</h2>
+          <p className="mono">{keys.find(k => k.id === hosting.id)?.label}</p>
+          <label>Server names, separated by commas<input className="name-in" autoFocus value={hosting.draft} placeholder="api.example.com"
+            onChange={e => setHosting({ ...hosting, draft: e.target.value })} spellCheck={false} /></label>
+          <div className="btn-row"><button type="button" className="btn secondary" onClick={() => setHosting(null)}>Cancel</button><button className="btn primary grow">Save servers</button></div>
+        </form> : removing && <>
+          <h2 className="title">Remove from vault?</h2><p className="mono">{removing.label}</p>
+          <div className="btn-row"><button autoFocus className="btn secondary grow" onClick={() => setRemoving(null)}>Cancel</button>
+            <button className="btn secondary" onClick={() => void run(api.forget(removing.id).then(() => setRemoving(null)))}>Remove key</button></div>
+        </>}
+      </VaultDialog>}
     </div>
   );
 }
 
-function Me({ name, run, onSecurity, onCard }: { onCard: () => void; name: string; run: Run; onSecurity: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
+function VaultDialog({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const el = dialog.current; el?.showModal(); return () => el?.close(); }, []);
+  return <dialog className="vault-dialog" ref={dialog} onCancel={onClose}>{children}</dialog>;
+}
 
-  const save = () => {
-    setEditing(false);
-    if (draft.trim() && draft !== name) void run(api.setName(draft));
-  };
-  return (
-    <div className="foot">
-      <span className="me">
-        {editing ? (
-          <input
-            autoFocus
-            value={draft}
-            maxLength={64}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={save}
-            onKeyDown={(e) => e.key === "Enter" && save()}
-            aria-label="Your name"
-          />
-        ) : (
-          <button onClick={() => { setDraft(name); setEditing(true); }} title="Shown on your card">
-            <b>{name}</b>
-          </button>
-        )}
-        <button className="card-link" onClick={onCard}><IdCard size={15} aria-hidden />My receiving card</button>
-      </span>
-      <button onClick={onSecurity} aria-label="Security settings" title="Security settings"><Settings size={17} aria-hidden /></button>
-      <button className="paste" onClick={() => void run(api.paste())} title="Paste a .handoff file">
-        Paste a file <kbd>Ctrl V</kbd>
-      </button>
-    </div>
-  );
+function Me({ name, onSettings, onCard }: { name: string; onSettings: () => void; onCard: () => void }) {
+  return <footer className="identity-dock">
+    <button className="pocket-card" onClick={onCard}><IdCard aria-hidden /><span>Share my card<small>.handoff file</small></span><ArrowUpRight size={14} aria-hidden /></button>
+    <strong className="dock-name" title={name}>{name}</strong>
+    <button className="dock-settings" title="Settings" aria-label="Settings" onClick={onSettings}><Settings size={25}/></button>
+  </footer>;
+}
+
+function SettingsSheet({ view, run, onSecurity, onClose }: { view: View; run: Run; onSecurity: () => void; onClose: () => void }) {
+  const [name, setName] = useState(view.name);
+  const [version, setVersion] = useState("");
+  useEffect(() => { void run(getVersion().then(setVersion)); }, []);
+  return <section className="sheet preferences" role="dialog" aria-labelledby="settings-title">
+    <h2 className="display md" id="settings-title">Settings</h2>
+    <form onSubmit={e => { e.preventDefault(); void run(api.setName(name.trim())); }}>
+      <label htmlFor="card-name">Name on your receiving card</label>
+      <div className="btn-row"><input id="card-name" className="name-in" value={name} maxLength={64} onChange={e => setName(e.target.value)}/>
+        <button className="btn secondary" disabled={!name.trim() || name.trim() === view.name}>Save</button></div>
+    </form>
+    <button className="pref-link" onClick={onSecurity}><LockKeyhole size={20}/>Vault security<ArrowUpRight size={16}/></button>
+    <div className="about-version"><Logo />KeyHandoff <span>Version {version}</span></div>
+    <span className="grow-space"/><button className="btn secondary" onClick={onClose}>Done</button>
+  </section>;
 }
 
 const KEEP_HELP: Record<Keep, string> = {
@@ -629,30 +609,25 @@ function AlertSheet({ alert }: { alert: AlertView }) {
 
 /** Your card is on the clipboard; it can also be dragged out. */
 function CardSheet({ fileName, computer, run }: { fileName: string; computer: string; run: Run }) {
-  const sheet = useRef<HTMLDivElement>(null);
+  const sheet = useRef<HTMLElement>(null);
   const drag = useDragOut(() => void run(api.dragOut("request")));
   useEffect(() => void enter(sheet.current, "rise", 360), [fileName]);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
   return (
-    <div className="sheet" ref={sheet}>
-      <Glyph mark="send" />
-      <div className="hero">
-        <h2 className="display md">Card copied.</h2>
-        <p className="lede">Send it to anyone who'll send you keys, by chat or email. It holds no secret, and they only need it once.</p>
+    <section className="sheet receiving-sheet" ref={sheet} role="dialog" aria-labelledby="receiving-title">
+      <h2 className="display md" id="receiving-title">Share your card</h2>
+      <p className="lede">Give this file to someone so they can send you keys.</p>
+      <div className="card-file" {...drag} title="Drag this card into a folder or message">
+        <IdCard size={32}/><strong>{fileName}</strong><small>Drag card file</small>
       </div>
-      <div className="chip grab" {...drag}>
-        <Icon name="file" />
-        <span className="mono">{fileName}</span>
-      </div>
-      <p className="help">
-        Each copy is for one person and good for 12 keys; copy it again for the next person. They'll see your computer as{" "}
-        <span className="mono">{computer}</span>; read it to them if they want to check it's really you.
-      </p>
-      <span className="grow-space" />
-      <div className="btn-row">
-        <button className="btn secondary" onClick={() => void run(api.copyCard())}>Copy again</button>
-        <button className="btn primary grow" onClick={() => void api.dismiss()}>Done</button>
-      </div>
-    </div>
+      <button className="btn primary" onClick={() => void run(api.saveCard().then(ok => { if (ok) setSaved(true); }))}>
+        {saved ? <Check size={17}/> : <Download size={17}/>} {saved ? "Save another copy" : "Save card file"}
+      </button>
+      <button className="quiet" onClick={() => void run(api.copyRequest().then(() => setCopied(true)))}>{copied ? "Copied" : "Copy card instead"}</button>
+      <details className="help"><summary>Card details</summary><p>For one recipient, up to 12 keys. Computer fingerprint: <span className="mono">{computer}</span>.</p></details>
+      <span className="grow-space"/><button className="btn secondary" onClick={() => void run(api.dismiss())}>Done</button>
+    </section>
   );
 }
 

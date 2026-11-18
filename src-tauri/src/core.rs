@@ -501,6 +501,14 @@ impl Handoff {
     /// Your card: a batch of one-time locks, each good for one key sent to you.
     /// Writes `KeyHandoff card - <you>.handoff` and puts it on the clipboard.
     pub fn copy_card(&self) -> Result<(), String> {
+        self.make_card(true)
+    }
+
+    pub fn prepare_card(&self) -> Result<(), String> {
+        self.make_card(false)
+    }
+
+    fn make_card(&self, copy: bool) -> Result<(), String> {
         let mut core = self.lock();
         let (card, pending) = keyhandoff_seal::create_card(&core.identity, &core.settings.name, now(), DEFAULT_CARD_TTL, CARD_LOCKS)
             .map_err(|e| e.to_string())?;
@@ -509,7 +517,7 @@ impl Handoff {
         let text = armor::card_text(&card);
         let file = core.outbox.join(file_name("KeyHandoff card -", card.name()));
         os::write_private(&file, text.as_bytes()).map_err(|e| e.to_string())?;
-        (self.clipboard.offer)(&file, text)?;
+        if copy { (self.clipboard.offer)(&file, text)?; }
         core.asked = Some(file);
         core.accepted = None;
         Ok(())
@@ -2429,9 +2437,13 @@ mod tests {
         let ann = app("Ann");
         let ben = app("Ben");
 
-        // Ann copies her card once; it carries a batch of locks.
-        ann.handoff.copy_card().unwrap();
-        let (card_file, card_text) = offered();
+        // Preparing a card produces the shareable file without touching the clipboard.
+        OFFERED.lock().unwrap().take();
+        ann.handoff.prepare_card().unwrap();
+        assert!(OFFERED.lock().unwrap().is_none());
+        let (card_file, card_text) = ann.handoff.drag_source("request").unwrap();
+        ann.handoff.copy_request().unwrap();
+        assert_eq!(offered(), (card_file.clone(), card_text.clone()));
         assert_eq!(card_file.file_name().unwrap(), "KeyHandoff card - Ann.handoff");
         assert!(card_text.contains("Ann's KeyHandoff card"));
         assert!(ann.handoff.open_path(&card_file).unwrap_err().contains("your own card"));
