@@ -231,6 +231,8 @@ pub struct Handoff {
     clipboard: Clipboard,
     notify: Box<dyn Fn() + Send + Sync>,
     me: Weak<Handoff>,
+    #[cfg(test)]
+    interactive_fixture: AtomicBool,
 }
 
 // ---- what the screens see ----
@@ -484,7 +486,14 @@ impl Handoff {
             import: None,
             import_receipt: None,
         };
-        let handoff = Arc::new_cyclic(|me| Self { core: Mutex::new(core), clipboard, notify, me: me.clone() });
+        let handoff = Arc::new_cyclic(|me| Self {
+            core: Mutex::new(core),
+            clipboard,
+            notify,
+            me: me.clone(),
+            #[cfg(test)]
+            interactive_fixture: AtomicBool::new(false),
+        });
         handoff.lock().tick()?;
         if handoff.lock().settings.nearby {
             if let Err(e) = handoff.start_nearby(true) {
@@ -1406,7 +1415,7 @@ impl Handoff {
     }
 
     pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
-        self.give_scoped(peer, names, None, false, peer.unattended_origin()).map(|(values, _)| values)
+        self.give_scoped(peer, names, None, false, self.unattended_origin(peer)).map(|(values, _)| values)
     }
 
     /// For `keyhandoff run`: an agent's session grant can count, and with
@@ -1414,7 +1423,7 @@ impl Handoff {
     /// under the same lock, before consuming Once keys or allowing a
     /// rename/rotation.
     pub fn give_run(&self, peer: &Peer, names: &[String], placeholders: bool) -> Result<(Vec<Secret>, Option<String>), String> {
-        let unattended = peer.unattended_origin();
+        let unattended = self.unattended_origin(peer);
         #[cfg(windows)]
         let session = peer.agent.as_deref().and_then(|agent| Some(SessionScope {
             process: os::agent_session(peer.pid, agent)?,
@@ -1423,6 +1432,14 @@ impl Handoff {
         #[cfg(not(windows))]
         let session = None;
         self.give_scoped(peer, names, session, placeholders, unattended)
+    }
+
+    fn unattended_origin(&self, peer: &Peer) -> Option<&'static str> {
+        #[cfg(test)]
+        if self.interactive_fixture.load(Ordering::Relaxed) {
+            return None;
+        }
+        peer.unattended_origin()
     }
 
     fn give_scoped(&self, peer: &Peer, names: &[String], session: Option<SessionScope>, for_run: bool, unattended: Option<&'static str>) -> Result<(Vec<Secret>, Option<String>), String> {
@@ -2434,6 +2451,8 @@ mod tests {
         let store = Store::in_dir(&data, MasterKey::for_tests());
         let settings = Settings { name: name.into(), ..Settings::default() };
         let handoff = Handoff::open(store, settings, outbox.clone(), fake(), Box::new(|| {})).unwrap();
+        // Tests of interactive grants can run under a CI service account.
+        handoff.interactive_fixture.store(true, Ordering::Relaxed);
         App { handoff, data, outbox }
     }
 
