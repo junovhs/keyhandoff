@@ -1,7 +1,7 @@
 /* The Calm look: black ground, white type, four greys, Geist, one
    white primary action per screen. Design source: the "Calm · System" board on
    the design canvas. --tempo is the motion speed knob. */
-@import "@fontsource-variable/host-grotesk";
+@import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
 :root {
@@ -17,7 +17,7 @@
   --accent: #2f6bff; --accent-2: #5a5cff; --accent-ink: #6b95ff;
   --handoff-finish: linear-gradient(135deg, #9df6e0 4%, #858afc 42%, #e3b5eb 74%, #b0e8df);
   --accent-grad: linear-gradient(100deg, var(--accent), var(--accent-2));
-  --font: "Host Grotesk Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font: "Geist Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, monospace;
   --tempo: 1;
   --ease: cubic-bezier(.22, 1, .36, 1);
@@ -318,84 +318,120 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .flow-ico { width: 52px; height: 52px; border-radius: 14px; }
 .flow { padding-top: 0; }
 
-/* Vault chrome is separate from the native window controls. */
-/* The foil belongs to the frame. The window buttons sit on its dark end. */
-.app:has(.vault-heading) {
-  --foil: radial-gradient(ellipse at 12% 112%, #9ff8ed 2%, transparent 38%),
-    radial-gradient(ellipse at 81% -38%, #93f3f1 5%, transparent 45%),
-    linear-gradient(122deg, #c6a8fe 4%, #aebaff 29%, #efb6d9 56%, #b899ff 79%, #c4f0e6);
+/* Vault: black glass with one pearl. Hairlines, Geist, quiet greys; the
+   pearlescent sheen appears only where something is yours to act on: the
+   main button, your card, and a faint halo behind the heading. */
+:root {
+  --pearl: linear-gradient(115deg, #ddd5ff 0%, #c4ece6 24%, #f4d4e8 48%, #d3cdff 72%, #cbeeee 100%);
+  --pearl-line: linear-gradient(115deg, rgba(221, 213, 255, .75), rgba(196, 236, 230, .45) 30%, rgba(244, 212, 232, .65) 60%, rgba(211, 205, 255, .5));
+  --hair: rgba(255, 255, 255, .08);
+  --hair-strong: rgba(255, 255, 255, .14);
 }
 .app:has(.vault-heading)::before {
-  content: ""; position: absolute; right: 0; top: 0; width: clamp(96px, 24%, 164px); height: 72px;
-  background: linear-gradient(180deg, #101422aa, transparent 90%), var(--foil);
-  clip-path: polygon(0 0,100% 0,100% 100%,68% 100%,68% 73%,34% 73%,34% 46%,0 46%);
-  pointer-events: none;
+  content: ""; position: absolute; inset: -140px -80px auto auto; width: 420px; height: 300px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(214, 205, 255, .22), rgba(196, 238, 232, .09) 55%, transparent);
+  filter: blur(18px);
 }
 .titlebar { position: relative; }
-.titlebar > button { color: white; }
-.app:has(.vault-heading) .titlebar > button:last-child, .app:has(.vault-heading) .titlebar > button:nth-last-child(2) {
-  color: white; filter: drop-shadow(0 1px 2px #15131b); }
-.stage:has(.vault-heading) { gap: 12px; padding-bottom: 0; }
-.vault-heading { display: flex; align-items: center; gap: 11px; padding: 4px 28px 5px 0; }
-.vault-heading .display { font-size: clamp(25px, 5vw, 34px); }
-.vault-heading .lede { font-size: 13px; margin-top: 3px; }
-.vault-seal { display: grid; place-items: center; width: 35px; height: 42px; color: #cbbbf5; flex-shrink: 0; }
+.stage:has(.vault-heading) { gap: 14px; padding-bottom: 0; }
+
+.vault-heading { display: flex; align-items: center; gap: 14px; padding: 6px 0 4px; }
+.vault-heading .display { font-size: 26px; font-weight: 600; letter-spacing: -.045em; line-height: 1.1; }
+.vault-heading .lede { font-size: 13px; color: var(--text-3); margin-top: 4px; letter-spacing: -.005em; }
+.vault-seal { position: relative; display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px;
+  background: linear-gradient(#0b0b0d, #0b0b0d) padding-box, var(--pearl-line) border-box; border: 1px solid transparent; color: #f2f0fa;
+  box-shadow: 0 0 24px -6px rgba(214, 205, 255, .35); }
 .vault-seal svg { grid-area: 1 / 1; }
-.vault-seal svg:first-child { width: 38px; height: 42px; stroke-width: 1.5; }
-.vault-seal svg:last-child { width: 13px; color: #faf9ff; }
-.vault-actions .primary { background: var(--foil); color: #191524; border: 1px solid #d7c9f1; }
-.vault-actions .primary:hover { filter: brightness(1.06); }
-.vault-actions .secondary { border-color: #43424d; }
+.vault-seal svg:first-child { width: 22px; height: 22px; stroke-width: 1.5; opacity: .9; }
+.vault-seal svg:last-child { width: 9px; height: 9px; stroke-width: 2.4; }
+
+/* The pearl button: white, with a slow sheen that drifts on hover. */
+.vault-actions .btn { height: 40px; border-radius: 8px; font-size: 14px; letter-spacing: -.01em; gap: 8px; }
+.vault-actions .primary { position: relative; overflow: hidden; color: #0a0a0a; font-weight: 600;
+  background: var(--pearl); background-size: 220% 100%; background-position: 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 0 0 1px rgba(255, 255, 255, .12), 0 6px 22px -10px rgba(214, 205, 255, .6);
+  transition: background-position calc(1.2s / var(--tempo)) var(--ease), box-shadow .2s, transform calc(.1s / var(--tempo)); }
+.vault-actions .primary:hover { background: var(--pearl); background-size: 220% 100%; background-position: 100% 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 0 0 1px rgba(255, 255, 255, .2), 0 8px 28px -10px rgba(214, 205, 255, .8); }
+.vault-actions .secondary { border: 1px solid var(--hair-strong); color: #ededed; }
+.vault-actions .secondary:hover { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .22); }
+.tools-row { gap: 18px; margin-top: -4px; }
+.tools-row .quiet { color: var(--text-3); font-size: 12.5px; gap: 7px; transition: color .15s; }
+.tools-row .quiet:hover { color: var(--text); }
 .vault-actions + .tools-row { margin: 0; }
-.import-start { display: flex; align-items: center; gap: 14px; padding: 18px 14px; text-align: left; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+
+.import-start { display: flex; align-items: center; gap: 14px; padding: 18px 14px; text-align: left; border: 1px solid var(--hair-strong); border-radius: 10px; background: #0a0a0a; }
 .import-start span { flex: 1; }
 .import-start small, .entry-text small { display: block; color: var(--text-2); font-size: 12px; }
-.import-start:hover, .entry-heading:hover { background: var(--raised); }
-.vault { gap: 8px; }
-.vault { position: relative; }
-.vault .search { background: #0c0c11; border-color: #34343e; }
-.sort-menu { position: relative; border-left: 1px solid var(--line-strong); padding-left: 8px; }
-.sort-menu summary { display: flex; align-items: center; gap: 6px; padding: 5px; cursor: pointer; color: #dedce7; font-size: 12px; }
+.import-start:hover, .entry-heading:hover { background: #111; }
+
+.vault { position: relative; gap: 10px; }
+.vault .search { height: 38px; border-radius: 8px; background: #0a0a0a; border: 1px solid var(--hair); color: var(--text-3); padding-left: 11px; transition: border-color .15s, box-shadow .15s; }
+.vault .search:hover { border-color: var(--hair-strong); }
+.vault .search:focus-within { border-color: rgba(255, 255, 255, .28); color: var(--text-2); box-shadow: 0 0 0 3px rgba(255, 255, 255, .06); }
+.vault .search input { font-size: 13.5px; }
+.vault .search > svg { width: 15px; height: 15px; }
+.sort-menu { position: relative; padding-left: 4px; }
+.sort-menu summary { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-size: 12px; list-style: none; }
+.sort-menu summary:hover, .sort-menu[open] summary { background: rgba(255, 255, 255, .06); color: var(--text); }
 .sort-menu summary::-webkit-details-marker { display: none; }
-.sort-options { position: absolute; right: -4px; top: 32px; z-index: 2; width: 180px; border: 1px solid #42424d; border-radius: 10px; padding: 10px; background: #141419; box-shadow: 0 8px 20px #0008; }
-.sort-options label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px; }
-.sort-options select { background: #222129; color: var(--text); font: inherit; border: 1px solid #393842; border-radius: 4px; }
-.key-ledger { min-height: 0; overflow: auto; flex: 1; padding-inline: 7px 2px; position: relative; }
-.key-ledger::before { content: ""; position: absolute; top: 0; left: 0; width: 2px; height: min(100%,var(--ledger-height)); background: linear-gradient(#c69eea,#8ac9df,#f2caaf,#b5a4ee); }
-.key-ledger, .sheet { scrollbar-width: thin; scrollbar-color: #46444f transparent; }
-.ledger-row { display: flex; gap: 10px; align-items: center; height: 38px; border-bottom: 1px solid #24232c; position: relative; }
-.ledger-key { display: grid; place-items: center; height: 26px; width: 28px; flex-shrink: 0; border-radius: 7px; background: linear-gradient(130deg,#22232c,#101016); color: #e8e7f0; }
-.ledger-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
-.ledger-tools { display: flex; gap: 3px; margin-left: auto; }
-.ledger-tools button, .dock-settings { display: grid; place-items: center; border: 1px solid transparent; border-radius: 7px; }
-.ledger-tools button { width: 26px; height: 26px; border-color: #393842; color: #e2dfe9; background: #111116; }
+.sort-options { position: absolute; right: -4px; top: 34px; z-index: 2; width: 190px; border: 1px solid var(--hair-strong); border-radius: 10px; padding: 6px; background: rgba(14, 14, 16, .96); backdrop-filter: blur(12px); box-shadow: 0 12px 32px #000c; }
+.sort-options label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; font-size: 12.5px; color: var(--text-2); }
+.sort-options select { background: #1a1a1c; color: var(--text); font: inherit; border: 1px solid var(--hair-strong); border-radius: 6px; padding: 2px 4px; }
+
+.key-ledger { min-height: 0; overflow: auto; flex: 1; margin-inline: -8px; position: relative; }
+.key-ledger, .sheet { scrollbar-width: thin; scrollbar-color: #2e2e32 transparent; }
+.ledger-row { display: flex; gap: 12px; align-items: center; height: 40px; padding: 0 8px; border-radius: 8px; position: relative; transition: background .12s; }
+.ledger-row + .ledger-row::before { content: ""; position: absolute; top: 0; left: 8px; right: 8px; height: 1px; background: var(--hair); }
+.ledger-row:hover, .ledger-row:focus-within { background: rgba(255, 255, 255, .035); }
+.ledger-row:hover::before, .ledger-row:hover + .ledger-row::before, .ledger-row:focus-within::before, .ledger-row:focus-within + .ledger-row::before { opacity: 0; }
+.ledger-key { display: grid; place-items: center; height: 24px; width: 24px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--hair); color: var(--text-3); transition: color .15s, border-color .15s, background .15s; }
+.ledger-key svg { width: 13px; height: 13px; }
+.ledger-row:hover .ledger-key { color: #1a1625; border-color: transparent; background: var(--pearl); }
+.ledger-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: #e6e6e6; letter-spacing: -.01em; }
+.ledger-tools { display: flex; gap: 2px; margin-left: auto; }
+.ledger-tools button, .dock-settings { display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: var(--text-2); transition: background .12s, color .12s; }
+.ledger-tools button { width: 28px; height: 28px; }
 .ledger-tools svg { width: 14px; height: 14px; }
-.ledger-tools button:hover, .dock-settings:hover { background: #26242d; border-color: #63616c; }
+.ledger-tools button:hover, .dock-settings:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
 @media (hover: hover) {
-  .ledger-tools { position: absolute; right: 0; opacity: 0; pointer-events: none; }
-  .ledger-row:hover .ledger-tools, .ledger-row:focus-within .ledger-tools { position: static; opacity: 1; pointer-events: auto; }
+  .ledger-tools { position: absolute; right: 6px; opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .ledger-row:hover .ledger-tools, .ledger-row:focus-within .ledger-tools { opacity: 1; pointer-events: auto; }
 }
-.identity-dock { margin: auto -20px 0; padding: 14px 17px; border-top: 1px solid #35323e; background: linear-gradient(110deg,#101016,#07070a 70%); display: grid; grid-template-columns: auto minmax(0,1fr) 38px; align-items: center; gap: clamp(8px,2.6vw,18px); flex-shrink: 0; }
-.pocket-card, .card-file { color: #fff; border: 1px solid #a397bf; background: radial-gradient(ellipse at 0% 120%,#467c8f 0%,transparent 48%), radial-gradient(ellipse at 110% -30%,#91d5ce 1%,transparent 42%), radial-gradient(ellipse at 105% 115%,#9b74b8,transparent 41%), linear-gradient(140deg,#72658e,#272240 43%,#272640 70%,#544d83); }
-.pocket-card { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 9px; padding: 0 11px; min-height: 52px; font-size: 14px; font-weight: 650; }
-.pocket-card span { text-align: left; line-height: 1.15; }
-.pocket-card small { display: block; margin-top: 4px; font: 10px var(--mono); color: #ded7ee; }
-.pocket-card:hover { filter: brightness(1.15); }
-.dock-name { font-size: clamp(14px,2.8vw,20px); line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
-.dock-settings { width: 38px; height: 40px; }
+
+/* You: your card, your name, your settings. */
+.identity-dock { margin: auto -20px 0; padding: 14px 20px; border-top: 1px solid var(--hair); background: #050505; display: grid; grid-template-columns: auto minmax(0, 1fr) 36px; align-items: center; gap: 14px; flex-shrink: 0; }
+.pocket-card, .card-file { position: relative; overflow: hidden; color: #f5f4fb;
+  background: radial-gradient(110% 160% at 0% 0%, rgba(206, 194, 255, .42), transparent 62%) padding-box, radial-gradient(90% 140% at 100% 100%, rgba(180, 236, 228, .32), transparent 62%) padding-box, radial-gradient(60% 120% at 70% 0%, rgba(244, 206, 230, .24), transparent 70%) padding-box, linear-gradient(#0e0e12, #0e0e12) padding-box, var(--pearl-line) border-box;
+  border: 1px solid transparent; }
+.pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .10) 45%, rgba(230, 220, 255, .14) 50%, transparent 65%); background-size: 250% 100%; background-position: 120% 0;
+  transition: background-position calc(.9s / var(--tempo)) var(--ease); }
+.pocket-card:hover::after, .card-file:hover::after { background-position: -20% 0; }
+.pocket-card { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 0 12px 0 11px; min-height: 48px; min-width: 156px; font-size: 13px; font-weight: 600; letter-spacing: -.01em; box-shadow: 0 8px 24px -14px rgba(214, 205, 255, .5); }
+.pocket-card > svg:first-child { width: 18px; height: 18px; stroke-width: 1.6; opacity: .9; }
+.pocket-card span { flex: 1; text-align: left; line-height: 1.2; }
+.pocket-card small { display: block; margin-top: 2px; font: 10.5px var(--mono); color: var(--text-3); font-weight: 400; }
+.pocket-card > svg:last-child { color: var(--text-3); transition: color .15s, transform .2s var(--ease); }
+.pocket-card:hover > svg:last-child { color: var(--text); transform: translate(1px, -1px); }
+.dock-name { font-size: 14.5px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.dock-settings { width: 36px; height: 36px; border-radius: 8px; }
+.dock-settings svg { width: 19px; height: 19px; stroke-width: 1.6; }
+
 .preferences form, .vault-dialog form { display: grid; gap: 12px; }
 .preferences .name-in { min-width: 0; flex: 1; }
-.pref-link, .about-version { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-block-start: 1px solid var(--line); }
+.pref-link, .about-version { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-block-start: 1px solid var(--hair); }
 .pref-link svg:last-child, .about-version span { margin-left: auto; }
 .about-version span { color: var(--text-2); }
-.card-file { display: grid; justify-items: start; gap: 10px; border-radius: 14px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
-.card-file small { color: #e1deeb; }
-.vault-dialog { width: min(360px,92vw); background: #16151c; color: var(--text); border: 1px solid #514d5c; border-radius: 14px; padding: 20px; }
-.vault-dialog::backdrop { background: #000a; }
+.card-file { display: grid; justify-items: start; gap: 10px; border-radius: 12px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
+.card-file small { color: var(--text-2); }
+.vault-dialog { width: min(360px, 92vw); background: #0e0e10; color: var(--text); border: 1px solid var(--hair-strong); border-radius: 12px; padding: 20px; box-shadow: 0 24px 60px #000d; }
+.vault-dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(2px); }
 .vault-dialog label { display: grid; gap: 7px; }
 .vault-dialog p { overflow-wrap: anywhere; }
-@media(min-width: 540px) { .identity-dock { min-height: 86px; } .pocket-card { min-width: 170px; min-height: 55px; } .key-ledger { --row-height: 44px; } .ledger-row { height: 44px; } }
-.send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 3px 0 #c6c0f1; padding-inline: 8px; }
+@media (min-width: 540px) { .identity-dock { min-height: 80px; } .pocket-card { min-width: 172px; min-height: 52px; } .ledger-row { height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .vault-actions .primary, .pocket-card::after, .card-file::after { transition: none; } }
+.send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 2px 0 #d9d6fb; padding-inline: 8px; }
 .send-confirm { min-width: 0; white-space: normal; height: auto; min-height: 44px; padding-block: 6px; overflow-wrap: anywhere; }
 .session-grant { display: block; }
 .session-grant summary { overflow-wrap: anywhere; }

@@ -337,7 +337,7 @@ function Me({ name, onSettings, onCard }: { name: string; onSettings: () => void
   return <footer className="identity-dock">
     <button className="pocket-card" onClick={onCard}><IdCard aria-hidden /><span>Share my card<small>.handoff file</small></span><ArrowUpRight size={14} aria-hidden /></button>
     <strong className="dock-name" title={name}>{name}</strong>
-    <button className="dock-settings" title="Settings" aria-label="Settings" onClick={onSettings}><Settings size={25}/></button>
+    <button className="dock-settings" title="Settings" aria-label="Settings" onClick={onSettings}><Settings /></button>
   </footer>;
 }
 
