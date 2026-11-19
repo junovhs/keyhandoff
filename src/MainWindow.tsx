@@ -613,7 +613,7 @@ function AcceptSheet({ item, run }: { item: KeyView; run: Run }) {
 
 /**
  * A program asks for kept keys, through a `handoff:` pointer or `keyhandoff run`.
- * When an AI agent started it, the sheet says so and offers 30 minutes, not Always.
+ * The launch origin determines which approvals the sheet offers.
  */
 function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
   const sheet = useRef<HTMLDivElement>(null);
@@ -644,7 +644,9 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
         </div>
       </div>
       <p className="help">
-        {agent ? (
+        {program.unattended ? (
+          `Started by ${program.unattended}. Approval covers this request only.`
+        ) : agent ? (
           <><Bot size={13} strokeWidth={2} aria-hidden className="inline-ico" /> {program.session
             ? program.session + ". Allow any command from this session to use the listed keys in this folder for 30 minutes."
             : agent + " started this command. KeyHandoff could not verify a dedicated session. Approval covers this request only."}</>
@@ -665,7 +667,7 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
         {program.session && (
           <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow for 30 minutes</button>
         )}
-        {!agent && (
+        {!agent && !program.unattended && (
           <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
         )}
       </div>

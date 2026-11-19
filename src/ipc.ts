@@ -44,6 +44,7 @@ export interface SafeView {
 /** A program asking for kept keys, waiting for Allow. */
 export interface ProgramView {
   id: number;
+  unattended: string | null;
   session: string | null;
   session_image: string | null;
   /** `python3`, `node.exe`. */

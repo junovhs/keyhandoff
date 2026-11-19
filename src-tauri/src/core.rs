@@ -154,6 +154,7 @@ struct ProgramAsk {
     peer: Peer,
     keys: Vec<[u8; 16]>,
     session: Option<SessionScope>,
+    unattended: Option<&'static str>,
     reply: mpsc::Sender<Answer>,
 }
 
@@ -275,6 +276,7 @@ pub struct SafeView {
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ProgramView {
     pub id: u64,
+    pub unattended: Option<&'static str>,
     pub session: Option<String>,
     pub session_image: Option<String>,
     /// `python3`, `node.exe`.
@@ -1404,7 +1406,7 @@ impl Handoff {
     }
 
     pub fn give(&self, peer: &Peer, names: &[String]) -> Result<Vec<Secret>, String> {
-        self.give_scoped(peer, names, None, false).map(|(values, _)| values)
+        self.give_scoped(peer, names, None, false, peer.unattended_origin()).map(|(values, _)| values)
     }
 
     /// For `keyhandoff run`: an agent's session grant can count, and with
@@ -1412,6 +1414,7 @@ impl Handoff {
     /// under the same lock, before consuming Once keys or allowing a
     /// rename/rotation.
     pub fn give_run(&self, peer: &Peer, names: &[String], placeholders: bool) -> Result<(Vec<Secret>, Option<String>), String> {
+        let unattended = peer.unattended_origin();
         #[cfg(windows)]
         let session = peer.agent.as_deref().and_then(|agent| Some(SessionScope {
             process: os::agent_session(peer.pid, agent)?,
@@ -1419,10 +1422,11 @@ impl Handoff {
         }));
         #[cfg(not(windows))]
         let session = None;
-        self.give_scoped(peer, names, session, placeholders)
+        self.give_scoped(peer, names, session, placeholders, unattended)
     }
 
-    fn give_scoped(&self, peer: &Peer, names: &[String], session: Option<SessionScope>, for_run: bool) -> Result<(Vec<Secret>, Option<String>), String> {
+    fn give_scoped(&self, peer: &Peer, names: &[String], session: Option<SessionScope>, for_run: bool, unattended: Option<&'static str>) -> Result<(Vec<Secret>, Option<String>), String> {
+        let session = session.filter(|_| unattended.is_none());
         let runner = for_run.then_some(peer);
         let binding = peer.binding();
         let (ids, new, id, answer) = {
@@ -1432,7 +1436,7 @@ impl Handoff {
                 .iter()
                 .map(|n| core.vault.find(n).ok_or_else(|| format!("No kept key is named {n}.")))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, session.as_ref(), binding, k)).collect();
+            let mut new: Vec<_> = ids.iter().copied().filter(|&k| unattended.is_some() || !core.allowed(peer, session.as_ref(), binding, k)).collect();
             new.sort_unstable();
             new.dedup();
             if new.is_empty() {
@@ -1450,7 +1454,7 @@ impl Handoff {
             let (reply, answer) = mpsc::channel();
             core.asks += 1;
             let id = core.asks;
-            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), session: session.clone(), reply });
+            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), session: session.clone(), unattended, reply });
             (ids, new, id, answer)
         };
         (self.notify)();
@@ -1467,7 +1471,7 @@ impl Handoff {
             } else {
                 let released = match (answer, &session, &peer.agent) {
                     (Answer::Deny, _, _) => Err("Not allowed in KeyHandoff.".into()),
-                    (Answer::Always, _, None) => core.allow(peer, binding, &new).and_then(|()| core.release(&ids, runner)),
+                    (Answer::Always, _, None) if unattended.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids, runner)),
                     (Answer::Session | Answer::ForNow, Some(scope), Some(agent)) => {
                         let released = core.release(&ids, runner)?;
                         core.grants.push(SessionGrant {
@@ -1570,8 +1574,9 @@ impl Handoff {
 
     pub fn answer_request(&self, id: u64, answer: Answer) -> Result<(), String> {
         let mut core = self.lock();
-        if !core.program.as_ref().is_some_and(|ask| ask.id == id) {
-            return Err("This request has ended.".into());
+        let ask = core.program.as_ref().filter(|ask| ask.id == id).ok_or("This request has ended.")?;
+        if ask.unattended.is_some() && !matches!(answer, Answer::Once | Answer::Deny) {
+            return Err("An unattended request can only be allowed once.".into());
         }
         let ask = core.program.take().ok_or("No program is waiting.")?;
         let _ = ask.reply.send(answer);
@@ -2149,6 +2154,7 @@ impl Core {
         let labels = ask.keys.iter().filter_map(|id| self.vault.items().iter().find(|i| i.id == *id)).map(|i| i.label.clone());
         ProgramView {
             id: ask.id,
+            unattended: ask.unattended,
             session_image: ask.session.as_ref().map(|s| s.process.image.display().to_string()),
             session: ask.session.as_ref().map(|s| format!("{} · PID {}", ask.peer.agent.as_deref().unwrap_or("Agent"), s.process.pid)),
             name: display_name(&ask.peer.program),
@@ -3012,6 +3018,39 @@ mod tests {
 
     fn peer(program: &str, folder: &str) -> Peer {
         Peer { pid: 0, program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")), args: vec!["report.py".into()], agent: None }
+    }
+
+    #[test]
+    fn unattended_launch_cannot_reuse_or_create_a_lasting_grant() {
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        h.lock().vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+        let script = peer("/usr/bin/python3", "/home/juno/report");
+        let ask = |unattended| {
+            let h = h.clone();
+            let script = script.clone();
+            std::thread::spawn(move || h.give_scoped(&script, &["Dialpad".into()], None, false, unattended))
+        };
+
+        let interactive = ask(None);
+        answer_when_asked(&h, Answer::Always);
+        assert!(interactive.join().unwrap().is_ok());
+
+        let unattended = ask(Some("Windows Task Scheduler"));
+        let shown = (0..200).find_map(|_| {
+            let program = h.view().program;
+            if program.is_none() {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            program
+        }).expect("a scheduled launch needs fresh approval even with an existing interactive grant");
+        assert_eq!(shown.unattended, Some("Windows Task Scheduler"));
+        for answer in [Answer::Always, Answer::Session, Answer::ForNow] {
+            assert!(h.answer_request(shown.id, answer).is_err());
+        }
+        h.answer_request(shown.id, Answer::Once).unwrap();
+        let (keys, _) = unattended.join().unwrap().unwrap();
+        assert_eq!(keys[0].expose(), KEY);
     }
 
     /// Wait for a program to be asking, then answer it.

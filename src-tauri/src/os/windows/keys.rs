@@ -61,13 +61,49 @@ fn peer(pipe: HANDLE) -> Option<(Peer, OwnedHandle)> {
 /// executable name from one process snapshot. A renamed agent isn't found,
 /// so this is a warning; binding approvals to the command is what holds.
 pub fn agent(pid: u32) -> Option<String> {
+    process_ancestry(pid).iter().find_map(|name| super::super::agent_named(name))
+}
+
+impl Peer {
+    pub fn unattended_origin(&self) -> Option<&'static str> {
+        use ::windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+
+        if self.pid == 0 {
+            return None;
+        }
+        let mut session = 0;
+        // The OS reserves session zero for services.
+        let service_session = unsafe { ProcessIdToSessionId(self.pid, &mut session) }.is_ok() && session == 0;
+        unattended_origin(process_ancestry(self.pid).iter().map(String::as_str), service_session)
+    }
+}
+
+fn unattended_origin<'a>(ancestry: impl IntoIterator<Item = &'a str>, service_session: bool) -> Option<&'static str> {
+    for name in ancestry {
+        if ["explorer.exe", "userinit.exe", "winlogon.exe"].iter().any(|shell| name.eq_ignore_ascii_case(shell)) {
+            break;
+        }
+        if ["taskeng.exe", "taskhostw.exe"].iter().any(|host| name.eq_ignore_ascii_case(host)) {
+            return Some("Windows Task Scheduler");
+        }
+        if name.eq_ignore_ascii_case("wmiprvse.exe") {
+            return Some("Windows Management Instrumentation");
+        }
+        if name.eq_ignore_ascii_case("services.exe") || name.eq_ignore_ascii_case("svchost.exe") {
+            return Some("a Windows service or scheduled task");
+        }
+    }
+    service_session.then_some("a Windows service or scheduled task")
+}
+
+fn process_ancestry(mut pid: u32) -> Vec<String> {
     use ::windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
     let mut parents = std::collections::HashMap::new();
     // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
     unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Vec::new() };
         let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
         let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
         while more {
@@ -77,18 +113,26 @@ pub fn agent(pid: u32) -> Option<String> {
         }
         let _ = CloseHandle(snapshot);
     }
-    let mut pid = pid;
+    let mut ancestry = Vec::new();
     for _ in 0..64 {
-        let (parent, name) = parents.get(&pid)?;
-        if let Some(agent) = super::super::agent_named(name) {
-            return Some(agent);
+        let Some((parent, name)) = parents.remove(&pid) else { break };
+        ancestry.push(name);
+        if parent == 0 || parent == pid {
+            break;
         }
-        if *parent == 0 || *parent == pid {
-            return None;
-        }
-        pid = *parent;
+        pid = parent;
     }
-    None
+    ancestry
+}
+
+#[cfg(test)]
+#[test]
+fn unattended_launches_are_distinguished_from_the_interactive_shell() {
+    assert_eq!(unattended_origin(["cmd.exe", "TaskEng.exe", "svchost.exe"], false), Some("Windows Task Scheduler"));
+    assert_eq!(unattended_origin(["cmd.exe", "WmiPrvSE.exe"], false), Some("Windows Management Instrumentation"));
+    assert!(unattended_origin(["cmd.exe", "svchost.exe"], false).is_some());
+    assert!(unattended_origin(["cmd.exe"], true).is_some());
+    assert_eq!(unattended_origin(["cmd.exe", "explorer.exe", "svchost.exe"], false), None);
 }
 
 /// Identify a dedicated interactive CLI process. A desktop host or app-server

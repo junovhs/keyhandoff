@@ -100,6 +100,11 @@ pub struct Peer {
 }
 
 impl Peer {
+    #[cfg(not(windows))]
+    pub fn unattended_origin(&self) -> Option<&'static str> {
+        None
+    }
+
     /// What an approval is bound to: the program, its arguments, and the
     /// contents of every file the arguments name (a script, a config), so an
     /// edited script, or the same interpreter running other code, asks again.
