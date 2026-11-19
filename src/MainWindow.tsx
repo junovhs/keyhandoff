@@ -23,6 +23,7 @@ import {
 } from "./ipc";
 import { enter, flip, stagger } from "./motion";
 import { Gate } from "./Gate";
+import { HISTORY } from "./history";
 import { Presence } from "./Presence";
 import { SafeCopy } from "./SafeCopy";
 import { CodeSheet, ImportResult, ImportSheet, ImportStart } from "./Visual";
@@ -82,6 +83,7 @@ export function MainWindow() {
   // Send a key: open at the person-or-team list, or straight at someone's keys.
   const [sending, setSending] = useState<To | "pick" | null>(null);
   const [settings, setSettings] = useState(false);
+  const [history, setHistory] = useState(false);
   const [security, setSecurity] = useState(false);
   const [code, setCode] = useState(false);
   // The team being edited, "new" for a new one.
@@ -94,7 +96,7 @@ export function MainWindow() {
   return (
     <div className="app">
       <header className="titlebar" data-tauri-drag-region>
-        <Logo />
+        <button className="brand" aria-label="Version history" title="Version history" onClick={() => setHistory(true)}><Logo /></button>
         <span className="name" data-tauri-drag-region>KeyHandoff</span>
         {gate?.update && (
           <button
@@ -121,6 +123,7 @@ export function MainWindow() {
         <Presence show={Boolean(gate && !open)}>{gate && !open && <Gate gate={gate} />}</Presence>
         <Presence show={Boolean(view && !safeOn)}>{view && !safeOn && <Home view={view} run={run} onCard={() => void run(api.prepareCard())} onSend={() => setSending("pick")} onSettings={() => setSettings(true)} onCode={() => setCode(true)} />}</Presence>
       </main>
+      <Presence show={history} fx="pop" inMs={320} outMs={220}>{history && <HistoryDialog onClose={() => setHistory(false)} />}</Presence>
       <Presence show={Boolean(view && safeOn)} fx="fade">{view && safeOn && <SafeCopy view={view} />}</Presence>
       <Presence show={Boolean(view?.accepted)}>{view?.accepted && <AcceptSheet item={view.accepted} run={run} />}</Presence>
       <Presence show={Boolean(view?.invited && !view.accepted)}>{view?.invited && !view.accepted && <InviteSheet invite={view.invited} run={run} />}</Presence>
@@ -387,10 +390,37 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   );
 }
 
-function VaultDialog({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+/** A modal dialog. Escape (and, with `light`, a click outside) asks to
+ * close rather than closing at once, so Presence can ease it out. */
+function VaultDialog({ children, onClose, className = "", light = false }: { children: React.ReactNode; onClose: () => void; className?: string; light?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { const el = dialog.current; el?.showModal(); return () => el?.close(); }, []);
-  return <dialog className="vault-dialog" ref={dialog} onCancel={onClose}>{children}</dialog>;
+  return <dialog className={`vault-dialog ${className}`} ref={dialog}
+    onCancel={e => { e.preventDefault(); onClose(); }}
+    onClick={e => { if (light && e.target === e.currentTarget) onClose(); }}>{children}</dialog>;
+}
+
+/** Clicking the logo: the version and what changed, newest first. */
+function HistoryDialog({ onClose }: { onClose: () => void }) {
+  const [version, setVersion] = useState("");
+  useEffect(() => { void getVersion().then(setVersion, () => undefined); }, []);
+  const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return <VaultDialog className="history" light onClose={onClose}>
+    <div className="history-inner">
+      <header className="history-head">
+        <Logo height={30} />
+        <div><h2>KeyHandoff</h2><p>{version ? `Version ${version}` : " "}</p></div>
+        <button className="history-close" aria-label="Close" onClick={onClose}><X size={16} /></button>
+      </header>
+      <ol className="history-list">
+        {HISTORY.map((r, i) => <li key={r.date} className={i === 0 ? "latest" : ""}>
+          <time dateTime={r.date}>{day(r.date)}</time>
+          <h3>{r.title}{i === 0 && <span className="history-tag">Latest</span>}</h3>
+          <ul>{r.notes.map(n => <li key={n}>{n}</li>)}</ul>
+        </li>)}
+      </ol>
+    </div>
+  </VaultDialog>;
 }
 
 function Me({ name, onSettings, onCard }: { name: string; onSettings: () => void; onCard: () => void }) {

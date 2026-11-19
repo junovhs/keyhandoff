@@ -98,13 +98,16 @@ function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
   return (
     <>
       <ClipboardWarning safe={safe} />
-      {info && (
-        <p className="info">
-          KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
-          system allows, then you name the key. It's never shown. A program watching your clipboard can still read
-          it as you copy.
-        </p>
-      )}
+      {/* Always rendered, so opening and closing can ease (rows 0fr <-> 1fr). */}
+      <div className="info-wrap" data-open={info} aria-hidden={!info}>
+        <div>
+          <p className="info">
+            KeyHandoff catches that one copy, wipes your clipboard and removes it from clipboard history where the
+            system allows, then you name the key. It's never shown. A program watching your clipboard can still read
+            it as you copy.
+          </p>
+        </div>
+      </div>
     </>
   );
 }

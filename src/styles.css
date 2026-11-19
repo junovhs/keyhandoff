@@ -241,6 +241,15 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .warning p { margin: 2px 0 0; }
 .link { align-self: flex-start; color: var(--text-2); font-size: 12.5px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .link:hover { color: var(--text); }
+/* How it works opens and closes by easing its height and fading. The -10px
+   cancels the column gap while it is closed; the 10px inside restores it. */
+.info-wrap { display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: -10px; transform: translateY(4px);
+  --inout: cubic-bezier(.65, 0, .35, 1);
+  transition: grid-template-rows calc(.5s / var(--tempo)) var(--inout), opacity calc(.45s / var(--tempo)) var(--inout), transform calc(.5s / var(--tempo)) var(--inout); }
+.info-wrap[data-open="true"] { grid-template-rows: 1fr; opacity: 1; transform: none; }
+.info-wrap > div { min-height: 0; overflow: hidden; }
+.info-wrap .info { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .info-wrap { transition: opacity .2s; transform: none; } }
 .info { margin: 0; font-size: 12px; color: var(--text-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
 .name-in { height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); transition: border-color .15s, box-shadow .15s; color: var(--text); font: 400 15px var(--font); user-select: text; }
@@ -407,39 +416,45 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 
 /* You: your card, your name, your settings. */
 .identity-dock { margin: auto -20px 0; padding: 14px 20px; border-top: 1px solid var(--hair); background: #050505; display: grid; grid-template-columns: auto minmax(0, 1fr) 36px; align-items: center; gap: 14px; flex-shrink: 0; }
-/* Your card: a crisp dark tile with a hairline pearl edge. Under the
-   pointer a spotlight lights the edge in pearl and, faintly, the surface
-   behind the text. The text sits above both and never changes, so it stays
-   sharp. --px/--py come from trackSheen(); the spotlight glides to them. */
-.pocket-card, .card-file { position: relative; isolation: isolate; overflow: hidden; color: var(--text);
-  background: linear-gradient(180deg, #151517, #0b0b0d) padding-box,
-    linear-gradient(115deg, rgba(221, 213, 255, .42), rgba(255, 255, 255, .09) 38%, rgba(255, 255, 255, .07) 62%, rgba(196, 236, 230, .32)) border-box;
+/* Your card is a holographic card, shaped like one (ID-1, 1.586:1). Its
+   colour pools toward the pointer, the edge turns with it, a glint lies
+   under it, and the card tips toward you. The text sits above every layer
+   with a soft shadow, so it reads wherever the light is. --px/--py come
+   from trackSheen(). */
+@property --edge { syntax: "<angle>"; inherits: false; initial-value: 115deg; }
+.pocket-card, .card-file { position: relative; isolation: isolate; overflow: hidden; color: #f7f6fc; --gx: 0%; --gy: 0%; --edge: 115deg;
+  background: radial-gradient(110% 160% at var(--gx) var(--gy), rgba(206, 194, 255, .46), transparent 62%) padding-box,
+    radial-gradient(90% 140% at calc(100% - var(--gx)) calc(100% - var(--gy)), rgba(180, 236, 228, .34), transparent 62%) padding-box,
+    radial-gradient(60% 120% at calc(70% - var(--gx) * .4) var(--gy), rgba(244, 206, 230, .26), transparent 70%) padding-box,
+    linear-gradient(#0e0e12, #0e0e12) padding-box,
+    linear-gradient(var(--edge), rgba(221, 213, 255, .8), rgba(196, 236, 230, .45) 30%, rgba(244, 212, 232, .7) 60%, rgba(211, 205, 255, .55)) border-box;
   border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 1px 2px rgba(0, 0, 0, .7), 0 10px 28px -18px rgba(214, 205, 255, .4);
-  transition: box-shadow .3s var(--ease), transform calc(.2s / var(--tempo)) var(--ease); }
-.pocket-card:hover, .card-file:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 1px 2px rgba(0, 0, 0, .7), 0 14px 34px -18px rgba(214, 205, 255, .55); }
-.pocket-card:active { transform: scale(.985); }
-.pocket-card > *, .card-file > * { position: relative; z-index: 2; }
-/* The edge: a pearl spotlight drawn only in the 1px border ring. */
-.pocket-card::before, .card-file::before { content: ""; position: absolute; inset: -1px; z-index: 1; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0;
-  --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%);
-  background: radial-gradient(130px circle at var(--gx) var(--gy), #f4f0ff, rgba(206, 194, 255, .85) 25%, rgba(180, 236, 228, .45) 50%, transparent 75%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
-  transition: opacity .35s var(--ease), --gx calc(.12s / var(--tempo)) linear, --gy calc(.12s / var(--tempo)) linear; }
-/* The surface: a faint light under the pointer, below the text. */
-.pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
-  --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%);
-  background: radial-gradient(160px circle at var(--gx) var(--gy), rgba(232, 224, 255, .075), rgba(196, 236, 230, .03) 45%, transparent 75%);
-  transition: opacity .35s var(--ease), --gx calc(.12s / var(--tempo)) linear, --gy calc(.12s / var(--tempo)) linear; }
-.pocket-card:hover::before, .card-file:hover::before, .pocket-card:hover::after, .card-file:hover::after { opacity: 1; }
-.pocket-card > svg:first-child { transition: color .25s var(--ease); }
-.pocket-card:hover > svg:first-child { color: var(--accent-ink); }
-.pocket-card { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 0 12px 0 11px; min-height: 48px; min-width: 156px; font-size: 13px; font-weight: 600; letter-spacing: -.01em; box-shadow: 0 8px 24px -14px rgba(214, 205, 255, .5); }
-.pocket-card > svg:first-child { width: 18px; height: 18px; stroke-width: 1.6; color: var(--text-2); }
-.pocket-card span { flex: 1; text-align: left; line-height: 1.2; }
-.pocket-card small { display: block; margin-top: 2px; font: 10.5px var(--mono); color: var(--text-3); font-weight: 400; }
-.pocket-card > svg:last-child { color: var(--text-3); transition: color .15s, transform .2s var(--ease); }
-.pocket-card:hover > svg:last-child { color: var(--text); transform: translate(1px, -1px); }
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 10px 26px -14px rgba(214, 205, 255, .55);
+  transition: --gx calc(.5s / var(--tempo)) var(--ease), --gy calc(.5s / var(--tempo)) var(--ease), --edge calc(.5s / var(--tempo)) var(--ease),
+    transform calc(.4s / var(--tempo)) var(--ease), box-shadow .35s var(--ease); }
+.pocket-card:hover, .card-file:hover { --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%); --edge: calc(70deg + var(--px, .5) * 90deg);
+  transform: perspective(520px) rotateX(calc((.5 - var(--py, .5)) * 12deg)) rotateY(calc((var(--px, .5) - .5) * 14deg)) translateZ(0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), calc((.5 - var(--px, .5)) * 14px) calc(12px + (.5 - var(--py, .5)) * 8px) 30px -14px rgba(214, 205, 255, .7); }
+.pocket-card:hover { transition-duration: calc(.5s / var(--tempo)), calc(.5s / var(--tempo)), calc(.5s / var(--tempo)), calc(.18s / var(--tempo)), .35s; }
+.pocket-card:active { transform: perspective(520px) rotateX(calc((.5 - var(--py, .5)) * 12deg)) rotateY(calc((var(--px, .5) - .5) * 14deg)) scale(.97); }
+.pocket-card > *, .card-file > * { position: relative; z-index: 2; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+/* Glint: a light under the pointer and a diagonal band that follows it. */
+.pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(circle 80px at calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%), rgba(255, 255, 255, .16), transparent 70%),
+    linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .09) 45%, rgba(230, 220, 255, .15) 50%, rgba(196, 236, 230, .08) 55%, transparent 66%);
+  background-size: 100% 100%, 250% 100%; background-position: 0 0, 120% 0; background-repeat: no-repeat; opacity: 0;
+  transition: background-position calc(.9s / var(--tempo)) var(--ease), opacity .4s var(--ease); }
+/* The band's centre is 47.5% into a 250%-wide layer, so this keeps it under the pointer. */
+.pocket-card:hover::after, .card-file:hover::after { opacity: 1; background-position: 0 0, calc((1.1875 - var(--px, .5)) / 1.5 * 100%) 0; transition-duration: calc(.25s / var(--tempo)), .35s; }
+/* Card-shaped: the ID mark top left, the arrow top right, the words along the bottom. */
+.pocket-card { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; width: 140px; aspect-ratio: 1.586; padding: 11px 12px 10px;
+  border-radius: 9px; font-size: 13px; font-weight: 600; letter-spacing: -.01em; text-align: left; }
+.pocket-card > svg:first-child { width: 20px; height: 20px; stroke-width: 1.5; color: rgba(247, 246, 252, .85); transition: color .3s var(--ease); }
+.pocket-card:hover > svg:first-child { color: #fff; }
+.pocket-card span { grid-column: 1 / -1; grid-row: 2; align-self: end; line-height: 1.2; }
+.pocket-card small { display: block; margin-top: 2px; font: 10.5px var(--mono); color: rgba(247, 246, 252, .62); font-weight: 400; }
+.pocket-card > svg:last-child { grid-column: 2; grid-row: 1; color: rgba(247, 246, 252, .55); transition: color .25s var(--ease), transform .3s var(--ease); }
+.pocket-card:hover > svg:last-child { color: #fff; transform: translate(1px, -1px); }
 .dock-name { font-size: 14.5px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .dock-settings { width: 36px; height: 36px; border-radius: 8px; }
 .dock-settings svg { width: 19px; height: 19px; stroke-width: 1.6; }
@@ -449,17 +464,17 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .pref-link, .about-version { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-block-start: 1px solid var(--hair); }
 .pref-link svg:last-child, .about-version span { margin-left: auto; }
 .about-version span { color: var(--text-2); }
-.card-file { display: grid; justify-items: start; gap: 10px; border-radius: 12px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
+.card-file { display: grid; justify-items: start; align-content: space-between; gap: 10px; width: min(320px, 100%); aspect-ratio: 1.586; border-radius: 14px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
 .card-file small { color: var(--text-2); }
 .vault-dialog { width: min(360px, 92vw); background: #0e0e10; color: var(--text); border: 1px solid var(--hair-strong); border-radius: 12px; padding: 20px; box-shadow: 0 24px 60px #000d; }
 .vault-dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(2px); }
 .vault-dialog label { display: grid; gap: 7px; }
 .vault-dialog p { overflow-wrap: anywhere; }
-.identity-dock { min-height: 80px; } .pocket-card { min-width: 172px; min-height: 52px; } .ledger-row { height: 44px; }
+.identity-dock { min-height: 80px; } .ledger-row { height: 44px; }
 .btn.primary:disabled { background: rgba(255, 255, 255, .07); color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .btn.primary, .btn.primary::before, .pocket-card, .card-file, .pocket-card::before, .card-file::before, .pocket-card::after, .card-file::after { transition: none; }
-  .pocket-card:active { transform: none; }
+  .btn.primary, .btn.primary::before, .pocket-card, .card-file, .pocket-card::after, .card-file::after { transition: none; }
+  .pocket-card:hover, .card-file:hover, .pocket-card:active { transform: none; }
   :where(button, summary, a, input, select, label, .ledger-row, .ledger-key, .chips button), .ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico { transition: none; }
 }
 .send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 2px 0 #d9d6fb; padding-inline: 8px; }
@@ -565,3 +580,44 @@ button:disabled { opacity: .45; cursor: default; }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
 @keyframes fade-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico, .sort-menu::details-content, .sort-options { transition: none; } .vault-dialog[open], .vault-dialog[open]::backdrop { animation: none; } }
+
+/* The logo opens version history: a modal with a pearl hairline on top and
+   a timeline, newest first. Entries rise in one after another. */
+.titlebar button.brand { width: 30px; height: 30px; margin-left: -6px; border-radius: 8px; }
+.titlebar button.brand .logo { transition: transform .35s var(--ease), filter .35s var(--ease); }
+.titlebar button.brand:hover .logo { transform: rotate(-8deg) scale(1.06); filter: drop-shadow(0 0 8px rgba(214, 205, 255, .45)); }
+.vault-dialog.history { width: min(460px, 92vw); max-height: min(620px, 84vh); padding: 0; overflow: hidden; display: flex; flex-direction: column;
+  background: linear-gradient(#0c0c0f, #0c0c0f) padding-box, linear-gradient(160deg, rgba(221, 213, 255, .5), rgba(255, 255, 255, .08) 35%, rgba(255, 255, 255, .06) 70%, rgba(196, 236, 230, .35)) border-box;
+  border: 1px solid transparent; border-radius: 16px; box-shadow: 0 30px 80px -20px #000, 0 0 60px -30px rgba(214, 205, 255, .5); }
+.vault-dialog.history[open] { display: flex; }
+.history-inner { display: flex; flex-direction: column; min-height: 0; }
+.history-head { position: relative; display: flex; align-items: center; gap: 12px; padding: 20px 20px 16px; border-bottom: 1px solid var(--hair); }
+.history-head::before { content: ""; position: absolute; inset: 0 0 auto; height: 70px; pointer-events: none; z-index: -1;
+  background: radial-gradient(60% 100% at 15% 0%, rgba(206, 194, 255, .16), transparent 70%), radial-gradient(50% 100% at 85% 0%, rgba(180, 236, 228, .1), transparent 70%); }
+.history-head .logo { flex-shrink: 0; filter: drop-shadow(0 0 10px rgba(214, 205, 255, .3)); }
+.history-head > div { flex: 1; min-width: 0; }
+.history-head h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+.history-head p { margin: 2px 0 0; font: 11.5px var(--mono); color: var(--text-3); }
+.history-close { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); align-self: flex-start; }
+.history-close:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
+.history-list { list-style: none; margin: 0; padding: 18px 20px 22px 20px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 20px; }
+.history-list > li { position: relative; padding-left: 22px; animation: history-in .55s var(--ease) backwards; }
+.history-list > li:nth-child(2) { animation-delay: 50ms; } .history-list > li:nth-child(3) { animation-delay: 100ms; }
+.history-list > li:nth-child(4) { animation-delay: 150ms; } .history-list > li:nth-child(5) { animation-delay: 200ms; }
+.history-list > li:nth-child(n+6) { animation-delay: 250ms; }
+@keyframes history-in { from { opacity: 0; transform: translateY(8px); } }
+/* The timeline: a dot per release on a hairline that runs down the left. */
+.history-list > li::before { content: ""; position: absolute; left: 3px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: #2a2a30; box-shadow: 0 0 0 3px #0c0c0f; z-index: 1; }
+.history-list > li::after { content: ""; position: absolute; left: 6px; top: 14px; bottom: -26px; width: 1px; background: var(--hair); }
+.history-list > li:last-child::after { display: none; }
+.history-list > li.latest::before { background: var(--pearl); background-size: 200% 200%; box-shadow: 0 0 0 3px #0c0c0f, 0 0 10px rgba(214, 205, 255, .7); }
+.history-list time { font: 11px var(--mono); color: var(--text-3); }
+.history-list h3 { margin: 3px 0 6px; font-size: 14px; font-weight: 600; letter-spacing: -.015em; display: flex; align-items: center; gap: 8px; }
+.history-tag { font: 600 10px var(--mono); letter-spacing: .02em; padding: 2px 6px; border-radius: 999px; color: #1a1625; background: var(--pearl); background-size: 200% 200%; }
+.history-list ul { margin: 0; padding: 0 0 0 14px; display: grid; gap: 4px; color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
+.history-list ul li::marker { color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .history-list > li { animation: none; } .titlebar button.brand .logo { transition: none; } }
+.history-list { scrollbar-width: thin; scrollbar-color: #2a2a30 transparent; mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+.history-list ul { list-style: none; padding-left: 0; }
+.history-list ul li { position: relative; padding-left: 14px; }
+.history-list ul li::before { content: ""; position: absolute; left: 1px; top: .72em; width: 6px; height: 1px; background: var(--text-3); }
