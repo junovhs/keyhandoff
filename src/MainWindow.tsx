@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Glyph, Icon, Logo, MakerMark, useDragOut } from "./art";
+import { Glyph, Icon, Logo, MakerMark, VaultMark, useDragOut } from "./art";
 import {
   api,
   typingApi,
@@ -21,11 +21,12 @@ import {
   type TeamView,
   type View,
 } from "./ipc";
-import { enter, stagger } from "./motion";
+import { enter, flip, stagger } from "./motion";
 import { Gate } from "./Gate";
+import { Presence } from "./Presence";
 import { SafeCopy } from "./SafeCopy";
 import { CodeSheet, ImportResult, ImportSheet, ImportStart } from "./Visual";
-import { ArrowUpRight, Bot, Check, ChevronDown, Copy, Download, FileInput, Folder, FolderOpen, IdCard, Keyboard, KeyRound, LockKeyhole, Plus, RefreshCw, Send, Server, Settings, Shield, SquareTerminal, X } from "lucide-react";
+import { ArrowUpRight, Bot, Check, ChevronDown, Copy, Download, FileInput, Folder, FolderOpen, IdCard, Keyboard, KeyRound, LockKeyhole, Plus, RefreshCw, Send, Server, Settings, SquareTerminal, X } from "lucide-react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -117,53 +118,90 @@ export function MainWindow() {
         </button>
       </header>
       <main className="stage" ref={stage}>
-        {gate && !open && <Gate gate={gate} />}
-        {view && !safeOn && <Home view={view} run={run} onCard={() => void run(api.prepareCard())} onSend={() => setSending("pick")} onSettings={() => setSettings(true)} onCode={() => setCode(true)} />}
+        <Presence show={Boolean(gate && !open)}>{gate && !open && <Gate gate={gate} />}</Presence>
+        <Presence show={Boolean(view && !safeOn)}>{view && !safeOn && <Home view={view} run={run} onCard={() => void run(api.prepareCard())} onSend={() => setSending("pick")} onSettings={() => setSettings(true)} onCode={() => setCode(true)} />}</Presence>
       </main>
-      {view && safeOn && <SafeCopy view={view} />}
-      {view?.accepted && <AcceptSheet item={view.accepted} run={run} />}
-      {view?.invited && !view.accepted && <InviteSheet invite={view.invited} run={run} />}
-      {view?.pairing && !view.added && <PairingSheet pairing={view.pairing} run={run} />}
-      {view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}
-      {view?.added && (
+      <Presence show={Boolean(view && safeOn)} fx="fade">{view && safeOn && <SafeCopy view={view} />}</Presence>
+      <Presence show={Boolean(view?.accepted)}>{view?.accepted && <AcceptSheet item={view.accepted} run={run} />}</Presence>
+      <Presence show={Boolean(view?.invited && !view.accepted)}>{view?.invited && !view.accepted && <InviteSheet invite={view.invited} run={run} />}</Presence>
+      <Presence show={Boolean(view?.pairing && !view.added)}>{view?.pairing && !view.added && <PairingSheet pairing={view.pairing} run={run} />}</Presence>
+      <Presence show={Boolean(view?.asked && !view.accepted)}>{view?.asked && !view.accepted && <CardSheet fileName={view.asked} computer={view.computer} run={run} />}</Presence>
+      <Presence show={Boolean(view?.added)}>{view?.added && (
         <ContactSheet contact={view.added} onSend={(c) => void api.dismiss().then(() => setSending({ team: false, id: c.id, name: c.name }))} />
-      )}
-      {view && sending && !safeOn && !editing && (
+      )}</Presence>
+      <Presence show={Boolean(view && sending && !safeOn && !editing)}>{view && sending && !safeOn && !editing && (
         <SendSheet view={view} run={run} start={sending === "pick" ? null : sending} onEdit={setEditing} onClose={() => setSending(null)} />
-      )}
-      {view && editing && !safeOn && (
+      )}</Presence>
+      <Presence show={Boolean(view && editing && !safeOn)}>{view && editing && !safeOn && (
         <TeamSheet
           team={editing === "new" ? null : (view.teams.find((t) => t.id === editing.id) ?? null)}
           contacts={view.contacts}
           run={run}
           onClose={() => setEditing(null)}
         />
-      )}
-      {view && settings && !safeOn && !security && <SettingsSheet view={view} run={run} onSecurity={() => setSecurity(true)} onClose={() => setSettings(false)} />}
-      {view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}
-      {view && code && !safeOn && <CodeSheet view={view} onClose={() => setCode(false)} />}
-      {view?.import_receipt && !safeOn && <ImportResult receipt={view.import_receipt} run={run} />}
-      {view?.import && !safeOn && <ImportSheet imp={view.import} keep={view.keep} run={run} />}
-      {view?.alert && !view.program && <AlertSheet alert={view.alert} />}
-      {view?.program && <ProgramSheet program={view.program} run={run} />}
-      {toast && (
+      )}</Presence>
+      <Presence show={Boolean(view && settings && !safeOn && !security)}>{view && settings && !safeOn && !security && <SettingsSheet view={view} run={run} onSecurity={() => setSecurity(true)} onClose={() => setSettings(false)} />}</Presence>
+      <Presence show={Boolean(view && security && !safeOn)}>{view && security && !safeOn && <SecuritySheet view={view} run={run} onClose={() => setSecurity(false)} />}</Presence>
+      <Presence show={Boolean(view && code && !safeOn)}>{view && code && !safeOn && <CodeSheet view={view} onClose={() => setCode(false)} />}</Presence>
+      <Presence show={Boolean(view?.import_receipt && !safeOn)}>{view?.import_receipt && !safeOn && <ImportResult receipt={view.import_receipt} run={run} />}</Presence>
+      <Presence show={Boolean(view?.import && !safeOn)}>{view?.import && !safeOn && <ImportSheet imp={view.import} keep={view.keep} run={run} />}</Presence>
+      <Presence show={Boolean(view?.alert && !view.program)}>{view?.alert && !view.program && <AlertSheet alert={view.alert} />}</Presence>
+      <Presence show={Boolean(view?.program)}>{view?.program && <ProgramSheet program={view.program} run={run} />}</Presence>
+      <Presence show={Boolean(toast)} fx="fade" inMs={220} outMs={220}>{toast && (
         <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
           {!bad && <Icon name="check" />}
           {toast}
         </button>
-      )}
+      )}</Presence>
     </div>
   );
 }
 
 type Run = (p: Promise<unknown>) => Promise<void>;
 
+/** Window widths where the vault changes shape: wide puts the heading beside the buttons and keys in tiles. */
+const WIDE_AT = 820;
+const THREE_COLUMNS_AT = 1120;
+
+/**
+ * Pick the vault's shape from the stage's width: narrow, wide with two
+ * columns, or wide with three. Only these three, and each change glides.
+ */
+function useVaultShape(anchor: React.RefObject<HTMLElement>) {
+  useLayoutEffect(() => {
+    const stage = anchor.current?.closest<HTMLElement>(".stage");
+    if (!stage) return;
+    let frame = 0;
+    const apply = (animate: boolean) => {
+      frame = 0;
+      const w = stage.clientWidth;
+      const shape = w < WIDE_AT ? "narrow" : w < THREE_COLUMNS_AT ? "wide-2" : "wide-3";
+      if (stage.dataset.shape === shape) return;
+      const set = () => { stage.dataset.shape = shape; };
+      if (!animate) return set();
+      const ledger = stage.querySelector(".key-ledger")?.getBoundingClientRect();
+      const rows = Array.from(stage.querySelectorAll<HTMLElement>(".ledger-row")).filter((r) => {
+        const b = r.getBoundingClientRect();
+        return !ledger || (b.bottom > ledger.top && b.top < ledger.bottom);
+      }).slice(0, 48);
+      const parts = Array.from(stage.querySelectorAll<HTMLElement>(".vault-heading, .vault-actions, .tools-row, .vault .search, .import-start, .session-grants"));
+      flip([...parts, ...rows], set, 460);
+    };
+    apply(false);
+    const watch = new ResizeObserver(() => { if (!frame) frame = requestAnimationFrame(() => apply(true)); });
+    watch.observe(stage);
+    return () => { watch.disconnect(); cancelAnimationFrame(frame); delete stage.dataset.shape; };
+  }, []);
+}
+
 function Home({ view, run, onSend, onSettings, onCode, onCard }: { onCard: () => void; view: View; run: Run; onSend: () => void; onSettings: () => void; onCode: () => void }) {
   const n = view.keys.length;
+  const heading = useRef<HTMLDivElement>(null);
+  useVaultShape(heading);
   return (
     <>
-      <div className="vault-heading">
-        <span className="vault-seal" aria-hidden><Shield /><LockKeyhole /></span>
+      <div className="vault-heading" ref={heading}>
+        <VaultMark />
         <div><h1 className="display sm">Your secure keys</h1>
         <p className="lede">{n === 0 ? "Keep your first key on this machine." : summary(view.keys)}</p></div>
       </div>
@@ -253,13 +291,32 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [order, setOrder] = useState<Order>("newest");
-  if (keys.length === 0) {
-    return <ImportStart run={run} />;
-  }
+  const ledger = useRef<HTMLDivElement>(null);
+  const placed = useRef(new Map<string, DOMRect>());
   const q = query.trim().toLowerCase();
   const pass = FILTERS.find((f) => f.id === filter)!.test;
   const shown = keys.filter((key) => pass(key) &&
     [key.label, key.from, key.team, ...key.hosts].some((field) => field?.toLowerCase().includes(q))).sort(COMPARE[order]);
+  const shownIds = shown.map((k) => k.id).join(",");
+  useLayoutEffect(() => {
+    const rows = Array.from(ledger.current?.querySelectorAll<HTMLElement>(".ledger-row") ?? []);
+    const before = placed.current;
+    const now = new Map<string, DOMRect>();
+    for (const row of rows) {
+      const id = row.dataset.id!;
+      const b = row.getBoundingClientRect();
+      now.set(id, b);
+      const a = before.get(id);
+      if (before.size === 0) continue;
+      if (!a) { void enter(row, "fade", 260); continue; }
+      const dx = a.left - b.left, dy = a.top - b.top;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) row.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: 340, easing: "cubic-bezier(.22,1,.36,1)" });
+    }
+    placed.current = now;
+  }, [shownIds]);
+  if (keys.length === 0) {
+    return <ImportStart run={run} />;
+  }
   return (
     <div className="vault">
       <div className="search">
@@ -294,9 +351,9 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
         </details>
       </div>
       {shown.length === 0 && <p className="help no-match">No keys match{q ? ` \u201c${query.trim()}\u201d` : ""}.</p>}
-      <div className="key-ledger" style={{ "--ledger-height": `calc(${shown.length} * var(--row-height, 38px))` } as React.CSSProperties}>
+      <div className="key-ledger" ref={ledger} style={{ "--ledger-height": `calc(${shown.length} * var(--row-height, 38px))` } as React.CSSProperties}>
         {shown.map(k => (
-          <div className="ledger-row" key={k.id}>
+          <div className="ledger-row" key={k.id} data-id={k.id}>
             <span className="ledger-key" title={describe(k)}><KeyRound size={15} aria-hidden /></span>
             <span className="ledger-text">
               <span className="ledger-name mono" title={`${describe(k)} · ${lifetime(k)}${k.hosts.length ? " · " + k.hosts.join(", ") : ""}`}>{k.label}</span>
@@ -313,7 +370,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
           </div>
         ))}
       </div>
-      {(hosting || removing) && <VaultDialog onClose={() => { setHosting(null); setRemoving(null); }}>
+      <Presence show={Boolean(hosting || removing)} fx="pop" inMs={240} outMs={200}>{(hosting || removing) && <VaultDialog onClose={() => { setHosting(null); setRemoving(null); }}>
         {hosting ? <form onSubmit={e => { e.preventDefault(); saveHosts(); }}>
           <h2 className="title">Allowed servers</h2>
           <p className="mono">{keys.find(k => k.id === hosting.id)?.label}</p>
@@ -325,7 +382,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
           <div className="btn-row"><button autoFocus className="btn secondary grow" onClick={() => setRemoving(null)}>Cancel</button>
             <button className="btn secondary" onClick={() => void run(api.forget(removing.id).then(() => setRemoving(null)))}>Remove key</button></div>
         </>}
-      </VaultDialog>}
+      </VaultDialog>}</Presence>
     </div>
   );
 }
@@ -359,7 +416,7 @@ function SettingsSheet({ view, run, onSecurity, onClose }: { view: View; run: Ru
     <button className="pref-link about-site" onClick={() => void run(api.openSite("keyhandoff"))}>
       <Logo /><span>KeyHandoff<small>keyhandoff.dev{version && ` · Version ${version}`}</small></span><ArrowUpRight size={16}/></button>
     <button className="pref-link about-site" onClick={() => void run(api.openSite("maker"))}>
-      <MakerMark /><span>Made by Strange Systems<small>strangesystems.dev</small></span><ArrowUpRight size={16}/></button>
+      <MakerMark height={24} /><span>Made by Strange Systems<small>strangesystems.dev</small></span><ArrowUpRight size={16}/></button>
     <span className="grow-space"/><button className="btn secondary" onClick={onClose}>Done</button>
   </section>;
 }

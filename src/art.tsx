@@ -72,13 +72,40 @@ export function Logo({ height = 22 }: { height?: number }) {
   );
 }
 
-/** Strange Systems' mark: two brackets and the orange bridge between them. */
+/** Strange Systems' mark: two brackets and the bridge between them, here in pearl. */
 export function MakerMark({ height = 20 }: { height?: number }) {
   return (
     <svg className="logo maker-mark" viewBox="0 0 505 474" height={height} width={(height * 505) / 474} aria-hidden>
+      <defs>
+        <linearGradient id="maker-pearl" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#b8a6ff" />
+          <stop offset=".4" stopColor="#8ee6d6" />
+          <stop offset=".75" stopColor="#f3a9dc" />
+          <stop offset="1" stopColor="#a9b4ff" />
+        </linearGradient>
+      </defs>
       <path fill="currentColor" d="M0,0 L0,411.878 L216.914,411.878 L216.914,350.713 L62.937,350.713 L62.937,61.163 L216.914,61.163 L216.914,0 Z" />
-      <path fill="#ff5418" d="M216.914,153.657 L288.081,122.522 L288.081,319.256 L216.914,350.391 Z" />
+      <path className="maker-bridge" fill="url(#maker-pearl)" d="M216.914,153.657 L288.081,122.522 L288.081,319.256 L216.914,350.391 Z" />
       <path fill="currentColor" d="M505,61.503 L505,473.381 L288.081,473.381 L288.081,412.216 L442.058,412.216 L442.058,122.666 L288.081,122.666 L288.081,61.503 Z" />
+    </svg>
+  );
+}
+
+/** The vault's mark: a shield with a keyhole on its centre line, in pearl. */
+export function VaultMark() {
+  return (
+    <svg className="vault-mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden>
+      <defs>
+        <linearGradient id="vault-pearl" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ddd5ff" />
+          <stop offset=".4" stopColor="#c4ece6" />
+          <stop offset=".75" stopColor="#f4d4e8" />
+          <stop offset="1" stopColor="#d3cdff" />
+        </linearGradient>
+      </defs>
+      <path d="M16 3.5 26 7.25v7.6c0 6.4-4.2 11.3-10 13.65C10.2 26.15 6 21.25 6 14.85v-7.6Z" fill="none" stroke="url(#vault-pearl)" strokeWidth="1.7" strokeLinejoin="round" />
+      <circle cx="16" cy="14.25" r="2.4" fill="#f2f0fa" />
+      <path d="M14.9 15.6h2.2l.7 4.9h-3.6Z" fill="#f2f0fa" />
     </svg>
   );
 }

@@ -85,7 +85,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .chips button { height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-strong); font-size: 12.5px; font-weight: 500; color: var(--text-2); }
 .chips button span { color: var(--text-3); margin-left: 2px; }
 .chips button:hover { color: var(--text); }
-.chips button.on { background: var(--accent-grad); border-color: transparent; color: var(--on-pearl); }
+.chips button.on { border-color: transparent; color: var(--on-pearl); }
 .chips button.on span { color: rgba(13, 11, 20, .55); }
 .no-match { padding: 12px 0; }
 .key-row { content-visibility: auto; contain-intrinsic-size: auto 56px; display: flex; align-items: center; gap: 14px; min-height: 56px; border-bottom: 1px solid var(--line); }
@@ -102,7 +102,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-ink)
 .key-row .who.contact > .who { display: flex; flex-direction: column; min-width: 0; }
 .key-row .who.contact:hover .nm { color: var(--accent-ink); }
 .key-row .use.always { opacity: 1; }
-.key-ico.on { background: var(--accent-grad); border-color: transparent; color: var(--on-pearl); }
+.key-ico.on { border-color: transparent; color: var(--on-pearl); }
 .keys .label { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 2px; }
 .key-row .forget { height: 30px; min-width: 30px; padding: 0 8px; border-radius: 7px; display: grid; place-items: center; color: var(--text-3); font-size: 12px; font-weight: 500; opacity: 0; transition: opacity calc(.15s / var(--tempo)); }
 .key-row:hover .forget, .key-row .forget:focus-visible, .key-row .forget.sure { opacity: 1; }
@@ -166,8 +166,8 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 /* Once / 30 days / Keep */
 .segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
 .segmented button { height: 36px; border-radius: 7px; color: var(--text-2); font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.segmented button:hover { color: var(--text); background: var(--raised); }
-.segmented button.pick { background: var(--accent-grad); background-size: 220% 100%; background-position: 0 0; transition: background-position calc(.6s / var(--tempo)) var(--ease); color: var(--on-pearl); font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
+.segmented button:hover { color: var(--text); }
+.segmented button.pick { color: var(--on-pearl); font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
 .keep-block { display: flex; flex-direction: column; gap: 8px; }
 
 /* Safe Copy window */
@@ -247,14 +247,13 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .name-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 255, 255, .06); }
 .keep-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .keep-buttons button { height: 44px; border-radius: 8px; border: 1px solid var(--line-strong); font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
-.keep-buttons button:hover { background: rgba(255, 255, 255, .05); }
 .pin-block { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--line); }
 .pin-block .label { padding-top: 10px; }
 .pin-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
 .pin-add .name-in { min-width: 0; }
 .help.links { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .keep-buttons.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.keep-buttons button.pick { background: var(--accent-grad); background-size: 220% 100%; background-position: 0 0; transition: background-position calc(.6s / var(--tempo)) var(--ease); color: var(--on-pearl); border-color: transparent; }
+.keep-buttons button.pick { color: var(--on-pearl); border-color: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -278,7 +277,7 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .checklist label.on { color: var(--text); }
 .checklist input { position: absolute; opacity: 0; pointer-events: none; }
 .checklist .box { width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line-strong); display: grid; place-items: center; flex-shrink: 0; }
-.checklist label.on .box { background: var(--accent-grad); border-color: transparent; color: var(--on-pearl); }
+.checklist label.on .box { border-color: transparent; color: var(--on-pearl); }
 .checklist input:focus-visible + .box { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .checklist .var { flex: 1; font-size: 12.5px; overflow-wrap: anywhere; }
 .checklist .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--accent-ink); }
@@ -337,15 +336,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .titlebar { position: relative; }
 .stage:has(.vault-heading) { gap: 14px; padding-bottom: 0; }
 
-.vault-heading { display: flex; align-items: center; gap: 14px; padding: 6px 0 4px; }
+.vault-heading { display: flex; align-items: center; gap: 14px; padding: 6px 0 4px; min-width: 0; }
+.vault-heading > div { min-width: 0; }
+.vault-heading .display, .vault-heading .lede { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vault-heading .display { font-size: 26px; font-weight: 600; letter-spacing: -.045em; line-height: 1.1; }
 .vault-heading .lede { font-size: 13px; color: var(--text-3); margin-top: 4px; letter-spacing: -.005em; }
-.vault-seal { position: relative; display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px;
-  background: linear-gradient(#0b0b0d, #0b0b0d) padding-box, var(--pearl-line) border-box; border: 1px solid transparent; color: #f2f0fa;
-  box-shadow: 0 0 24px -6px rgba(214, 205, 255, .35); }
-.vault-seal svg { grid-area: 1 / 1; }
-.vault-seal svg:first-child { width: 22px; height: 22px; stroke-width: 1.5; opacity: .9; }
-.vault-seal svg:last-child { width: 9px; height: 9px; stroke-width: 2.4; }
+.vault-mark { display: block; flex-shrink: 0; width: 34px; height: 34px; filter: drop-shadow(0 0 10px rgba(214, 205, 255, .28)); }
 
 /* The pearl button: the sheen follows the pointer. --px/--py (0..1, where
    the pointer is over the box) come from trackSheen() in motion.ts. */
@@ -396,9 +392,9 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .ledger-row + .ledger-row::before { content: ""; position: absolute; top: 0; left: 8px; right: 8px; height: 1px; background: var(--hair); }
 .ledger-row:hover, .ledger-row:focus-within { background: rgba(255, 255, 255, .035); }
 .ledger-row:hover::before, .ledger-row:hover + .ledger-row::before, .ledger-row:focus-within::before, .ledger-row:focus-within + .ledger-row::before { opacity: 0; }
-.ledger-key { display: grid; place-items: center; height: 24px; width: 24px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--hair); color: var(--text-3); transition: color .15s, border-color .15s, background .15s; }
+.ledger-key { display: grid; place-items: center; height: 24px; width: 24px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--hair); color: var(--text-3); }
 .ledger-key svg { width: 13px; height: 13px; }
-.ledger-row:hover .ledger-key { color: #1a1625; border-color: transparent; background: var(--pearl); background-size: 260% 260%; background-position: calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%); }
+.ledger-row:hover .ledger-key { color: #1a1625; border-color: transparent; }
 .ledger-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: #e6e6e6; letter-spacing: -.01em; }
 .ledger-tools { display: flex; gap: 2px; margin-left: auto; }
 .ledger-tools button, .dock-settings { display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: var(--text-2); transition: background .12s, color .12s; }
@@ -420,10 +416,10 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
   border: 1px solid transparent;
   transition: --gx calc(.5s / var(--tempo)) var(--ease), --gy calc(.5s / var(--tempo)) var(--ease), --edge calc(.5s / var(--tempo)) var(--ease), transform calc(.35s / var(--tempo)) var(--ease), box-shadow .3s var(--ease); }
 .pocket-card:hover, .card-file:hover { --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%); --edge: calc(70deg + var(--px, .5) * 90deg);
-  transform: perspective(520px) rotateX(calc((.5 - var(--py, .5)) * 9deg)) rotateY(calc((var(--px, .5) - .5) * 11deg)); }
+  transform: perspective(520px) rotateX(calc((.5 - var(--py, .5)) * 6deg)) rotateY(calc((var(--px, .5) - .5) * 7deg)); }
 .pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(circle 70px at calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%), rgba(255, 255, 255, .24), transparent 70%),
-    linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .10) 45%, rgba(230, 220, 255, .16) 50%, transparent 65%);
+  background: radial-gradient(circle 70px at calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%), rgba(255, 255, 255, .07), transparent 70%),
+    linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, .05) 45%, rgba(230, 220, 255, .08) 50%, transparent 63%);
   background-size: 100% 100%, 250% 100%; background-position: 0 0, 120% 0; background-repeat: no-repeat; opacity: 0;
   transition: background-position calc(.9s / var(--tempo)) var(--ease), opacity .4s var(--ease); }
 /* The glint band sits under the pointer: its centre is 47.5% into a 250%-wide layer. */
@@ -449,12 +445,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .vault-dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(2px); }
 .vault-dialog label { display: grid; gap: 7px; }
 .vault-dialog p { overflow-wrap: anywhere; }
-@media (min-width: 540px) { .identity-dock { min-height: 80px; } .pocket-card { min-width: 172px; min-height: 52px; } .ledger-row { height: 44px; } }
+.identity-dock { min-height: 80px; } .pocket-card { min-width: 172px; min-height: 52px; } .ledger-row { height: 44px; }
 .btn.primary:disabled { background: rgba(255, 255, 255, .07); color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); opacity: 1; }
-.segmented button.pick:hover, .keep-buttons button.pick:hover { background: var(--accent-grad); background-size: 220% 100%; background-position: calc(var(--px, .5) * 100%) 0; }
 @media (prefers-reduced-motion: reduce) {
   .btn.primary, .btn.primary::before, .pocket-card, .card-file, .pocket-card::after, .card-file::after { transition: none; }
   .pocket-card:hover, .card-file:hover { transform: none; }
+  :where(button, summary, a, input, select, label, .ledger-row, .ledger-key, .chips button), .ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico { transition: none; }
 }
 .send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 2px 0 #d9d6fb; padding-inline: 8px; }
 .send-confirm { min-width: 0; white-space: normal; height: auto; min-height: 44px; padding-block: 6px; overflow-wrap: anywhere; }
@@ -486,47 +482,76 @@ button:disabled { opacity: .45; cursor: default; }
 .about-site small { font: 11.5px var(--mono); font-weight: 400; color: var(--text-3); }
 .about-site > svg:last-child { color: var(--text-3); transition: color .15s, transform .2s var(--ease); }
 .about-site:hover > svg:last-child { color: var(--text); transform: translate(1px, -1px); }
-.about-site .logo { width: 22px; display: grid; }
+/* Both marks sit in the same 26px slot so the names line up. */
+.about-site .logo { display: block; width: 26px; }
 .pref-link.about-site + .pref-link.about-site { padding-top: 14px; }
 
 /* Each key: its name, and on wide windows a quiet second line. */
 .ledger-text { display: grid; min-width: 0; }
 .ledger-meta { display: none; font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Wide windows: the content keeps a readable measure, centred, and the room
-   goes to the keys. The dock still runs edge to edge. */
-.stage, .sheet { --gutter: 20px; }
+/* Width: the content keeps a readable measure, centred; the dock runs edge
+   to edge. The gutter grows smoothly, never in steps. The vault has three
+   shapes, set as data-shape on .stage by useVaultShape(), and moving
+   between them glides (flip() in motion.ts). Type never changes size. */
+.stage { --gutter: max(20px, calc((100% - 1040px) / 2)); padding-inline: var(--gutter); }
+.sheet { --gutter: max(20px, calc((100% - 560px) / 2)); padding-inline: var(--gutter); }
 .identity-dock { margin-inline: calc(-1 * var(--gutter, 20px)); padding-inline: var(--gutter, 20px); }
-@media (min-width: 720px) {
-  .stage { --gutter: max(32px, calc((100% - 1040px) / 2)); padding-inline: var(--gutter); padding-top: 20px; }
-  .sheet { --gutter: max(32px, calc((100% - 560px) / 2)); padding-inline: var(--gutter); padding-top: 24px; }
-  .stage:has(.vault-heading) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); grid-template-rows: auto auto 1fr auto; column-gap: 28px; row-gap: 18px;
-    grid-template-areas: "head actions" "tools tools" "vault vault" "me me"; }
-  .stage:has(.vault-heading):has(.session-grants) { grid-template-rows: auto auto auto 1fr auto; grid-template-areas: "head actions" "tools tools" "grants grants" "vault vault" "me me"; }
-  .stage .vault-heading { grid-area: head; }
-  .stage .vault-actions { grid-area: actions; align-self: center; }
-  .stage .tools-row { grid-area: tools; margin: 0; }
-  .stage .session-grants { grid-area: grants; }
-  .stage .vault, .stage .import-start { grid-area: vault; min-height: 0; }
-  .stage .import-start { align-self: start; }
-  .stage .identity-dock { grid-area: me; }
-  .vault { display: flex; flex-direction: column; min-height: 0; }
-  .vault-heading .display { font-size: 30px; }
-  .vault-heading .lede { font-size: 13.5px; }
-  .vault-seal { width: 48px; height: 48px; border-radius: 12px; }
-  .vault-seal svg:first-child { width: 26px; height: 26px; }
-  .vault-actions .btn { height: 44px; font-size: 14.5px; }
+.stage[data-shape^="wide"]:has(.vault-heading) { display: grid; grid-template-columns: minmax(0, 1fr) 420px; grid-template-rows: auto auto 1fr auto; column-gap: 28px; row-gap: 14px;
+  grid-template-areas: "head actions" "tools tools" "vault vault" "me me"; }
+.stage[data-shape^="wide"]:has(.session-grants) { grid-template-rows: auto auto auto 1fr auto; grid-template-areas: "head actions" "tools tools" "grants grants" "vault vault" "me me"; }
+.stage[data-shape^="wide"] .vault-heading { grid-area: head; }
+.stage[data-shape^="wide"] .vault-actions { grid-area: actions; align-self: center; }
+.stage[data-shape^="wide"] .tools-row { grid-area: tools; margin: 0; }
+.stage[data-shape^="wide"] .session-grants { grid-area: grants; }
+.stage[data-shape^="wide"] .vault, .stage[data-shape^="wide"] .import-start { grid-area: vault; min-height: 0; }
+.stage[data-shape^="wide"] .import-start { align-self: start; }
+.stage[data-shape^="wide"] .identity-dock { grid-area: me; }
+.stage[data-shape^="wide"] .vault { display: flex; flex-direction: column; min-height: 0; }
 
-  /* Keys become tiles in as many columns as fit. */
-  .key-ledger { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); grid-auto-rows: 60px; gap: 8px; align-content: start; margin-inline: 0; padding-bottom: 16px; }
-  .ledger-row { height: auto; padding: 0 12px; gap: 12px; border: 1px solid var(--hair); background: #070708; border-radius: 10px; transition: background .12s, border-color .12s; }
-  .ledger-row + .ledger-row::before { display: none; }
-  .ledger-row:hover, .ledger-row:focus-within { background: #0e0e10; border-color: var(--hair-strong); }
-  .ledger-key { width: 30px; height: 30px; border-radius: 8px; }
-  .ledger-key svg { width: 15px; height: 15px; }
-  .ledger-name { font-size: 13px; }
-  .ledger-meta { display: block; }
-  .ledger-tools { padding-left: 18px; background: linear-gradient(90deg, transparent, #0e0e10 16px); border-radius: 0 10px 10px 0; }
+/* Wide: keys are tiles, two or three across. */
+.stage[data-shape^="wide"] .key-ledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 60px; gap: 8px; align-content: start; margin-inline: 0; padding-bottom: 16px; }
+.stage[data-shape="wide-3"] .key-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stage[data-shape^="wide"] .ledger-row { height: auto; padding: 0 12px; border: 1px solid var(--hair); background: #070708; border-radius: 10px; transition: background-color .2s var(--ease), border-color .2s var(--ease); }
+.stage[data-shape^="wide"] .ledger-row + .ledger-row::before { display: none; }
+.stage[data-shape^="wide"] .ledger-row:hover, .stage[data-shape^="wide"] .ledger-row:focus-within { background: #0e0e10; border-color: var(--hair-strong); }
+.stage[data-shape^="wide"] .ledger-key { width: 30px; height: 30px; border-radius: 8px; }
+.stage[data-shape^="wide"] .ledger-meta { display: block; }
+.stage[data-shape^="wide"] .ledger-tools { padding-left: 18px; background: linear-gradient(90deg, transparent, #0e0e10 16px); border-radius: 0 10px 10px 0; }
+@media (hover: hover) { .stage[data-shape^="wide"] .ledger-tools { right: 1px; top: 1px; bottom: 1px; align-items: center; padding-right: 6px; } }
+
+/* Nothing changes state in one frame: interactive things ease their colours. */
+:where(button, summary, a, input, select, label, .ledger-row, .ledger-key, .chips button) {
+  transition: color .22s var(--ease), background-color .22s var(--ease), border-color .22s var(--ease), opacity .22s var(--ease), box-shadow .22s var(--ease);
 }
-@media (min-width: 720px) and (hover: hover) { .ledger-tools { right: 1px; top: 1px; bottom: 1px; align-items: center; padding-right: 6px; } }
-@media (min-width: 1100px) { .vault-heading .display { font-size: 34px; } .key-ledger { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); } }
+
+/* Pearl fills fade in: the pearl is always there under a veil colour that
+   clears when the thing is picked or hovered. */
+@property --veil { syntax: "<color>"; inherits: false; initial-value: transparent; }
+.ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico {
+  background: linear-gradient(var(--veil), var(--veil)), var(--pearl); background-size: 100% 100%, 220% 220%; background-position: 0 0, 0 0;
+  transition: --veil .28s var(--ease), color .22s var(--ease), border-color .22s var(--ease), background-position .6s var(--ease), box-shadow .22s var(--ease);
+}
+.ledger-key { --veil: #050506; }
+.stage[data-shape^="wide"] .ledger-key { --veil: #070708; }
+.ledger-row:hover .ledger-key, .ledger-row:focus-within .ledger-key { --veil: rgba(0, 0, 0, 0); background: linear-gradient(var(--veil), var(--veil)), var(--pearl); background-size: 100% 100%, 260% 260%; background-position: 0 0, calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%); }
+.segmented button { --veil: var(--surface); }
+.segmented button:hover { --veil: var(--raised); background: linear-gradient(var(--veil), var(--veil)), var(--pearl); background-size: 100% 100%, 220% 220%; }
+.keep-buttons button, .chips button, .checklist .box { --veil: var(--ground); }
+.keep-buttons button:hover { --veil: #0d0d0d; background: linear-gradient(var(--veil), var(--veil)), var(--pearl); background-size: 100% 100%, 220% 220%; }
+.key-ico { --veil: var(--ground); }
+.segmented button.pick, .keep-buttons button.pick, .chips button.on, .checklist label.on .box, .key-ico.on { --veil: rgba(0, 0, 0, 0); background: linear-gradient(var(--veil), var(--veil)), var(--pearl); background-size: 100% 100%, 220% 220%; }
+.segmented button.pick:hover, .keep-buttons button.pick:hover { background-position: 0 0, calc(var(--px, .5) * 100%) 0; }
+
+/* The sort menu opens and closes with a fade. */
+.sort-menu::details-content { opacity: 0; transition: opacity .2s var(--ease), content-visibility .2s allow-discrete; }
+.sort-menu[open]::details-content { opacity: 1; }
+.sort-options { transition: transform .22s var(--ease); transform: translateY(-4px); }
+.sort-menu[open] .sort-options { transform: none; }
+
+/* Dialogs ease in; Presence eases them out. */
+.vault-dialog[open] { animation: dialog-in .24s var(--ease); }
+.vault-dialog[open]::backdrop { animation: fade-in .24s var(--ease); }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+@keyframes fade-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico, .sort-menu::details-content, .sort-options { transition: none; } .vault-dialog[open], .vault-dialog[open]::backdrop { animation: none; } }

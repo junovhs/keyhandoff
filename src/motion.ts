@@ -37,7 +37,9 @@ export function leave(el: Element | null, fx: Fx = "rise", ms = 200): Promise<vo
 /** Stagger the entrance of an element's children. */
 export function stagger(parent: Element | null, fx: Fx = "rise", step = 45): void {
   if (!parent) return;
-  Array.from(parent.children).forEach((child, i) => void enter(child, fx, 320, i * step));
+  // Wrappers that only group (display: contents) stagger their children instead.
+  const kids = Array.from(parent.children).flatMap((c) => (getComputedStyle(c).display === "contents" ? Array.from(c.children) : [c]));
+  kids.forEach((child, i) => void enter(child, fx, 320, i * step));
 }
 
 /** The pearl surfaces whose sheen follows the pointer. */
@@ -71,4 +73,32 @@ export function trackSheen(): () => void {
   };
   window.addEventListener("pointermove", onMove, { passive: true });
   return () => { window.removeEventListener("pointermove", onMove); cancelAnimationFrame(frame); };
+}
+
+/**
+ * Move elements to a new layout smoothly (FLIP): note where they are, make
+ * the change, then glide each from its old box to its new one. Anything
+ * already gliding starts from wherever it is on screen now.
+ */
+export function flip(els: HTMLElement[], change: () => void, ms = 420): void {
+  const before = els.map((el) => [el, el.getBoundingClientRect()] as const);
+  els.forEach((el) => el.getAnimations().forEach((a) => a.id === "flip" && a.cancel()));
+  change();
+  if (reduced()) return;
+  const t = tempo();
+  for (const [el, a] of before) {
+    if (!el.isConnected) continue;
+    const b = el.getBoundingClientRect();
+    if (!a.width || !b.width) continue;
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1) continue;
+    const anim = el.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px)`, width: `${a.width}px`, height: `${a.height}px` },
+        { transform: "translate(0, 0)", width: `${b.width}px`, height: `${b.height}px` },
+      ],
+      { duration: ms / t, easing: EASE },
+    );
+    anim.id = "flip";
+  }
 }
