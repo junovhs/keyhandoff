@@ -94,8 +94,10 @@ export function flip(els: HTMLElement[], change: () => void, ms = 420): void {
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1) continue;
     const anim = el.animate(
       [
+        // No width or height at the end: the glide heads for the live layout,
+        // so a window still being resized is followed instead of snapped to.
         { transform: `translate(${dx}px, ${dy}px)`, width: `${a.width}px`, height: `${a.height}px` },
-        { transform: "translate(0, 0)", width: `${b.width}px`, height: `${b.height}px` },
+        { transform: "translate(0, 0)" },
       ],
       { duration: ms / t, easing: EASE },
     );

@@ -321,7 +321,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 /* Registered so the pointer-driven gradients glide instead of jumping. */
 @property --gx { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
 @property --gy { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-@property --edge { syntax: "<angle>"; inherits: false; initial-value: 115deg; }
 :root {
   --pearl: linear-gradient(115deg, #ddd5ff 0%, #c4ece6 24%, #f4d4e8 48%, #d3cdff 72%, #cbeeee 100%);
   --pearl-line: linear-gradient(115deg, rgba(221, 213, 255, .75), rgba(196, 236, 230, .45) 30%, rgba(244, 212, 232, .65) 60%, rgba(211, 205, 255, .5));
@@ -408,24 +407,35 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 
 /* You: your card, your name, your settings. */
 .identity-dock { margin: auto -20px 0; padding: 14px 20px; border-top: 1px solid var(--hair); background: #050505; display: grid; grid-template-columns: auto minmax(0, 1fr) 36px; align-items: center; gap: 14px; flex-shrink: 0; }
-/* Your card is holographic: its colour pools toward the pointer, the edge
-   turns with it, a glint lies under it, and the card tips a little. */
-.pocket-card, .card-file { position: relative; overflow: hidden; color: #f5f4fb; --gx: 0%; --gy: 0%; --edge: 115deg;
-  background: radial-gradient(110% 160% at var(--gx) var(--gy), rgba(206, 194, 255, .42), transparent 62%) padding-box, radial-gradient(90% 140% at calc(100% - var(--gx)) calc(100% - var(--gy)), rgba(180, 236, 228, .32), transparent 62%) padding-box, radial-gradient(60% 120% at calc(70% - var(--gx) * .4) var(--gy), rgba(244, 206, 230, .24), transparent 70%) padding-box, linear-gradient(#0e0e12, #0e0e12) padding-box,
-    linear-gradient(var(--edge), rgba(221, 213, 255, .75), rgba(196, 236, 230, .45) 30%, rgba(244, 212, 232, .65) 60%, rgba(211, 205, 255, .5)) border-box;
+/* Your card: a crisp dark tile with a hairline pearl edge. Under the
+   pointer a spotlight lights the edge in pearl and, faintly, the surface
+   behind the text. The text sits above both and never changes, so it stays
+   sharp. --px/--py come from trackSheen(); the spotlight glides to them. */
+.pocket-card, .card-file { position: relative; isolation: isolate; overflow: hidden; color: var(--text);
+  background: linear-gradient(180deg, #151517, #0b0b0d) padding-box,
+    linear-gradient(115deg, rgba(221, 213, 255, .42), rgba(255, 255, 255, .09) 38%, rgba(255, 255, 255, .07) 62%, rgba(196, 236, 230, .32)) border-box;
   border: 1px solid transparent;
-  transition: --gx calc(.5s / var(--tempo)) var(--ease), --gy calc(.5s / var(--tempo)) var(--ease), --edge calc(.5s / var(--tempo)) var(--ease), transform calc(.35s / var(--tempo)) var(--ease), box-shadow .3s var(--ease); }
-.pocket-card:hover, .card-file:hover { --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%); --edge: calc(70deg + var(--px, .5) * 90deg);
-  transform: perspective(520px) rotateX(calc((.5 - var(--py, .5)) * 6deg)) rotateY(calc((var(--px, .5) - .5) * 7deg)); }
-.pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(circle 70px at calc(var(--px, .5) * 100%) calc(var(--py, .5) * 100%), rgba(255, 255, 255, .07), transparent 70%),
-    linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, .05) 45%, rgba(230, 220, 255, .08) 50%, transparent 63%);
-  background-size: 100% 100%, 250% 100%; background-position: 0 0, 120% 0; background-repeat: no-repeat; opacity: 0;
-  transition: background-position calc(.9s / var(--tempo)) var(--ease), opacity .4s var(--ease); }
-/* The glint band sits under the pointer: its centre is 47.5% into a 250%-wide layer. */
-.pocket-card:hover::after, .card-file:hover::after { opacity: 1; background-position: 0 0, calc((1.1875 - var(--px, .5)) / 1.5 * 100%) 0; transition-duration: calc(.25s / var(--tempo)), .3s; }
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 1px 2px rgba(0, 0, 0, .7), 0 10px 28px -18px rgba(214, 205, 255, .4);
+  transition: box-shadow .3s var(--ease), transform calc(.2s / var(--tempo)) var(--ease); }
+.pocket-card:hover, .card-file:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 1px 2px rgba(0, 0, 0, .7), 0 14px 34px -18px rgba(214, 205, 255, .55); }
+.pocket-card:active { transform: scale(.985); }
+.pocket-card > *, .card-file > * { position: relative; z-index: 2; }
+/* The edge: a pearl spotlight drawn only in the 1px border ring. */
+.pocket-card::before, .card-file::before { content: ""; position: absolute; inset: -1px; z-index: 1; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0;
+  --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%);
+  background: radial-gradient(130px circle at var(--gx) var(--gy), #f4f0ff, rgba(206, 194, 255, .85) 25%, rgba(180, 236, 228, .45) 50%, transparent 75%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  transition: opacity .35s var(--ease), --gx calc(.12s / var(--tempo)) linear, --gy calc(.12s / var(--tempo)) linear; }
+/* The surface: a faint light under the pointer, below the text. */
+.pocket-card::after, .card-file::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
+  --gx: calc(var(--px, .5) * 100%); --gy: calc(var(--py, .5) * 100%);
+  background: radial-gradient(160px circle at var(--gx) var(--gy), rgba(232, 224, 255, .075), rgba(196, 236, 230, .03) 45%, transparent 75%);
+  transition: opacity .35s var(--ease), --gx calc(.12s / var(--tempo)) linear, --gy calc(.12s / var(--tempo)) linear; }
+.pocket-card:hover::before, .card-file:hover::before, .pocket-card:hover::after, .card-file:hover::after { opacity: 1; }
+.pocket-card > svg:first-child { transition: color .25s var(--ease); }
+.pocket-card:hover > svg:first-child { color: var(--accent-ink); }
 .pocket-card { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 0 12px 0 11px; min-height: 48px; min-width: 156px; font-size: 13px; font-weight: 600; letter-spacing: -.01em; box-shadow: 0 8px 24px -14px rgba(214, 205, 255, .5); }
-.pocket-card > svg:first-child { width: 18px; height: 18px; stroke-width: 1.6; opacity: .9; }
+.pocket-card > svg:first-child { width: 18px; height: 18px; stroke-width: 1.6; color: var(--text-2); }
 .pocket-card span { flex: 1; text-align: left; line-height: 1.2; }
 .pocket-card small { display: block; margin-top: 2px; font: 10.5px var(--mono); color: var(--text-3); font-weight: 400; }
 .pocket-card > svg:last-child { color: var(--text-3); transition: color .15s, transform .2s var(--ease); }
@@ -448,8 +458,8 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .identity-dock { min-height: 80px; } .pocket-card { min-width: 172px; min-height: 52px; } .ledger-row { height: 44px; }
 .btn.primary:disabled { background: rgba(255, 255, 255, .07); color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .btn.primary, .btn.primary::before, .pocket-card, .card-file, .pocket-card::after, .card-file::after { transition: none; }
-  .pocket-card:hover, .card-file:hover { transform: none; }
+  .btn.primary, .btn.primary::before, .pocket-card, .card-file, .pocket-card::before, .card-file::before, .pocket-card::after, .card-file::after { transition: none; }
+  .pocket-card:active { transform: none; }
   :where(button, summary, a, input, select, label, .ledger-row, .ledger-key, .chips button), .ledger-key, .segmented button, .keep-buttons button, .chips button, .checklist .box, .key-ico { transition: none; }
 }
 .send-choice[aria-pressed=true] { background: var(--raised); box-shadow: inset 2px 0 #d9d6fb; padding-inline: 8px; }
