@@ -260,3 +260,18 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* The small typing panel is the deliberate exception to the one-window rule.
+   Native focus stays in the destination while its buttons are clicked. */
+.typing-panel { height: 100%; border: 1px solid var(--line-strong); }
+.typing-body { height: calc(100% - 48px); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 10px 20px 20px; }
+.typing-heading { display: flex; align-items: baseline; gap: 12px; }
+.typing-heading .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.typing-clock { flex-shrink: 0; color: var(--accent-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.typing-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text-2); font-size: 13px; }
+.typing-confirm { width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; }
+button:disabled { opacity: .45; cursor: default; }
+
+.vault .key-row { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 6px 12px; padding: 10px 0; }
+.key-actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px; }
+.vault .key-actions .use, .vault .key-actions .forget { opacity: 1; }

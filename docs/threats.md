@@ -158,3 +158,14 @@ No one outside the project has reviewed this table yet.
 ## Reporting a problem
 
 See [SECURITY.md](../SECURITY.md). Please don't include real keys in a report.
+
+
+## Typing into a field (Linux X11)
+
+**Type** opens a floating panel for one saved key. It does not take keyboard focus. Click the destination field, then explicitly confirm the destination named by the panel. The panel warns that the field may display the key: X11 does not reliably identify password fields or browser sites, so there is no remembered site exception. No value crosses into React or the clipboard.
+
+The backend captures the focused child window, its top-level window, class, process id (when supplied) and title. It checks the window, focused child and app identity before each character, with the X server grabbed around the final focus check and XTest key pair. A changed destination stops further typing; already typed characters stay in the old field. Timeout, cancellation and locking the vault also stop subsequent characters. X11 cannot distinguish controls that share the same X window, or prove that a browser still shows the same site. A key kept Once is removed and saved before the first pair is sent, including when typing later fails. Test: `typing_once_consumes_before_output_but_not_on_preflight_failure` in core.rs. The ignored `x11_types_unicode_and_stops_at_focus_changes` test uses a real GTK entry on an isolated X server, checks Unicode input, an interrupted send, mapping restoration, and app-class refusals.
+
+**This is not protection from keyboard watchers.** X11 clients running as you can observe synthetic keys, inspect the temporary keyboard mapping, spoof window metadata or interfere with focus. The backend temporarily maps an unused keycode, sends one pair per character and restores the mapping on completion or errors. A process crash during that operation may leave that keycode remapped until the X session resets. Tabs, newlines, other control characters and non-UTF-8 keys are refused before any typing. Modifier keys and Caps Lock must be released/off; Num Lock is supported.
+
+Known chat and mail window classes are refused. This is a warning-level check, not a guarantee: a chat in a browser tab, a renamed app, or an unknown client can evade it. The named window does not prove the site or recipient, and a terminal field can still be the wrong destination. Check the field before confirming. Wayland (including XWayland sessions) and Windows typing are unavailable in this implementation.

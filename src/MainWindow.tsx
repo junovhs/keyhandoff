@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Glyph, Icon, Logo, useDragOut } from "./art";
 import {
   api,
+  typingApi,
   attempt,
   gateApi,
   KEEP_CHOICES,
@@ -204,6 +205,10 @@ const COMPARE: Record<Order, (a: KeyView, b: KeyView) => number> = {
 
 function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
   const [armed, setArmed] = useState<string | null>(null);
+  const [typing, setTyping] = useState<{ available: boolean; reason: string }>({ available: false, reason: "Checking typing support…" });
+  useEffect(() => {
+    void typingApi.available().then(() => setTyping({ available: true, reason: "Type into a field without using the clipboard" })).catch((e) => setTyping({ available: false, reason: String(e) }));
+  }, []);
   // The key whose servers are being typed, and what's typed so far.
   const [hosting, setHosting] = useState<{ id: string; draft: string } | null>(null);
   const saveHosts = () => {
@@ -301,25 +306,28 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
                 </span>
               )}
             </span>
-            {k.from === null && (
-              <button className="use" onClick={() => void run(api.replace(k.id))} title="Rotated it with the provider? Catch the new value. Programs using it keep working.">
-                Replace
+            <div className="key-actions">
+              <button className="use" disabled={!typing.available} title={typing.reason} aria-label={`Type ${k.label}`} onClick={() => void run(typingApi.start(k.id))}>Type</button>
+              {k.from === null && (
+                <button className="use" onClick={() => void run(api.replace(k.id))} title="Rotated it with the provider? Catch the new value. Programs using it keep working.">
+                  Replace
+                </button>
+              )}
+              <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
+                Copy .env line
               </button>
-            )}
-            <button className="use" onClick={() => void run(api.copyPointer(k.id))} title="Copy a line for your .env file. It points at the key, it doesn't hold it.">
-              Copy .env line
-            </button>
-            <button
-              className={`forget ${armed === k.id ? "sure" : ""}`}
-              aria-label={`Forget ${k.label}`}
-              onClick={() => {
-                if (armed === k.id) void run(api.forget(k.id));
-                else setArmed(k.id);
-              }}
-              onBlur={() => setArmed(null)}
-            >
-              {armed === k.id ? "Forget for good?" : <Icon name="close" />}
-            </button>
+              <button
+                className={`forget ${armed === k.id ? "sure" : ""}`}
+                aria-label={`Forget ${k.label}`}
+                onClick={() => {
+                  if (armed === k.id) void run(api.forget(k.id));
+                  else setArmed(k.id);
+                }}
+                onBlur={() => setArmed(null)}
+              >
+                {armed === k.id ? "Forget for good?" : <Icon name="close" />}
+              </button>
+            </div>
           </div>
         ))}
       </div>

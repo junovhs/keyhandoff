@@ -1,8 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The one window: events, dragging the frameless title area, minimize and close.",
-  "windows": ["main"],
+  "description": "The main window and floating typing panel: events, title dragging, minimize and close.",
+  "windows": [
+    "main",
+    "typing"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

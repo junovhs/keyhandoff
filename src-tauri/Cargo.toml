@@ -35,7 +35,7 @@ sha2 = "0.10"
 [dev-dependencies]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-x11rb = { version = "0.13", features = ["xfixes"] }
+x11rb = { version = "0.13", features = ["xfixes", "xtest"] }
 keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
 gtk = "0.18"
 # Whether the screen is locked (logind's LockedHint); keyring already uses it.

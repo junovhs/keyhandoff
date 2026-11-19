@@ -295,3 +295,21 @@ export async function attempt(p: Promise<unknown>): Promise<string | null> {
     return String(e);
   }
 }
+
+/** The floating typing panel sees metadata only; the native backend holds values. */
+export interface TypingView {
+  token: number;
+  revision: number;
+  key: KeyView | null;
+  target: string | null;
+  ends_at: number;
+  message: string | null;
+  busy: boolean;
+}
+export const typingApi = {
+  available: () => invoke<void>("typing_available"),
+  view: () => invoke<TypingView>("typing_view"),
+  start: (id: string) => invoke<void>("start_typing", { id }),
+  send: (token: number, revision: number) => invoke<void>("type_key", { token, revision }),
+  cancel: () => invoke<void>("cancel_typing"),
+};
