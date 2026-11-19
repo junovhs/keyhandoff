@@ -16,10 +16,15 @@ pub fn socket(profile: &str) -> PathBuf {
 
 /// Serve programs asking for keys, each connection on its own thread.
 pub fn listen_for_keys(profile: &str, serve: ServeKeys) -> Result<(), String> {
+    let connections = crate::os::KeyConnections::default();
     super::serve_socket(&socket(profile), "keys", move |stream| {
+        let Some(permit) = connections.enter() else { return };
         let Some(peer) = peer(&stream) else { return };
         let serve = serve.clone();
-        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || serve(peer, Box::new(stream)));
+        let _ = thread::Builder::new().name("key-ask".into()).spawn(move || {
+            let _permit = permit;
+            serve(peer, Box::new(stream));
+        });
     })
 }
 
@@ -98,4 +103,14 @@ pub fn descends_from(pid: u32, ancestor: u32) -> bool {
 /// Connect to a running KeyHandoff's key socket, as `keyhandoff run` does.
 pub fn connect_keys(profile: &str) -> std::io::Result<Box<dyn crate::os::KeyStream>> {
     Ok(Box::new(UnixStream::connect(socket(profile))?))
+}
+
+impl crate::os::KeyStream for UnixStream {
+    fn set_read_timeout(&mut self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
+        UnixStream::set_read_timeout(self, timeout)
+    }
+
+    fn set_write_timeout(&mut self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
+        UnixStream::set_write_timeout(self, timeout)
+    }
 }

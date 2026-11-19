@@ -52,8 +52,9 @@ pub struct Item {
     pub team: Option<String>,
     /// The servers it's for. A program started by `keyhandoff run` gets a
     /// placeholder, swapped for the key only inside a TLS connection whose
-    /// certificate is valid for one of these. Empty: the ones its prefix
-    /// suggests ([`crate::placeholder::known_hosts`]), if any.
+    /// certificate is valid for one of these. Initially filled from the
+    /// built-in prefix table, then changed only by a local edit. Empty: no
+    /// placeholder protection. Replacing the secret preserves this policy.
     #[serde(default)]
     pub hosts: Vec<String>,
     /// A certificate authority trusted for those hosts besides the system's,
