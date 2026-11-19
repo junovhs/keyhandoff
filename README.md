@@ -147,7 +147,7 @@ On Windows the installer puts the `keyhandoff` command on your PATH, so this wor
 3. **Allow it.** KeyHandoff asks the operating system which program is asking and which folder it runs in. The first time, the window shows the command and the folder, and you choose **Always allow**, **Just this once** or **Deny**. Always allow covers that exact command (the program, its arguments and the files they name), in that folder, for those keys; an edited script or a one-off `python -c` asks again. When an AI coding agent such as Claude Code or Cursor started the command, KeyHandoff always asks, names the agent, and offers **Allow for 30 minutes** instead of Always.
 4. **Use it.** The value goes into the program's own environment. Nothing is written to disk. A key the program prints shows as `[KeyHandoff: Dialpad hidden]`, plain, base64, hex, URL-encoded or backwards. Your code has to read it from the environment: code that opens `.env` and reads the value itself (python-dotenv's `dotenv_values()`, `override=True`, a hand-written parser, docker compose `env_file:`) gets the pointer text instead. Read the environment first and fall back to the file; see [Code that reads .env itself](https://keyhandoff.dev/docs/reads-env-file/).
 
-Typing a key into a field, without the clipboard, is still being built.
+On **Linux X11**, click **Type** on a saved key. A small floating panel stays above your work: click the destination field, check the window named by the panel, then click **Type into …**. The panel leaves keyboard focus in the field and types without the clipboard. It disarms after 30 seconds and stops if focus moves. The field may show the key; keyboard watchers can still read synthetic keystrokes. Known chat and mail apps are refused by window class, but browser tabs cannot be identified reliably. Windows typing is still to come.
 
 </details>
 
@@ -227,10 +227,19 @@ To try two identities on one computer, run each with its own profile: `keyhandof
 ```
 cd crates/seal && cargo test
 cd src-tauri && cargo test
-cd src-tauri && cargo test -- --ignored --test-threads=1   # real clipboard checks
+cd src-tauri && cargo test clipboard::tests -- --ignored --test-threads=1   # real clipboard checks
 ```
 
 Tests only ever use synthetic keys. On Linux the real clipboard checks need `DISPLAY` and `xclip`.
+
+The typing integration test needs an isolated X server and Python GTK3 (never point it at your working desktop):
+
+```bash
+Xephyr :97 -screen 1024x768 -ac -noreset -nolisten tcp -no-host-grab
+KEYHANDOFF_TEST_DISPLAY=:97 cargo test --manifest-path src-tauri/Cargo.toml x11_types_unicode -- --ignored
+```
+
+See [the typing implementation notes](docs/typing.md) for the native interface and Windows follow-up.
 
 </details>
 

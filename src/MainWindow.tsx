@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Glyph, Icon, Logo, useDragOut } from "./art";
 import {
   api,
+  typingApi,
   attempt,
   gateApi,
   KEEP_CHOICES,
@@ -24,7 +25,7 @@ import { enter, stagger } from "./motion";
 import { Gate } from "./Gate";
 import { SafeCopy } from "./SafeCopy";
 import { CodeSheet, ImportResult, ImportSheet, ImportStart } from "./Visual";
-import { ArrowUpRight, Bot, Check, ChevronDown, Copy, Download, FileInput, Folder, FolderOpen, IdCard, KeyRound, LockKeyhole, Plus, RefreshCw, Send, Server, Settings, Shield, SquareTerminal, X } from "lucide-react";
+import { ArrowUpRight, Bot, Check, ChevronDown, Copy, Download, FileInput, Folder, FolderOpen, IdCard, Keyboard, KeyRound, LockKeyhole, Plus, RefreshCw, Send, Server, Settings, Shield, SquareTerminal, X } from "lucide-react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -239,6 +240,11 @@ const COMPARE: Record<Order, (a: KeyView, b: KeyView) => number> = {
 function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
 
   const [removing, setRemoving] = useState<KeyView | null>(null);
+  // Typing a key into another app's field (Linux X11 only for now).
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    void typingApi.available().then(() => setTyping(true)).catch(() => setTyping(false));
+  }, []);
   // The key whose servers are being typed, and what's typed so far.
   const [hosting, setHosting] = useState<{ id: string; draft: string } | null>(null);
   const saveHosts = () => {
@@ -297,6 +303,7 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
               <button title={k.hosts.length ? `Edit allowed servers: ${k.hosts.join(", ")}` : "Set allowed server"} aria-label={`Set allowed server for ${k.label}`}
                 onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}><Server /></button>
               {k.from === null && <button title="Replace stored value" aria-label={`Replace stored value for ${k.label}`} onClick={() => void run(api.replace(k.id))}><RefreshCw /></button>}
+              {typing && <button title="Type into a field without using the clipboard" aria-label={`Type ${k.label}`} onClick={() => void run(typingApi.start(k.id))}><Keyboard /></button>}
               <button title="Copy .env pointer" aria-label={`Copy pointer for ${k.label}`} onClick={() => void run(api.copyPointer(k.id))}><Copy /></button>
               <button title="Remove from vault" aria-label={`Remove ${k.label} from vault`} onClick={() => setRemoving(k)}><X /></button>
             </div>

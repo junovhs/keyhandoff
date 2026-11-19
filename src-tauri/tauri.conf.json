@@ -24,6 +24,20 @@
         "center": true,
         "visible": false,
         "backgroundColor": "#000000"
+      },
+      {
+        "label": "typing",
+        "title": "Type a saved key \u2014 KeyHandoff",
+        "width": 380,
+        "height": 400,
+        "resizable": false,
+        "decorations": false,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "backgroundColor": "#000000"
       }
     ],
     "security": {

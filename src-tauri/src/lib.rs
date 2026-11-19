@@ -19,6 +19,7 @@ mod session;
 mod slots;
 mod store;
 mod tpm;
+mod typing;
 mod update;
 mod vault;
 
@@ -520,6 +521,23 @@ fn dismiss(app: AppHandle, h: H) {
     changed(&app);
 }
 
+#[tauri::command]
+fn typing_available() -> Result<(), String> { typing::Typing::availability() }
+
+#[tauri::command]
+fn typing_view(t: State<'_, Arc<typing::Typing>>) -> typing::TypingView { t.view() }
+
+#[tauri::command]
+fn start_typing(app: AppHandle, t: State<'_, Arc<typing::Typing>>, id: String) -> Result<(), String> { t.start(&app, &id) }
+
+#[tauri::command]
+fn cancel_typing(app: AppHandle, t: State<'_, Arc<typing::Typing>>) { t.cancel(&app); }
+
+#[tauri::command]
+async fn type_key(app: AppHandle, token: u64, revision: u64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<Arc<typing::Typing>>().send(&app, token, revision)).await.map_err(|e| e.to_string())?
+}
+
 /// Called by the main window after its first paint: show it and log cold start.
 #[tauri::command]
 fn ready(app: AppHandle, started: State<Started>) -> Result<(), String> {
@@ -612,10 +630,12 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(Started(started))
+        .manage(Arc::new(typing::Typing::default()))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
             gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
-            forget, copy_pointer, set_hosts, set_name, answer, revoke_session, dismiss, ready, update_now
+            forget, copy_pointer, set_hosts, set_name, answer, revoke_session, dismiss, ready, update_now,
+            typing_available, typing_view, start_typing, cancel_typing, type_key
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -627,6 +647,14 @@ pub fn run() {
             });
             let session = Arc::new(Session::new(store::profile_dir(&args.profile), &args.profile, start)?);
             app.manage(session.clone());
+            // This auxiliary panel must never move focus away from the field.
+            #[cfg(target_os = "linux")]
+            if let Some(panel) = handle.get_webview_window("typing") {
+                use gtk::prelude::*;
+                let native = panel.gtk_window()?;
+                native.set_accept_focus(false);
+                native.set_focus_on_map(false);
+            }
             if let Err(e) = session.open_if_remembered(now_ms()) {
                 eprintln!("keyhandoff: {e}");
             }
@@ -699,6 +727,10 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } if window.label() == "typing" => {
+                api.prevent_close();
+                window.app_handle().state::<Arc<typing::Typing>>().cancel(window.app_handle());
+            }
             // Closing the window stops any Safe Copy and quits.
             WindowEvent::CloseRequested { .. } if window.label() == MAIN => {
                 if let Some(h) = window.app_handle().try_state::<Arc<Session>>().and_then(|s| s.current()) {

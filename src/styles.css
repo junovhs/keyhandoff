@@ -407,3 +407,14 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .receipt .mono { overflow-wrap: anywhere; }
 .safe.sealed .safe-stage .display { background: var(--handoff-finish); background-clip: text; color: transparent; }
 @media (forced-colors: active) { .safe.sealed .safe-stage .display { color: CanvasText; } }
+
+/* The small typing panel is the deliberate exception to the one-window rule.
+   Native focus stays in the destination while its buttons are clicked. */
+.typing-panel { height: 100%; border: 1px solid var(--line-strong); }
+.typing-body { height: calc(100% - 48px); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 10px 20px 20px; }
+.typing-heading { display: flex; align-items: baseline; gap: 12px; }
+.typing-heading .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.typing-clock { flex-shrink: 0; color: var(--accent-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.typing-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text-2); font-size: 13px; }
+.typing-confirm { width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; }
+button:disabled { opacity: .45; cursor: default; }

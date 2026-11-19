@@ -1322,6 +1322,29 @@ impl Handoff {
         Ok(())
     }
 
+    /// Type through a native backend. The value never crosses IPC. `started`
+    /// must run immediately before the first key event: Once is persisted as
+    /// consumed before any character leaves, even if typing later stops.
+    pub fn type_key(&self, id: &str, send: impl FnOnce(&[u8], &mut dyn FnMut() -> Result<(), String>) -> Result<(), String>) -> Result<(), String> {
+        let mut core = self.lock();
+        core.tick()?;
+        let id = parse_id(id)?;
+        let secret = core.vault.secret(id).ok_or("That key is no longer here.")?;
+        let once = core.vault.items().iter().any(|i| i.id == id && i.keep == Keep::Once);
+        let mut began = false;
+        let mut started = || {
+            if !began && once {
+                core.vault.remove(id);
+                core.store.save_vault(&core.vault)?;
+                core.prune_approvals()?;
+                if core.accepted == Some(id) { core.accepted = None; }
+            }
+            began = true;
+            Ok(())
+        };
+        send(secret.expose(), &mut started)
+    }
+
     /// Put a ready `.env` line for a key on the clipboard, such as
     /// `DIALPAD_API_KEY=handoff:Dialpad`. It names the key without holding it,
     /// so it's fine in `.env` and on the clipboard.
@@ -2435,6 +2458,32 @@ mod tests {
         let id = core.vault.add(label, None, None, &Secret::new(key.to_vec()), Keep::Forever, now());
         core.store.save_vault(&core.vault).unwrap();
         hex(&id)
+    }
+
+    #[test]
+    fn typing_once_consumes_before_output_but_not_on_preflight_failure() {
+        let app = app("typing");
+        let id = hold(&app, "Stripe", b"sk-synthetic-typing");
+        app.handoff.set_keep(&id, Keep::Once).unwrap();
+        assert!(app.handoff.type_key(&id, |_, _| Err("focus moved before typing".into())).is_err());
+        assert_eq!(app.handoff.view().keys.len(), 1);
+        let mut calls = 0;
+        let result = app.handoff.type_key(&id, |bytes, started| {
+            assert_eq!(bytes, b"sk-synthetic-typing");
+            started()?;
+            calls += 1;
+            Err("focus moved after the first character".into())
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 1);
+        assert!(app.handoff.view().keys.is_empty());
+        assert!(app.handoff.lock().store.vault().unwrap().items().is_empty(), "Once consumption is persisted before output");
+        assert!(app.handoff.type_key(&id, |_, _| panic!("consumed key must not be sent twice")).is_err());
+        assert!(!files_contain(&app.data, b"sk-synthetic-typing"));
+        // A kept key survives successful typing.
+        let id = hold(&app, "Kept", b"sk-synthetic-kept");
+        app.handoff.type_key(&id, |_, started| started()).unwrap();
+        assert_eq!(app.handoff.view().keys.len(), 1);
     }
 
     /// The sealed file on the Sealed screen, copied out the way you'd send it; then Done.
