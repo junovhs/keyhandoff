@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, UserAttentionType, WebviewWindow, WindowEvent};
 use zeroize::Zeroizing;
 
 use crate::core::{Answer, Clipboard, Handoff, View};
@@ -51,7 +51,7 @@ const UNLOCK_WAIT: Duration = Duration::from_secs(120);
 
 /// Tell the screens to refresh. While Safe Copy is on, the window stays above
 /// other apps so you can copy a key from them; it keeps its size, so nothing
-/// jumps between screens. A program asking for a key brings the window forward.
+/// jumps between screens. A program asking for a key only requests attention.
 fn changed(app: &AppHandle) {
     let Some(handoff) = app.try_state::<Arc<Session>>().and_then(|s| s.current()) else {
         let _ = app.emit("changed", ());
@@ -62,24 +62,13 @@ fn changed(app: &AppHandle) {
     if let Some(win) = app.get_webview_window(MAIN) {
         set_safe_copy_mode(&win, state != "off");
         if view.program.is_some() {
-            let _ = win.unminimize();
-            let _ = win.show();
-        }
-        // Naming the caught key, or answering a program, needs the keyboard.
-        if state == "caught" || view.program.is_some() {
+            let _ = win.request_user_attention(Some(UserAttentionType::Informational));
+        } else if state == "caught" {
+            // Naming a key the user just caught needs the keyboard.
             let _ = win.set_focus();
         }
     }
     let _ = app.emit("changed", ());
-}
-
-/// Bring the main window forward, for a program waiting on you.
-fn raise(app: &AppHandle) {
-    if let Some(main) = app.get_webview_window(MAIN) {
-        let _ = main.unminimize();
-        let _ = main.show();
-        let _ = main.set_focus();
-    }
 }
 
 /// Whether Safe Copy last put the window on top, so it's only changed on the switch.
@@ -90,10 +79,10 @@ fn set_safe_copy_mode(win: &WebviewWindow, on: bool) {
     if *on_top != on {
         *on_top = on;
         let _ = win.set_always_on_top(on);
-    }
-    if on {
-        let _ = win.unminimize();
-        let _ = win.show();
+        if on {
+            let _ = win.unminimize();
+            let _ = win.show();
+        }
     }
 }
 
@@ -677,13 +666,14 @@ pub fn run() {
                 eprintln!("keyhandoff: {e}");
             }
 
-            // Programs can ask while locked: the window comes forward and
-            // they wait for the unlock.
+            // Programs that ask while locked wait for the user to open and unlock the window.
             let asking = handle.clone();
             let serving = session.clone();
             let serve: os::ServeKeys = Arc::new(move |peer, stream| {
                 if serving.current().is_none() {
-                    raise(&asking);
+                    if let Some(main) = asking.get_webview_window(MAIN) {
+                        let _ = main.request_user_attention(Some(UserAttentionType::Informational));
+                    }
                 }
                 match serving.wait_open(UNLOCK_WAIT) {
                     Some(handoff) => pointer::serve(&handoff, &peer, stream),

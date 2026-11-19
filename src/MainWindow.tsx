@@ -91,7 +91,7 @@ export function MainWindow() {
 
   const overlay = Boolean(view && (safeOn || sending || editing || security || code || settings || view.accepted || view.invited ||
     view.pairing || view.asked || view.added || view.import || view.import_receipt || view.alert || view.program));
-  useEffect(() => { if (stage.current) stage.current.inert = overlay; }, [overlay]);
+  useLayoutEffect(() => { if (stage.current) stage.current.inert = overlay; }, [overlay]);
 
   return (
     <div className="app">
@@ -149,7 +149,7 @@ export function MainWindow() {
       <Presence show={Boolean(view?.import_receipt && !safeOn)}>{view?.import_receipt && !safeOn && <ImportResult receipt={view.import_receipt} run={run} />}</Presence>
       <Presence show={Boolean(view?.import && !safeOn)}>{view?.import && !safeOn && <ImportSheet imp={view.import} keep={view.keep} run={run} />}</Presence>
       <Presence show={Boolean(view?.alert && !view.program)}>{view?.alert && !view.program && <AlertSheet alert={view.alert} />}</Presence>
-      <Presence show={Boolean(view?.program)}>{view?.program && <ProgramSheet program={view.program} run={run} />}</Presence>
+      <Presence show={Boolean(view?.program)}>{view?.program && <ProgramSheet key={view.program.id} program={view.program} run={run} />}</Presence>
       <Presence show={Boolean(toast)} fx="fade" inMs={220} outMs={220}>{toast && (
         <button className={`toast ${bad ? "bad" : ""}`} onClick={() => { setError(null); void api.dismiss(); }}>
           {!bad && <Icon name="check" />}
@@ -666,7 +666,7 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
           <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow for 30 minutes</button>
         )}
         {!agent && (
-          <button className="btn primary grow" autoFocus onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
+          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
         )}
       </div>
     </div>
