@@ -39,3 +39,36 @@ export function stagger(parent: Element | null, fx: Fx = "rise", step = 45): voi
   if (!parent) return;
   Array.from(parent.children).forEach((child, i) => void enter(child, fx, 320, i * step));
 }
+
+/** The pearl surfaces whose sheen follows the pointer. */
+const SHEEN = ".btn.primary, .pocket-card, .card-file, .ledger-row, .segmented button.pick, .keep-buttons button.pick";
+
+/**
+ * Tell each pearl surface where the pointer is over it: --px/--py run 0..1
+ * across its box. CSS turns that into the drifting colour, the glint and the
+ * tilt. One listener for the whole window; writes at most once a frame.
+ */
+export function trackSheen(): () => void {
+  let frame = 0;
+  let last: PointerEvent | null = null;
+  const paint = () => {
+    frame = 0;
+    const e = last;
+    if (!e || !(e.target instanceof Element)) return;
+    const el = e.target.closest<HTMLElement>(SHEEN);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    el.style.setProperty("--px", x.toFixed(3));
+    el.style.setProperty("--py", y.toFixed(3));
+  };
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerType === "touch") return;
+    last = e;
+    if (!frame) frame = requestAnimationFrame(paint);
+  };
+  window.addEventListener("pointermove", onMove, { passive: true });
+  return () => { window.removeEventListener("pointermove", onMove); cancelAnimationFrame(frame); };
+}

@@ -294,6 +294,7 @@ export const api = {
   copyPointer: (id: string) => invoke<void>("copy_pointer", { id }),
   setHosts: (id: string, hosts: string) => invoke<void>("set_hosts", { id, hosts }),
   setName: (name: string) => invoke<void>("set_name", { name }),
+  openSite: (site: "keyhandoff" | "maker") => invoke<void>("open_site", { site }),
   answer: (id: number, answer: Answer) => invoke<void>("answer", { id, answer }),
   revokeSession: (id: number) => invoke<void>("revoke_session", { id }),
   dismiss: () => invoke<void>("dismiss"),

@@ -72,6 +72,17 @@ export function Logo({ height = 22 }: { height?: number }) {
   );
 }
 
+/** Strange Systems' mark: two brackets and the orange bridge between them. */
+export function MakerMark({ height = 20 }: { height?: number }) {
+  return (
+    <svg className="logo maker-mark" viewBox="0 0 505 474" height={height} width={(height * 505) / 474} aria-hidden>
+      <path fill="currentColor" d="M0,0 L0,411.878 L216.914,411.878 L216.914,350.713 L62.937,350.713 L62.937,61.163 L216.914,61.163 L216.914,0 Z" />
+      <path fill="#ff5418" d="M216.914,153.657 L288.081,122.522 L288.081,319.256 L216.914,350.391 Z" />
+      <path fill="currentColor" d="M505,61.503 L505,473.381 L288.081,473.381 L288.081,412.216 L442.058,412.216 L442.058,122.666 L288.081,122.666 L288.081,61.503 Z" />
+    </svg>
+  );
+}
+
 /** A 16px line icon, coloured by the surrounding text colour. */
 export function Icon({ name }: { name: keyof typeof LINES }) {
   return (

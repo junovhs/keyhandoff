@@ -163,6 +163,24 @@ fn update_now(app: AppHandle, updates: State<'_, Arc<Updates>>) -> Result<(), St
     updates.install(&app)
 }
 
+/// Open KeyHandoff's or its maker's website in the default browser. Only
+/// these two fixed addresses: the screens name a site, never a URL.
+#[tauri::command]
+fn open_site(site: String) -> Result<(), String> {
+    let url = match site.as_str() {
+        "keyhandoff" => "https://keyhandoff.dev",
+        "maker" => "https://strangesystems.dev",
+        _ => return Err("Unknown site.".into()),
+    };
+    #[cfg(windows)]
+    let mut command = std::process::Command::new("explorer");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = std::process::Command::new("xdg-open");
+    command.arg(url).spawn().map(|_| ()).map_err(|_| "Couldn't open your browser.".into())
+}
+
 /// Five random words to use as the passphrase.
 #[tauri::command]
 fn suggest() -> String {
@@ -633,7 +651,7 @@ pub fn run() {
         .manage(Arc::new(typing::Typing::default()))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, open_site, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_hosts, set_name, answer, revoke_session, dismiss, ready, update_now,
             typing_available, typing_view, start_typing, cancel_typing, type_key
         ])

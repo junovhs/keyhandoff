@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Glyph, Icon, Logo, useDragOut } from "./art";
+import { Glyph, Icon, Logo, MakerMark, useDragOut } from "./art";
 import {
   api,
   typingApi,
@@ -298,7 +298,10 @@ function Vault({ keys, run }: { keys: KeyView[]; run: Run }) {
         {shown.map(k => (
           <div className="ledger-row" key={k.id}>
             <span className="ledger-key" title={describe(k)}><KeyRound size={15} aria-hidden /></span>
-            <span className="ledger-name mono" title={`${describe(k)} · ${lifetime(k)}${k.hosts.length ? " · " + k.hosts.join(", ") : ""}`}>{k.label}</span>
+            <span className="ledger-text">
+              <span className="ledger-name mono" title={`${describe(k)} · ${lifetime(k)}${k.hosts.length ? " · " + k.hosts.join(", ") : ""}`}>{k.label}</span>
+              <span className="ledger-meta">{k.from ? `From ${k.from}` : "Yours"} · {lifetime(k)}{k.hosts.length ? ` · ${k.hosts.join(", ")}` : ""}</span>
+            </span>
             <div className="ledger-tools">
               <button title={k.hosts.length ? `Edit allowed servers: ${k.hosts.join(", ")}` : "Set allowed server"} aria-label={`Set allowed server for ${k.label}`}
                 onClick={() => setHosting({ id: k.id, draft: k.hosts.join(", ") })}><Server /></button>
@@ -353,7 +356,10 @@ function SettingsSheet({ view, run, onSecurity, onClose }: { view: View; run: Ru
         <button className="btn secondary" disabled={!name.trim() || name.trim() === view.name}>Save</button></div>
     </form>
     <button className="pref-link" onClick={onSecurity}><LockKeyhole size={20}/>Vault security<ArrowUpRight size={16}/></button>
-    <div className="about-version"><Logo />KeyHandoff <span>Version {version}</span></div>
+    <button className="pref-link about-site" onClick={() => void run(api.openSite("keyhandoff"))}>
+      <Logo /><span>KeyHandoff<small>keyhandoff.dev{version && ` · Version ${version}`}</small></span><ArrowUpRight size={16}/></button>
+    <button className="pref-link about-site" onClick={() => void run(api.openSite("maker"))}>
+      <MakerMark /><span>Made by Strange Systems<small>strangesystems.dev</small></span><ArrowUpRight size={16}/></button>
     <span className="grow-space"/><button className="btn secondary" onClick={onClose}>Done</button>
   </section>;
 }
