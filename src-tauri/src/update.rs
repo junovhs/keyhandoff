@@ -6,6 +6,10 @@
 //! a valid signature from the release key, whose public half is built into the
 //! app (`tauri.conf.json`); the updater refuses anything else.
 //!
+//! A release waits 48 hours after it was signed before installed copies take
+//! it, so a release the owner didn't make can be pulled first (ADR 0005). The
+//! signing time is in the signature itself, so it can't be changed either.
+//!
 //! A locked vault has nothing open to lose, so while it's locked a Windows or
 //! AppImage update installs and restarts at once. Otherwise, and always for a
 //! `.deb` (installing one asks for an admin password), the window offers
@@ -25,6 +29,26 @@ use crate::session::Session;
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 /// While an update waits, how often to see whether the vault has locked.
 const INSTALL_CHECK: Duration = Duration::from_secs(60);
+/// How long after signing a release installed copies wait before taking it.
+const HOLD_SECS: u64 = 48 * 60 * 60;
+
+/// When the release key signed an update: the `timestamp:` in its signature's
+/// trusted comment (Unix seconds). Minisign's global signature covers that
+/// comment, and `Update::download` checks it before anything installs, so an
+/// earlier time to skip the wait fails the download.
+fn signed_at(signature: &str) -> Option<u64> {
+    use base64::Engine;
+    let text = base64::engine::general_purpose::STANDARD.decode(signature.trim()).ok()?;
+    let text = String::from_utf8(text).ok()?;
+    let comment = text.lines().find_map(|line| line.strip_prefix("trusted comment: "))?;
+    comment.split('\t').find_map(|field| field.strip_prefix("timestamp:"))?.parse().ok()
+}
+
+/// Whether an update signed at `signed` may install at `now`. A signature
+/// without a signing time never does.
+fn due(signed: Option<u64>, now: u64) -> bool {
+    signed.is_some_and(|t| now >= t.saturating_add(HOLD_SECS))
+}
 
 /// An update downloaded and verified, waiting to be installed.
 struct Ready {
@@ -101,10 +125,33 @@ pub fn watch(app: AppHandle, updates: Arc<Updates>, session: Arc<Session>, chang
 async fn fetch(app: &AppHandle) -> Result<Option<Ready>, String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else { return Ok(None) };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    if !due(signed_at(&update.signature), now) {
+        // Checked again at the next look, every few hours.
+        return Ok(None);
+    }
     let bytes = update.download(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
     Ok(Some(Ready { update, bytes }))
 }
 
 async fn tokio_sleep(d: Duration) {
     let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(d)).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The v0.1.0 .deb's real signature, signed at 1793487511.
+    const SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSYUtlVEVrN3pVM0pOa2ZNcURNbDZweEhUcmN0NExDanBJNzIySjFucCsrMTlBWWlBWmh1c2ptaVAzc05ZNlZMYnQ2Q1VaM3oxRjd1dUFzK1lndnlIelptNTQzMTM1blFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNDg3NTExCWZpbGU6S2V5SGFuZG9mZl8wLjEuMF9hbWQ2NC5kZWIJdmVyc2lvbjowLjEuMApIVVN5Ty9ZeEtzaWFRS1JsYzFNZ3FpTGdTSzBYQmVzaE9BRGVlVXJZU21KTHd6MzFTdjVzTDBIRXplUHZ4clhOd3BNMWNGL1lBNGw5Y0V1OXYxTkhEUT09Cg==";
+
+    #[test]
+    fn a_release_installs_only_48_hours_after_it_was_signed() {
+        let signed = signed_at(SIGNATURE);
+        assert_eq!(signed, Some(1_793_487_511), "the time comes from the signed trusted comment");
+        assert!(!due(signed, 1_793_487_511), "not at release");
+        assert!(!due(signed, 1_793_487_511 + 47 * 3600), "not after 47 hours");
+        assert!(due(signed, 1_793_487_511 + 48 * 3600), "after 48 hours");
+        assert!(!due(signed_at("not a signature"), u64::MAX), "no signing time, no install");
+    }
 }
