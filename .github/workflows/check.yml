@@ -31,6 +31,8 @@ jobs:
           python3 -m pip install --quiet httpx
       - name: platform code only in src-tauri/src/os (ADR 0006)
         run: bash scripts/check-platform-code.sh
+      - name: every gap in docs/parity.md names an issue
+        run: bash scripts/check-parity-doc.sh
       - run: npm ci && npm run build
       - name: seal crate
         run: cargo test

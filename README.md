@@ -199,7 +199,7 @@ The passphrase and recovery code always work. If you lose both, the keys can't b
 
 Download it from **[keyhandoff.dev](https://keyhandoff.dev/#download)** or [GitHub releases](https://github.com/junovhs/keyhandoff/releases): a Windows installer, or a `.deb` or AppImage for Linux (X11). Installed copies check GitHub for a signed update at launch and every six hours. While KeyHandoff is locked, a Windows or AppImage update installs and restarts on its own; otherwise **Restart to update** shows in the title bar. A `.deb` update always waits for that click, because installing it asks for your password.
 
-Windows and Linux (X11). macOS and Wayland aren't supported.
+Windows and Linux (X11). macOS and Wayland aren't supported. [What works on which system](docs/parity.md) lists the few things that work on one but not yet the other.
 
 <br>
 
@@ -265,6 +265,7 @@ The banner and GIFs come from the website's own animations. Build the site (`npm
 
 - [Every screen, in flow order](docs/screens.png): regenerate with `node scripts/site-shots/board.mjs`
 - [What it protects, and what it doesn't](docs/threats.md)
+- [What works on which system](docs/parity.md)
 - [Capture tests: the copy moment](docs/capture-tests.md)
 - [Architecture](docs/architecture.md)
 - [Sealing format and key storage](docs/sealing-format.md)
