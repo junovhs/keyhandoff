@@ -108,3 +108,45 @@ impl crate::os::Peer {
         None
     }
 }
+
+pub(crate) use super::typing_unsupported as typing;
+
+// keyhandoff run: no hook is built for this system yet.
+
+pub fn hooked(_program: &std::path::Path) -> bool {
+    false
+}
+
+pub fn hook_env(_profile: &str, _token: &str) -> Result<Vec<(String, zeroize::Zeroizing<String>)>, String> {
+    Err("Placeholders need KeyHandoff's TLS hook, which isn't built for this system yet.".into())
+}
+
+pub fn is_program(p: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+pub fn ignore_interrupts() {}
+
+pub fn exit_code(status: std::process::ExitStatus) -> i32 {
+    use std::os::unix::process::ExitStatusExt;
+    status.code().or(status.signal().map(|s| 128 + s)).unwrap_or(1)
+}
+
+pub fn program_suffixes() -> Vec<String> {
+    vec![String::new()]
+}
+
+pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    matches!((a.metadata(), b.metadata()), (Ok(a), Ok(b)) if a.dev() == b.dev() && a.ino() == b.ino())
+}
+
+/// macOS's `open`; the only other system this builds for so far.
+pub fn open_url(url: &str) -> std::io::Result<()> {
+    std::process::Command::new("open").arg(url).spawn().map(|_| ())
+}
+
+pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
+    Ok(())
+}

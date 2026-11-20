@@ -22,6 +22,9 @@ mod windows;
 #[cfg(windows)]
 pub use self::windows::*;
 
+#[cfg(not(target_os = "linux"))]
+pub(crate) mod typing_unsupported;
+
 #[cfg(not(any(target_os = "linux", windows)))]
 mod unsupported;
 #[cfg(not(any(target_os = "linux", windows)))]

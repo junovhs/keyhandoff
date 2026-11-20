@@ -18,7 +18,9 @@ pub struct Target {
     pub title: String,
     window: Window,
     focus: Window,
-    class: String,
+    /// `WM_CLASS`, which the shared controller checks against the chat and
+    /// mail apps it refuses.
+    pub class: String,
     pid: u32,
 }
 
@@ -148,9 +150,6 @@ impl Desktop {
         if pid == std::process::id() || class.to_lowercase().contains("keyhandoff") {
             return Ok(None);
         }
-        if super::blocked_class(&class) {
-            return Err("That's a chat or mail app. KeyHandoff doesn't type keys there.".into());
-        }
         if class.is_empty() {
             return Err("This window doesn't identify its app. Choose another destination.".into());
         }
@@ -207,7 +206,7 @@ impl Desktop {
         alive: &dyn Fn() -> bool,
         started: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
-        super::validate(text.as_bytes())?;
+        crate::typing::validate(text.as_bytes())?;
         self.same(target)?;
         let setup = self.conn.setup();
         let count = setup.max_keycode - setup.min_keycode + 1;
@@ -484,7 +483,7 @@ Gtk.main()
             .unwrap()
             .check()
             .unwrap();
-        assert!(desktop.capture().unwrap_err().contains("chat or mail"));
+        assert!(crate::typing::capture(&desktop).unwrap_err().contains("chat or mail"));
         desktop
             .conn
             .change_property8(

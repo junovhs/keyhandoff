@@ -8,37 +8,7 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager};
 
-#[cfg(target_os = "linux")]
-mod x11;
-#[cfg(target_os = "linux")]
-use x11::{Desktop, Target};
-#[cfg(not(target_os = "linux"))]
-mod unsupported {
-    #[derive(Clone, PartialEq)]
-    pub struct Target {
-        pub title: String,
-    }
-    pub struct Desktop;
-    impl Desktop {
-        pub fn open() -> Result<Self, String> {
-            Err("Typing is available on Linux X11. Windows support is still to come.".into())
-        }
-        pub fn capture(&self) -> Result<Option<Target>, String> {
-            unreachable!()
-        }
-        pub fn type_text(
-            &self,
-            _: &Target,
-            _: &str,
-            _: &dyn Fn() -> bool,
-            _: &mut dyn FnMut() -> Result<(), String>,
-        ) -> Result<(), String> {
-            unreachable!()
-        }
-    }
-}
-#[cfg(not(target_os = "linux"))]
-use unsupported::{Desktop, Target};
+use crate::os::typing::{Desktop, Target};
 
 const PANEL: &str = "typing";
 const ARMED: Duration = Duration::from_secs(30);
@@ -157,7 +127,7 @@ impl Typing {
                 let captured = desktop
                     .as_ref()
                     .map_err(Clone::clone)
-                    .and_then(|d| d.capture());
+                    .and_then(capture);
                 let old = (p.target.clone(), i.message.clone());
                 match captured {
                     Ok(Some(t)) => {
@@ -224,7 +194,7 @@ impl Typing {
             let desktop = Desktop::open()?;
             // Because the panel never takes focus, compare the live field to
             // the one named by the panel. Never guess or force focus elsewhere.
-            if desktop.capture()?.as_ref() != Some(&target) {
+            if capture(&desktop)?.as_ref() != Some(&target) {
                 return Err("The destination changed. Choose Type again.".into());
             }
             let session = app.state::<Arc<Session>>();
@@ -256,7 +226,17 @@ impl Typing {
     }
 }
 
-pub(super) fn blocked_class(class: &str) -> bool {
+/// The focused field's window, unless it's a chat or mail app, which
+/// KeyHandoff never types into. Each OS backend only reports the window.
+pub(crate) fn capture(desktop: &Desktop) -> Result<Option<Target>, String> {
+    let target = desktop.capture()?;
+    if target.as_ref().is_some_and(|t| blocked_class(&t.class)) {
+        return Err("That's a chat or mail app. KeyHandoff doesn't type keys there.".into());
+    }
+    Ok(target)
+}
+
+fn blocked_class(class: &str) -> bool {
     let class = class.to_lowercase();
     [
         "slack",
@@ -276,7 +256,7 @@ pub(super) fn blocked_class(class: &str) -> bool {
     .any(|app| class.contains(app))
 }
 /// Reject anything that could navigate/submit a field or act as a terminal command.
-fn validate(bytes: &[u8]) -> Result<&str, String> {
+pub(crate) fn validate(bytes: &[u8]) -> Result<&str, String> {
     let text = std::str::from_utf8(bytes).map_err(|_| "This key isn't text and can't be typed.")?;
     if text.is_empty() || text.len() > 16_384 || text.chars().any(char::is_control) {
         return Err(

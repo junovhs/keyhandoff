@@ -29,6 +29,8 @@ jobs:
             libayatana-appindicator3-dev libxdo-dev libdbus-1-dev libssl-dev patchelf file \
             python3-requests ruby curl
           python3 -m pip install --quiet httpx
+      - name: platform code only in src-tauri/src/os (ADR 0006)
+        run: bash scripts/check-platform-code.sh
       - run: npm ci && npm run build
       - name: seal crate
         run: cargo test

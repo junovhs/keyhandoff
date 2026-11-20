@@ -107,8 +107,8 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
         names.dedup();
         let mut argv = vec![program.to_string_lossy().into_owned()];
         argv.extend(options.command[1..].iter().cloned());
-        let placeholders = hooked(&program);
-        #[cfg(all(windows, test))]
+        let placeholders = crate::os::hooked(&program);
+        #[cfg(test)]
         let placeholders = placeholders || std::env::var_os("KEYHANDOFF_TEST_PROXY_PORT").is_some();
         let (mut reply, conn) = ask(&options.profile, &names, &argv, placeholders)?;
         for (var, name) in &pointers {
@@ -119,7 +119,7 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
             keys.push((name, Zeroizing::new(value)));
         }
         if let Some(token) = reply.hook {
-            env.extend(hook_env(&options.profile, &token)?);
+            env.extend(crate::os::hook_env(&options.profile, &token)?);
             _run = Some(conn);
         }
     }
@@ -134,7 +134,7 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
         .map_err(|e| format!("couldn't start {}: {e}", options.command[0]))?;
     drop(env);
     if quiet_signals {
-        ignore_interrupts();
+        crate::os::ignore_interrupts();
     }
     let masker = || Masker::new(keys.iter().map(|(name, value)| (name.as_str(), value.as_bytes())));
     let stdout = pump(child.stdout.take().expect("piped"), out, masker());
@@ -143,7 +143,7 @@ fn run(options: &Options, out: Out, err: Out, quiet_signals: bool) -> Result<i32
     let status = child.wait().map_err(|e| e.to_string())?;
     let _ = stdout.join();
     let _ = stderr.join();
-    Ok(exit_code(status))
+    Ok(crate::os::exit_code(status))
 }
 
 /// Copy `from` to `to` through `masker`, on its own thread.
@@ -181,105 +181,6 @@ fn ask(profile: &str, names: &[&str], argv: &[String], placeholders: bool) -> Re
         Some(error) => Err(error),
         None => Ok((reply, conn)),
     }
-}
-
-/// The TLS hook, built from hook/keyhandoff_tls.c by build.rs.
-#[cfg(target_os = "linux")]
-const TLS_HOOK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/libkeyhandoff_tls.so"));
-
-/// The Node.js hook (hook/keyhandoff_node.cjs): Node brings its own TLS.
-#[cfg(target_os = "linux")]
-const NODE_HOOK: &[u8] = include_bytes!("../hook/keyhandoff_node.cjs");
-
-/// The environment that loads the TLS hook into the program: written once
-/// to a private folder in the runtime directory, named by its contents.
-#[cfg(target_os = "linux")]
-fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
-    use sha2::{Digest, Sha256};
-    let dir = crate::os::runtime_dir().join("keyhandoff-hook");
-    crate::os::private_dir(&dir).map_err(|e| format!("couldn't prepare the TLS hook: {e}"))?;
-    let name: String = Sha256::digest(TLS_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect();
-    let path = dir.join(format!("tls-{name}.so"));
-    if std::fs::read(&path).ok().as_deref() != Some(TLS_HOOK) {
-        crate::os::write_private(&path, TLS_HOOK).map_err(|e| format!("couldn't prepare the TLS hook: {e}"))?;
-    }
-    let node = dir.join(format!("node-{}.cjs", Sha256::digest(NODE_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()));
-    if std::fs::read(&node).ok().as_deref() != Some(NODE_HOOK) {
-        crate::os::write_private(&node, NODE_HOOK).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
-    }
-    let node_options = match std::env::var("NODE_OPTIONS") {
-        Ok(old) if !old.is_empty() => format!("--require \"{}\" {old}", node.display()),
-        _ => format!("--require \"{}\"", node.display()),
-    };
-    let socket = crate::os::key_socket(profile);
-    let preload = match std::env::var("LD_PRELOAD") {
-        Ok(old) if !old.is_empty() => format!("{}:{old}", path.display()),
-        _ => path.display().to_string(),
-    };
-    Ok(vec![
-        ("LD_PRELOAD".into(), Zeroizing::new(preload)),
-        ("NODE_OPTIONS".into(), Zeroizing::new(node_options)),
-        ("KEYHANDOFF_HOOK".into(), Zeroizing::new(format!("{token}:{}", socket.display()))),
-    ])
-}
-
-/// On Windows only Node.js is hooked so far (`hook/keyhandoff_node.cjs`,
-/// which needs no native code): placeholders go to a run whose program is
-/// Node or a Node launcher, and every other program gets the key itself.
-#[cfg(windows)]
-const NODE_HOOK: &[u8] = include_bytes!("../hook/keyhandoff_node.cjs");
-
-/// Whether `program` is Node.js or one of the launchers that start it.
-#[cfg(windows)]
-fn hooked(program: &Path) -> bool {
-    let name = program.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    ["node.exe", "npm.cmd", "npx.cmd", "pnpm.cmd", "pnpm.exe", "yarn.cmd", "tsx.cmd"].contains(&name.as_str())
-}
-
-#[cfg(target_os = "linux")]
-fn hooked(_program: &Path) -> bool {
-    true
-}
-
-#[cfg(not(any(target_os = "linux", windows)))]
-fn hooked(_program: &Path) -> bool {
-    false
-}
-
-/// The environment that loads the Node.js hook: written once to the temp
-/// folder, named by its contents, with the key pipe to ask over.
-#[cfg(windows)]
-fn hook_env(profile: &str, token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
-    use sha2::{Digest, Sha256};
-    #[cfg(test)]
-    if let Ok(port) = std::env::var("KEYHANDOFF_TEST_PROXY_PORT") {
-        let port: u16 = port.parse().map_err(|_| "Invalid loopback fixture port")?;
-        return Ok(vec![
-            ("HTTPS_PROXY".into(), Zeroizing::new(format!("http://127.0.0.1:{port}"))),
-            ("NO_PROXY".into(), Zeroizing::new(String::new())),
-        ]);
-    }
-    let dir = crate::os::runtime_dir().join("keyhandoff-hook");
-    crate::os::private_dir(&dir).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
-    let node = dir.join(format!("node-{}.cjs", Sha256::digest(NODE_HOOK).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()));
-    if std::fs::read(&node).ok().as_deref() != Some(NODE_HOOK) {
-        crate::os::write_private(&node, NODE_HOOK).map_err(|e| format!("couldn't prepare the Node.js hook: {e}"))?;
-    }
-    // NODE_OPTIONS reads backslashes as escapes; Node takes forward slashes.
-    let require = node.display().to_string().replace('\\', "/");
-    let node_options = match std::env::var("NODE_OPTIONS") {
-        Ok(old) if !old.is_empty() => format!("--require \"{require}\" {old}"),
-        _ => format!("--require \"{require}\""),
-    };
-    Ok(vec![
-        ("NODE_OPTIONS".into(), Zeroizing::new(node_options)),
-        ("KEYHANDOFF_HOOK".into(), Zeroizing::new(format!("{token}:{}", crate::os::key_socket(profile)))),
-    ])
-}
-
-#[cfg(not(any(target_os = "linux", windows)))]
-fn hook_env(_profile: &str, _token: &str) -> Result<Vec<(String, Zeroizing<String>)>, String> {
-    Err("Placeholders need KeyHandoff's TLS hook, which isn't built for this system yet.".into())
 }
 
 /// Variables whose value is a `handoff:` pointer, from the environment and
@@ -330,63 +231,14 @@ fn read_env(path: &Path) -> Vec<(String, String)> {
 fn find_program(name: &str) -> Option<PathBuf> {
     let given = Path::new(name);
     if given.components().count() > 1 {
-        return std::path::absolute(given).ok().filter(|p| is_program(p));
+        return std::path::absolute(given).ok().filter(|p| crate::os::is_program(p));
     }
-    let exts: Vec<String> = if cfg!(windows) {
-        let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.CMD;.BAT;.COM".into());
-        std::iter::once(String::new()).chain(pathext.split(';').map(str::to_lowercase)).collect()
-    } else {
-        vec![String::new()]
-    };
+    let exts = crate::os::program_suffixes();
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .flat_map(|dir| exts.iter().map(move |ext| dir.join(format!("{name}{ext}"))))
-        .find(|p| is_program(p))
+        .find(|p| crate::os::is_program(p))
         .and_then(|p| std::path::absolute(p).ok())
-}
-
-#[cfg(unix)]
-fn is_program(p: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_program(p: &Path) -> bool {
-    p.is_file()
-}
-
-#[cfg(target_os = "linux")]
-fn ignore_interrupts() {
-    // SAFETY: setting a signal to ignored has no handler to race with. The
-    // program, already started, keeps its own handling.
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-        libc::signal(libc::SIGQUIT, libc::SIG_IGN);
-    }
-}
-
-/// Ctrl+C reaches every program on the console; the program decides, and
-/// the runner stays to pass on its output and exit code.
-#[cfg(windows)]
-fn ignore_interrupts() {
-    // SAFETY: no handler, TRUE: this process ignores Ctrl+C. Programs it
-    // starts get their own default handling back.
-    let _ = unsafe { ::windows::Win32::System::Console::SetConsoleCtrlHandler(None, true) };
-}
-
-#[cfg(not(any(target_os = "linux", windows)))]
-fn ignore_interrupts() {}
-
-#[cfg(unix)]
-fn exit_code(status: std::process::ExitStatus) -> i32 {
-    use std::os::unix::process::ExitStatusExt;
-    status.code().or(status.signal().map(|s| 128 + s)).unwrap_or(1)
-}
-
-#[cfg(not(unix))]
-fn exit_code(status: std::process::ExitStatus) -> i32 {
-    status.code().unwrap_or(1)
 }
 
 #[cfg(test)]

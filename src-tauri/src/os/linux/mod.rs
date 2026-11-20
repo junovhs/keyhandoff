@@ -6,12 +6,15 @@ mod clipboard;
 mod drag;
 mod instance;
 mod keys;
+mod process;
 mod protect;
+pub mod typing;
 
 pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::{agent, agent_session, connect_keys, descends_from, listen_for_keys, socket as key_socket};
+pub use process::{exit_code, hook_env, hooked, ignore_interrupts, is_program, open_url, program_suffixes, same_file};
 pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};
 
 thread_local! {
@@ -126,4 +129,14 @@ pub fn clipboard_apps() -> Vec<String> {
 /// The login name; the screens let you change the name you go by.
 pub fn user_name() -> Option<String> {
     std::env::var("USER").ok()
+}
+
+/// Keep a panel from ever taking keyboard focus, even when shown, so typing
+/// never moves focus away from the field it types into.
+pub fn never_take_focus(panel: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use gtk::prelude::*;
+    let native = panel.gtk_window()?;
+    native.set_accept_focus(false);
+    native.set_focus_on_map(false);
+    Ok(())
 }

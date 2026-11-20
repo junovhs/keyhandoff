@@ -165,13 +165,7 @@ fn open_site(site: String) -> Result<(), String> {
         "maker" => "https://strangesystems.dev",
         _ => return Err("Unknown site.".into()),
     };
-    #[cfg(windows)]
-    let mut command = std::process::Command::new("explorer");
-    #[cfg(target_os = "macos")]
-    let mut command = std::process::Command::new("open");
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut command = std::process::Command::new("xdg-open");
-    command.arg(url).spawn().map(|_| ()).map_err(|_| "Couldn't open your browser.".into())
+    os::open_url(url).map_err(|_| "Couldn't open your browser.".into())
 }
 
 /// Five random words to use as the passphrase.
@@ -691,12 +685,8 @@ pub fn run() {
             let session = Arc::new(Session::new(store::profile_dir(&args.profile), &args.profile, start)?);
             app.manage(session.clone());
             // This auxiliary panel must never move focus away from the field.
-            #[cfg(target_os = "linux")]
             if let Some(panel) = handle.get_webview_window("typing") {
-                use gtk::prelude::*;
-                let native = panel.gtk_window()?;
-                native.set_accept_focus(false);
-                native.set_focus_on_map(false);
+                os::never_take_focus(&panel)?;
             }
             if let Err(e) = session.open_if_remembered(now_ms()) {
                 eprintln!("keyhandoff: {e}");

@@ -10,13 +10,17 @@ mod instance;
 mod key_stream;
 mod keys;
 mod pipe;
+mod process;
 mod protect;
+
+pub(crate) use super::typing_unsupported as typing;
 
 pub use capture::arm_capture;
 pub use clipboard::{offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
 pub use instance::{forward_to_running, listen_for_launches};
 pub use keys::{agent, agent_session, connect_keys, descends_from, listen_for_keys, pipe as key_socket};
+pub use process::{exit_code, hook_env, hooked, ignore_interrupts, is_program, open_url, program_suffixes, same_file};
 pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};
 
 /// Whether this session's screen is locked (`WTS_SESSIONSTATE_LOCK`, which
@@ -127,4 +131,10 @@ pub fn user_name() -> Option<String> {
         return Some(String::from_utf16_lossy(&buf[..len as usize]));
     }
     std::env::var("USERNAME").ok()
+}
+
+/// Keep a panel from ever taking keyboard focus. The window's
+/// `focusable: false` in tauri.conf.json already does this on Windows.
+pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
+    Ok(())
 }

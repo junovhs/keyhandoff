@@ -280,31 +280,21 @@ fn running(runner: &Peer, argv: Vec<String>) -> Result<Peer, String> {
 fn is_own_executable(program: &std::path::Path) -> bool {
     static OWN: std::sync::OnceLock<Option<[u8; 32]>> = std::sync::OnceLock::new();
     let Ok(exe) = std::env::current_exe() else { return false };
-    if same_file(&exe, program) {
+    if crate::os::same_file(&exe, program) {
         return true;
     }
     // The console `keyhandoff` command (src/bin/keyhandoff-cli.rs), which
     // Windows terminals use because the app is a GUI program: installed as
     // `bin\keyhandoff.exe` beside the app, or `keyhandoff-cli` in a build folder.
     if let Some(dir) = exe.parent() {
-        let cli = [dir.join("bin").join(if cfg!(windows) { "keyhandoff.exe" } else { "keyhandoff" }), dir.join(if cfg!(windows) { "keyhandoff-cli.exe" } else { "keyhandoff-cli" })];
-        if cli.iter().any(|c| same_file(c, program)) {
+        let exe = std::env::consts::EXE_SUFFIX;
+        let cli = [dir.join("bin").join(format!("keyhandoff{exe}")), dir.join(format!("keyhandoff-cli{exe}"))];
+        if cli.iter().any(|c| crate::os::same_file(c, program)) {
             return true;
         }
     }
     let own = OWN.get_or_init(|| crate::os::file_hash(&exe));
     own.is_some() && crate::os::file_hash(program) == *own
-}
-
-#[cfg(unix)]
-fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    matches!((a.metadata(), b.metadata()), (Ok(a), Ok(b)) if a.dev() == b.dev() && a.ino() == b.ino())
-}
-
-#[cfg(not(unix))]
-fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
-    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
 }
 
 /// One line of JSON, in a buffer big enough that it never reallocates (which
