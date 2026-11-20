@@ -218,6 +218,37 @@ async fn add_pin(app: AppHandle, h: H, pin: String) -> Result<(), String> {
     done(&app, result)
 }
 
+/// Save a backup where you choose. False if you cancelled.
+#[tauri::command]
+async fn save_backup(app: AppHandle, h: H, date: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let bytes = h.backup()?;
+    drop(h);
+    // Today's date from the screen, for the suggested file name only.
+    let date: String = date.chars().filter(|c| c.is_ascii_digit() || *c == '-').take(10).collect();
+    let picked = app.dialog().file().set_title("Save a backup").set_file_name(format!("KeyHandoff backup{}{date}.{}", if date.is_empty() { "" } else { " " }, store::BACKUP_EXTENSION))
+        .add_filter("KeyHandoff backup", &[store::BACKUP_EXTENSION]).blocking_save_file();
+    let Some(picked) = picked else { return Ok(false) };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| format!("Could not save the backup: {e}"))?;
+    Ok(true)
+}
+
+/// Fill a new profile from a backup you pick, opened with its recovery code,
+/// and set a new passphrase. False if you cancelled the file picker.
+#[tauri::command]
+async fn restore_backup(app: AppHandle, code: String, passphrase: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (code, passphrase) = (Zeroizing::new(code), Zeroizing::new(passphrase));
+    let picked = app.dialog().file().set_title("Choose your backup")
+        .add_filter("KeyHandoff backup", &[store::BACKUP_EXTENSION]).blocking_pick_file();
+    let Some(picked) = picked else { return Ok(false) };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("Could not read the backup: {e}"))?;
+    opening(app, Box::new(move |locked, _| locked.restore(&bytes, &code, &passphrase))).await?;
+    Ok(true)
+}
+
 #[tauri::command]
 fn remove_pin(app: AppHandle, h: H) -> Result<(), String> {
     done(&app, h.remove_pin())
@@ -645,7 +676,7 @@ pub fn run() {
         .manage(Arc::new(typing::Typing::default()))
         .manage(updates.clone())
         .invoke_handler(tauri::generate_handler![
-            gate, open_site, suggest, set_up, unlock, recover, recovery_done, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
+            gate, open_site, suggest, set_up, unlock, recover, recovery_done, save_backup, restore_backup, lock, remember, set_lock_after, unlock_pin, add_pin, remove_pin, view, send_kept, send_kept_to_team, prepare_card, save_card_file, open_handoff_file, copy_card, save_team, delete_team, forget_contact, welcome, pick_folder, make_folder_team, join_team, close_invite, add_to_team, remove_from_team, turn_away, set_nearby, send_nearby, start_pairing, cancel_pairing, pair_with, confirm_pairing, share_with_folder_team, replace, keep_replacement, add, retry, paste, keep_own, pick_env_file, start_import, finish_import, close_import, copy_sealed, copy_request, drag_out, close_safe, set_keep,
             forget, copy_pointer, set_hosts, set_name, answer, revoke_session, dismiss, ready, update_now,
             typing_available, typing_view, start_typing, cancel_typing, type_key
         ])

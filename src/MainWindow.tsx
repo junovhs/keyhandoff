@@ -469,6 +469,7 @@ function SecuritySheet({ view, run, onClose }: { view: View; run: Run; onClose: 
   const [pin, setPin] = useState("");
   const [again, setAgain] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   useEffect(() => void enter(sheet.current, "rise", 360), []);
   const save = () => void run(gateApi.remember(pick)).then(onClose);
   const addPin = async () => {
@@ -562,6 +563,16 @@ function SecuritySheet({ view, run, onClose }: { view: View; run: Run; onClose: 
           </div>
         </>
       )}
+      <div className="pin-block">
+        <span className="label">Backup</span>
+        <p className="help">
+          A file that opens only with your recovery code, so it's safe on a thumb drive or in cloud storage. Restore
+          it when you set up KeyHandoff on a new computer.{" "}
+          <button className="link inline" onClick={() => void run(gateApi.saveBackup().then(setSaved))}>
+            {saved ? "Saved. Save another" : "Save a backup"}
+          </button>
+        </p>
+      </div>
       <span className="grow-space" />
       <div className="btn-row">
         <button className="btn secondary" onClick={onClose}>{pick === view.remembered ? "Done" : "Cancel"}</button>

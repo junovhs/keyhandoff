@@ -1283,6 +1283,12 @@ impl Handoff {
         self.lock().store.add_pin(&mut *t, pin)
     }
 
+    /// A backup file's bytes: the sealed profile, opened only by the
+    /// recovery code (ADR 0004).
+    pub fn backup(&self) -> Result<Vec<u8>, String> {
+        self.lock().store.backup()
+    }
+
     pub fn remove_pin(&self) -> Result<(), String> {
         self.lock().store.remove_pin()
     }

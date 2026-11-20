@@ -189,6 +189,8 @@ It locks again when the computer sleeps, when the screen locks, and from the loc
 
 The passphrase and recovery code always work. If you lose both, the keys can't be opened by anyone, you included.
 
+**Back up** from Security: one file that opens only with your recovery code, so it's safe on a thumb drive or in cloud storage. On a new computer, choose **Restore a backup** when KeyHandoff asks for a passphrase, and your keys, contacts and teams come back.
+
 </details>
 
 <br>

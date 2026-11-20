@@ -221,6 +221,10 @@ export const gateApi = {
   recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
   /** The asked groups of the recovery code, typed back; refused if they don't match. */
   recoveryDone: (groups: string[]) => invoke<void>("recovery_done", { groups }),
+  /** Save a backup that opens only with the recovery code; false if cancelled. */
+  saveBackup: () => invoke<boolean>("save_backup", { date: new Date().toLocaleDateString("en-CA") }),
+  /** Pick a backup and restore it into this new profile; false if cancelled. */
+  restoreBackup: (code: string, passphrase: string) => invoke<boolean>("restore_backup", { code, passphrase }),
   lock: () => invoke<void>("lock"),
   remember: (on: boolean) => invoke<void>("remember", { on }),
   /** Install the waiting update and restart into it. */

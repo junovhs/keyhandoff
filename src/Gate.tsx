@@ -59,6 +59,54 @@ function useBusy() {
 }
 
 function SetUp({ gate }: { gate: GateView }) {
+  const [restoring, setRestoring] = useState(false);
+  if (restoring) return <Restore gate={gate} onBack={() => setRestoring(false)} />;
+  return <NewPassphrase gate={gate} onRestore={() => setRestoring(true)} />;
+}
+
+/** Set up from a backup made on another computer (ADR 0004): its recovery
+ * code opens it, and a new passphrase locks it here. */
+function Restore({ gate, onBack }: { gate: GateView; onBack: () => void }) {
+  const [code, setCode] = useState("");
+  const [pass, setPass] = useState("");
+  const [shown, setShown] = useState(false);
+  const { busy, error, run } = useBusy();
+  const short = pass.trim().length < gate.min_passphrase;
+  const noCode = code.replace(/[\s-]/g, "").length !== 32;
+  return (
+    <form className="gate" onSubmit={(e) => { e.preventDefault(); if (!short && !noCode) void run(() => gateApi.restoreBackup(code, pass)); }}>
+      <Art />
+      <div className="hero">
+        <h1 className="display sm">Restore a backup</h1>
+        <p className="lede">Your keys, contacts and teams come back. Type the recovery code from setup, and choose a passphrase for this computer.</p>
+      </div>
+      <input
+        className="name-in mono"
+        value={code}
+        autoFocus
+        spellCheck={false}
+        autoComplete="off"
+        placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+        aria-label="Recovery code"
+        onChange={(e) => setCode(e.target.value)}
+      />
+      <Passphrase value={pass} onChange={setPass} label="New passphrase" shown={shown} onShown={setShown} />
+      {error && <p className="err">{error}</p>}
+      <p className="help">
+        Anyone waiting to send you a key will need your card again.{" "}
+        <button type="button" className="link inline" onClick={onBack}>Start fresh instead</button>
+      </p>
+      <span className="grow-space" />
+      <div className="btn-row">
+        <button className="btn primary grow" disabled={busy || short || noCode}>
+          {busy ? "Restoring…" : noCode ? "Type the recovery code" : short ? `At least ${gate.min_passphrase} characters` : "Choose the backup file"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function NewPassphrase({ gate, onRestore }: { gate: GateView; onRestore: () => void }) {
   const [pass, setPass] = useState("");
   const [again, setAgain] = useState("");
   const [shown, setShown] = useState(false);
@@ -104,6 +152,12 @@ function SetUp({ gate }: { gate: GateView }) {
           {!shown && <Passphrase value={again} onChange={setAgain} label="Type it again" shown={false} onShown={setShown} />}
           <p className="help">
             Five random words is best. <button type="button" className="link inline" onClick={() => void suggest()}>Suggest five</button>
+            {!gate.migrating && (
+              <>
+                {" · "}
+                <button type="button" className="link inline" onClick={onRestore}>Restore a backup</button>
+              </>
+            )}
           </p>
         </>
       )}

@@ -190,6 +190,10 @@ impl Slots {
 
     pub fn load(dir: &Path) -> Result<Self, String> {
         let bytes = fs::read(dir.join(FILE)).map_err(|e| format!("The key slots file can't be read: {e}"))?;
+        Self::from_bytes(&bytes)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let damaged = || "The key slots file is damaged.".to_string();
         if bytes.len() < 6 || &bytes[..4] != MAGIC || bytes[4] != VERSION {
             return Err(damaged());
@@ -259,6 +263,10 @@ impl Slots {
     }
 
     fn save(&self, dir: &Path) -> Result<(), String> {
+        os::write_private(&dir.join(FILE), &self.to_bytes()).map_err(|e| e.to_string())
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(6 + self.0.len() * (HEADER + SEALED));
         out.extend_from_slice(MAGIC);
         out.push(VERSION);
@@ -267,11 +275,46 @@ impl Slots {
             out.extend_from_slice(&slot.header());
             out.extend_from_slice(&slot.sealed);
         }
-        os::write_private(&dir.join(FILE), &out).map_err(|e| e.to_string())
+        out
+    }
+
+    /// This profile's slots file with only the recovery-code slot, for a
+    /// backup: the passphrase slot could be guessed offline (ADR 0004).
+    pub fn recovery_only(dir: &Path) -> Result<Vec<u8>, String> {
+        let mut slots = Self::load(dir)?;
+        slots.0.retain(|s| s.kind == Kind::Recovery);
+        if slots.0.is_empty() {
+            return Err("This profile has no recovery code to back up with.".into());
+        }
+        Ok(slots.to_bytes())
+    }
+
+    /// A backup's slots and the master key the recovery code opens. Nothing
+    /// is written: the caller checks the rest of the backup first.
+    pub fn open_backup(bytes: &[u8], code: &str) -> Result<(Self, MasterKey), String> {
+        let slots = Self::from_bytes(bytes).map_err(|_| "This backup is damaged.".to_string())?;
+        let wrong = || "That recovery code doesn't open this backup.".to_string();
+        let code = code_bytes(code).map_err(|_| wrong())?;
+        let key = slots.open(Kind::Recovery, &code[..])?.ok_or_else(wrong)?;
+        Ok((slots, key))
+    }
+
+    /// Save a restored backup's slots in `dir` with a new passphrase slot.
+    pub fn save_restored(mut self, dir: &Path, key: &MasterKey, passphrase: &str) -> Result<(), String> {
+        let passphrase = checked(passphrase)?;
+        self.0.retain(|s| s.kind == Kind::Recovery);
+        self.0.insert(0, Slot::seal(Kind::Passphrase, PASSPHRASE, passphrase.as_bytes(), key)?);
+        self.save(dir)
+    }
+
+    /// Whether every slot is a recovery-code slot.
+    #[cfg(test)]
+    pub fn only_recovery(bytes: &[u8]) -> bool {
+        Self::from_bytes(bytes).is_ok_and(|s| s.0.iter().all(|slot| slot.kind == Kind::Recovery))
     }
 }
 
-fn checked(passphrase: &str) -> Result<&str, String> {
+pub(crate) fn checked(passphrase: &str) -> Result<&str, String> {
     let p = passphrase.trim();
     if p.chars().count() < MIN_PASSPHRASE {
         return Err(format!("Use at least {MIN_PASSPHRASE} characters. Five random words is best."));

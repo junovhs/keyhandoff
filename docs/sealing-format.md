@@ -156,9 +156,10 @@ A member's note that one of their programs tried to send a key's placeholder to 
 
 ### Lost keys
 
-- **Lost or wiped computer:** its identity, pending entries and vault are gone. Sealed files still in transit can never be opened. The person installs KeyHandoff again and asks again; people who dealt with the old computer see a continuity warning, which is expected and is explained by the warning text.
+- **Lost or wiped computer, with a backup:** restoring it on the new computer brings back the identity, vault, contacts and teams. Pending entries never go in a backup, so sealed files still in transit can't be opened, and people sending keys need a fresh card. Contacts see the same computer, with no continuity warning ([ADR 0004](adr/0004-backup-is-the-vault-with-only-the-recovery-code.md)).
+- **Lost or wiped computer, without a backup:** its identity, pending entries and vault are gone. Sealed files still in transit can never be opened. The person installs KeyHandoff again and asks again; people who dealt with the old computer see a continuity warning, which is expected and is explained by the warning text.
 - **Pending entry lost before open:** the sender kept nothing, so they have to safe-copy the key again, which may mean making a new key with the provider.
-- **No recovery or escrow.** Rotating with the provider is the real fix .
+- **No escrow.** Nobody but the person holds a way in. Rotating with the provider is still the real fix for a leak.
 
 ## Device key storage
 

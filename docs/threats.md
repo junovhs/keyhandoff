@@ -155,7 +155,9 @@ No one outside the project has reviewed this table yet.
 ### People and channels
 
 - **First contact trusts the channel.** If someone can post as you in a chat, they can send a request in your name. Check the name and the computer fingerprint KeyHandoff shows before you copy a key.
-- **No central revocation, and no recovery.** Keys are tied to one computer. If a computer is lost or you suspect a leak, replace the key with the provider.
+- **No central revocation.** If a computer is lost or you suspect a leak, replace the key with the provider.
+- **A backup opens only with the recovery code.** Save a backup (Security) writes the sealed profile and a key slots file with only the recovery-code slot: no passphrase slot to guess offline, no TPM slot, no Remember copy, and no pending one-time keys. The recovery code is 160 random bits, so a stolen backup is out of reach of guessing. Restoring it on a new computer brings back the identity, kept keys, contacts and teams; it checks the whole file against tampering before writing anything, and a key sealed to a lock handed out before the backup can't be opened. Test: [`a_backup_restores_with_the_recovery_code_and_brings_no_guessable_slot_or_one_time_key`](../src-tauri/src/store.rs). [ADR 0004](adr/0004-backup-is-the-vault-with-only-the-recovery-code.md).
+- **A backup holds keys you've since replaced or removed.** It's a snapshot: a key replaced with the provider after the backup comes back as the old value, and one you removed comes back. Anyone with the backup and the recovery code has them. Make a new backup after big changes, and destroy old ones.
 
 ## Reporting a problem
 

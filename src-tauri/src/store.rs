@@ -33,6 +33,20 @@ const TEAMS: &str = "teams.bin";
 const FOLDER_TEAMS: &str = "folder-teams.bin";
 const SETTINGS: &str = "settings.json";
 
+/// A backup file (ADR 0004): `HOFB`, version, entry count, then per entry a
+/// name (u8 length) and its bytes (u32 LE length), then a nonce and the
+/// SHA-256 of everything before it sealed under the master key. The entries
+/// are the sealed files below, unchanged, plus `keyslots.bin` with only the
+/// recovery-code slot and `settings.json` without Remember.
+const BACKUP_MAGIC: &[u8; 4] = b"HOFB";
+const BACKUP_AAD: &[u8] = b"handoff:backup:v0";
+pub const BACKUP_EXTENSION: &str = "khbackup";
+/// What a backup carries. `pending.bin` stays out: its one-time keys must
+/// die with the computer they were made on, so a sealed file opened before
+/// the backup stays unopenable after a restore (rule 5). The TPM slot and the
+/// Remember copy are bound to this computer.
+const BACKED_UP: &[&str] = &[IDENTITY, VAULT, APPROVALS, TRIPWIRE, CONTACTS, TEAMS, FOLDER_TEAMS];
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
     /// Your display name, shown on your requests.
@@ -293,6 +307,50 @@ impl Locked {
         self.opened(key)
     }
 
+    /// Fill this new, empty profile from a backup, opened with its recovery
+    /// code, and set a new passphrase. The identity comes back, so contacts
+    /// and teams know this computer; pending one-time keys don't (ADR 0004).
+    /// Nothing is written unless the code opens it and every byte checks out.
+    pub fn restore(&mut self, backup: &[u8], code: &str, passphrase: &str) -> Result<(Store, Settings), String> {
+        if !matches!(self.setup, Some(None)) {
+            return Err("A backup can only be restored into a new profile, before a passphrase is set.".into());
+        }
+        slots::checked(passphrase)?;
+        let entries = parse_backup(backup)?;
+        let slots_file = entries.iter().find(|(n, _)| n == slots::FILE).ok_or("This backup is damaged.")?;
+        let (slots, key) = Slots::open_backup(&slots_file.1, code)?;
+        let body = backup.len() - 12 - 32 - 16;
+        let digest = ChaCha20Poly1305::new(Key::from_slice(&key.0[..]))
+            .decrypt(Nonce::from_slice(&backup[body..body + 12]), Payload { msg: &backup[body + 12..], aad: BACKUP_AAD })
+            .map_err(|_| "This backup was changed or is damaged.".to_string())?;
+        if digest[..] != sha256(&backup[..body])[..] {
+            return Err("This backup was changed or is damaged.".into());
+        }
+        let mut settings = match entries.iter().find(|(n, _)| n == SETTINGS) {
+            Some((_, bytes)) => serde_json::from_slice(bytes).map_err(|_| "This backup's settings are damaged.".to_string())?,
+            None => Settings::default(),
+        };
+        settings.remembered = None;
+        if settings.name.is_empty() {
+            settings.name = self.settings.name.clone();
+        }
+        let files: Vec<&(String, Vec<u8>)> = entries.iter().filter(|(n, _)| n != SETTINGS && n != slots::FILE).collect();
+        // The slots go last: until they exist, the profile still reads as new.
+        let written = files
+            .iter()
+            .try_for_each(|(name, bytes)| os::write_private(&self.dir.join(name), bytes).map_err(|e| e.to_string()))
+            .and_then(|()| slots.save_restored(&self.dir, &key, passphrase));
+        if let Err(e) = written {
+            for (name, _) in &files {
+                let _ = fs::remove_file(self.dir.join(name));
+            }
+            return Err(e);
+        }
+        self.settings = settings;
+        self.setup = None;
+        self.opened(key)
+    }
+
     fn opened(&self, key: MasterKey) -> Result<(Store, Settings), String> {
         let mut settings = self.settings.clone();
         settings.protection = Some(PASSPHRASE.to_string());
@@ -340,6 +398,43 @@ impl Store {
 
     pub fn has_pin(&self) -> bool {
         slots::has_pin(&self.dir)
+    }
+
+    /// A backup of this profile (ADR 0004). It opens only with the recovery
+    /// code, which can't be guessed, so it can be kept anywhere.
+    pub fn backup(&self) -> Result<Vec<u8>, String> {
+        let mut entries: Vec<(&str, Vec<u8>)> = vec![(slots::FILE, Slots::recovery_only(&self.dir)?)];
+        for name in BACKED_UP {
+            match fs::read(self.dir.join(name)) {
+                Ok(bytes) => entries.push((name, bytes)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("{name} can't be read: {e}")),
+            }
+        }
+        let mut settings = read_settings(&self.dir).unwrap_or_default();
+        settings.remembered = None;
+        entries.push((SETTINGS, serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?));
+
+        let mut out = Vec::new();
+        out.extend_from_slice(BACKUP_MAGIC);
+        out.push(VERSION);
+        out.push(entries.len() as u8);
+        for (name, bytes) in &entries {
+            out.push(name.len() as u8);
+            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+            out.extend_from_slice(bytes);
+        }
+        let mut nonce = [0u8; 12];
+        OsRng.fill_bytes(&mut nonce);
+        let digest = sha256(&out);
+        let tag = self
+            .cipher()
+            .encrypt(Nonce::from_slice(&nonce), Payload { msg: &digest, aad: BACKUP_AAD })
+            .map_err(|_| "Could not protect the backup.".to_string())?;
+        out.extend_from_slice(&nonce);
+        out.extend_from_slice(&tag);
+        Ok(out)
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<(), String> {
@@ -479,6 +574,42 @@ impl Store {
     }
 }
 
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).into()
+}
+
+/// A backup's entries, by name. Only names a backup may carry are accepted,
+/// each once, so a crafted file can't write anywhere else.
+fn parse_backup(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let damaged = || "This isn't a KeyHandoff backup, or it's damaged.".to_string();
+    if bytes.len() < 6 + 12 + 32 + 16 || &bytes[..4] != BACKUP_MAGIC || bytes[4] != VERSION {
+        return Err(damaged());
+    }
+    let end = bytes.len() - 12 - 32 - 16;
+    let count = bytes[5] as usize;
+    let mut at = 6;
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(count);
+    for _ in 0..count {
+        let n = *bytes.get(at).ok_or_else(damaged)? as usize;
+        let name = std::str::from_utf8(bytes.get(at + 1..at + 1 + n).ok_or_else(damaged)?).map_err(|_| damaged())?;
+        at += 1 + n;
+        let len = u32::from_le_bytes(bytes.get(at..at + 4).ok_or_else(damaged)?.try_into().unwrap()) as usize;
+        at += 4;
+        let body = bytes.get(at..at.checked_add(len).ok_or_else(damaged)?).ok_or_else(damaged)?;
+        at += len;
+        let allowed = name == slots::FILE || name == SETTINGS || BACKED_UP.contains(&name);
+        if !allowed || entries.iter().any(|(e, _)| e == name) || at > end {
+            return Err(damaged());
+        }
+        entries.push((name.to_string(), body.to_vec()));
+    }
+    if at != end {
+        return Err(damaged());
+    }
+    Ok(entries)
+}
+
 fn aad(name: &str) -> Vec<u8> {
     [b"handoff:file:v0:".as_slice(), name.as_bytes()].concat()
 }
@@ -506,6 +637,52 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("handoff-test-{tag}-{}", u64::from_le_bytes(n)));
         os::private_dir(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_backup_restores_with_the_recovery_code_and_brings_no_guessable_slot_or_one_time_key() {
+        const PASS: &str = "correct horse battery staple";
+        const NEW: &str = "a new passphrase for the restored computer";
+        let (old_dir, new_dir) = (temp_dir("backup-from"), temp_dir("backup-to"));
+        let (store, _, code) = Locked::open_in(old_dir.clone(), "t").unwrap().set_up(PASS).unwrap();
+        let identity = store.identity().unwrap();
+        let mut vault = store.vault().unwrap();
+        let kept = vault.add("Dialpad", None, None, &Secret::new(b"sk-synthetic-backup".to_vec()), Keep::Forever, 1);
+        store.save_vault(&vault).unwrap();
+        // A lock this computer handed out, with a key already sealed to it.
+        let (request, pending) = keyhandoff_seal::create_request(&identity, "Ann", 1, 3600).unwrap();
+        let mut keyring = store.keyring().unwrap();
+        keyring.insert(pending);
+        store.save_keyring(&keyring).unwrap();
+        let payload = keyhandoff_seal::Payload { label: "Stripe".into(), note: String::new(), secret: Secret::new(b"sk-synthetic-sealed".to_vec()) };
+        let sealed = keyhandoff_seal::seal(&Identity::generate(), &request, &payload, 2).unwrap();
+        let backup = store.backup().unwrap();
+
+        let entries = parse_backup(&backup).unwrap();
+        let slots_entry = &entries.iter().find(|(n, _)| n == slots::FILE).unwrap().1;
+        assert!(Slots::only_recovery(slots_entry), "no passphrase slot to guess");
+        assert!(entries.iter().all(|(n, _)| n != PENDING && n != slots::TPM_FILE), "no one-time keys, no TPM slot");
+        assert!(!backup.windows(19).any(|w| w == b"sk-synthetic-backup"), "keys stay sealed");
+
+        // Refused, and nothing written: a wrong code, a changed byte, a short passphrase.
+        let wrong = "0000-0000-0000-0000-0000-0000-0000-0000";
+        assert!(Locked::open_in(new_dir.clone(), "t").unwrap().restore(&backup, wrong, NEW).is_err());
+        let mut changed = backup.clone();
+        let mid = changed.len() / 2;
+        changed[mid] ^= 1;
+        assert!(Locked::open_in(new_dir.clone(), "t").unwrap().restore(&changed, &code, NEW).is_err());
+        assert!(Locked::open_in(new_dir.clone(), "t").unwrap().restore(&backup, &code, "short").is_err());
+        assert_eq!(fs::read_dir(&new_dir).unwrap().count(), 0, "a refused restore writes nothing");
+
+        let (restored, _) = Locked::open_in(new_dir.clone(), "t").unwrap().restore(&backup, &code, NEW).unwrap();
+        assert_eq!(restored.identity().unwrap().public(), identity.public(), "same computer to contacts and teams");
+        assert_eq!(restored.vault().unwrap().secret(kept).unwrap().expose(), b"sk-synthetic-backup");
+        assert!(restored.keyring().unwrap().open(&sealed, 3).is_err(), "a key sealed to an old lock doesn't open");
+        assert!(Locked::open_in(new_dir.clone(), "t").unwrap().unlock(NEW).is_ok());
+        assert!(Locked::open_in(new_dir.clone(), "t").unwrap().unlock(PASS).is_err(), "the old passphrase doesn't travel");
+        assert!(Locked::open_in(old_dir.clone(), "t").unwrap().restore(&backup, &code, NEW).is_err(), "only into a new profile");
+        fs::remove_dir_all(old_dir).unwrap();
+        fs::remove_dir_all(new_dir).unwrap();
     }
 
     #[test]
