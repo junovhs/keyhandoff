@@ -1,8 +1,9 @@
 # Tests on every push to main. Linux runs the whole suite and the coverage
 # matrix (eval/results/coverage.md): every cell the docs claim must be
 # protected, and no stranger may ever get a key; and the attack replays
-# (eval/results/replays.md): no real key leaves, and every send is stopped. Windows builds the app and
-# runs its tests, since placeholders and the TLS hook are Linux only so far.
+# (eval/results/replays.md): no real key leaves, and every send is stopped. Windows runs the same
+# suites (coverage-windows.md, replays-windows.md). Only Node.js is hooked there so far (PAR-08), so
+# Node.js must be protected and stopped there, and every other cell is written up as exposed.
 name: check
 
 on:
@@ -66,3 +67,24 @@ jobs:
       - name: app
         run: cargo test
         working-directory: src-tauri
+      - name: the matrix's clients
+        run: python -m pip install --quiet requests httpx
+      # Git for Windows' sh, curl and openssl go after everything else on
+      # PATH, so they never shadow the MSVC linker.
+      - name: coverage matrix
+        shell: pwsh
+        run: |
+          $env:Path += ';C:\Program Files\Git\usr\bin;C:\Program Files\Git\mingw64\bin'
+          cargo test --lib coverage_matrix -- --ignored --nocapture
+        working-directory: src-tauri
+      - name: attack replays
+        shell: pwsh
+        run: |
+          $env:Path += ';C:\Program Files\Git\usr\bin;C:\Program Files\Git\mingw64\bin'
+          cargo test --lib attack_replays -- --ignored --nocapture
+        working-directory: src-tauri
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-windows
+          path: eval/results/

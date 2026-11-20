@@ -33,6 +33,9 @@ function handle(req, res) {
 
 // WebSocket, just enough to read the client's first message.
 function upgrade(req, socket) {
+  // A client that resets the connection (as Windows does on close) must not
+  // take the server, and every later cell, down with it.
+  socket.on("error", () => {});
   const accept = createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
   socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
   let buf = Buffer.alloc(0);
@@ -53,4 +56,6 @@ function upgrade(req, socket) {
 
 const server = plain === "--plain" ? plainServer(handle) : createSecureServer({ cert: readFileSync(cert), key: readFileSync(key), allowHTTP1: true }, handle);
 server.on("upgrade", upgrade);
+server.on("tlsClientError", () => {});
+server.on("clientError", (_, socket) => socket.destroy());
 server.listen(0, "127.0.0.1", () => console.log(server.address().port));

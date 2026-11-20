@@ -53,12 +53,12 @@ Linux means X11. Wayland isn't supported yet on any row. macOS isn't built yet (
 | Node.js | yes | yes | no (FEAT-22) | The JavaScript hook, on both. |
 | Python, Ruby, PHP, curl (OpenSSL) | no (PAR-08) | yes | no (FEAT-22) | On Windows these get the real key, with printed copies masked. |
 | Go, Java, Rust with rustls | no (FEAT-18) | no (FEAT-18) | no (FEAT-22) | They bring their own TLS; the planned proxy covers them. |
-| Tripwire: a stand-in sent anywhere else is stopped | partly (PAR-08) | yes | no (FEAT-22) | On Windows, only for Node.js. |
+| Tripwire: a stand-in sent anywhere else is stopped | partly (PAR-08) | yes | no (FEAT-22) | On Windows, only for Node.js, over TLS or plain TCP. |
 
 ## Updates and testing
 
 | Feature | Windows | Linux | macOS | Notes |
 |---|---|---|---|---|
 | Signed updates, held 48 hours | yes | yes | no (FEAT-22) | A `.deb` update waits for **Restart to update**, since installing asks for your password. |
-| Attack, coverage and tripwire suites run in CI | no (PAR-02) | yes | no (FEAT-22) | |
+| Attack, coverage and tripwire suites run in CI | yes | yes | no (FEAT-22) | On Windows, only Node.js must be protected; other programs show as exposed (PAR-08). |
 | Every other test runs in CI | yes | yes | no (FEAT-22) | |

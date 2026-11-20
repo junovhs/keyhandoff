@@ -140,3 +140,8 @@ pub fn never_take_focus(panel: &tauri::WebviewWindow) -> tauri::Result<()> {
     native.set_focus_on_map(false);
     Ok(())
 }
+
+/// For tests: the backend a profile from before key slots kept its master
+/// key in without a keyring, a `0600` file.
+#[cfg(test)]
+pub const OLD_KEY_BACKEND: Option<&str> = Some(protect::FILE);

@@ -138,3 +138,8 @@ pub fn user_name() -> Option<String> {
 pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
+
+/// For tests: the backend a profile from before key slots kept its master
+/// key in: DPAPI, made fresh when asked for none.
+#[cfg(test)]
+pub const OLD_KEY_BACKEND: Option<&str> = None;

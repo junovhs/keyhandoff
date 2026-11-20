@@ -150,3 +150,6 @@ pub fn open_url(url: &str) -> std::io::Result<()> {
 pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
+
+#[cfg(test)]
+pub const OLD_KEY_BACKEND: Option<&str> = None;

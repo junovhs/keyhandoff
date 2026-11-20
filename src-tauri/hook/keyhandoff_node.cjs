@@ -38,6 +38,9 @@ function passOn(value) {
   };
 }
 
+/** Marks KeyHandoff's own connections, which the plain-socket check passes. */
+const OWN = Symbol("keyhandoff");
+
 function install(token, socketPath) {
   const crypto = require("node:crypto");
   const fs = require("node:fs");
@@ -49,6 +52,7 @@ function install(token, socketPath) {
     return new Promise((resolve) => {
       const chunks = [];
       const conn = net.connect(socketPath, () => conn.end(line));
+      conn[OWN] = true;
       conn.on("data", (d) => chunks.push(d));
       conn.on("close", () => resolve(Buffer.concat(chunks).toString("latin1")));
       conn.on("error", () => resolve(""));
@@ -225,6 +229,36 @@ function install(token, socketPath) {
       const out = texts.map((t) => Buffer.from(t, "latin1"));
       if (writev) original.call(socket, true, out.map((chunk) => ({ chunk, encoding: "buffer" })), "", cb);
       else original.call(socket, false, out[0], "buffer", cb);
+    }, () => original.call(socket, writev, data, encoding, cb));
+  };
+
+  // Plain TCP (HTTP without TLS, a raw socket): a stand-in, in any form the
+  // hook knows, never goes out in the clear, since no server can be verified
+  // there. The write is refused and KeyHandoff told, as the C hook does for
+  // plain sockets on Linux. Local pipes and Unix sockets, KeyHandoff's own
+  // included, aren't network destinations and pass.
+  net.Socket.prototype._writeGeneric = function (writev, data, encoding, cb) {
+    const socket = this;
+    if (socket[OWN] || typeof socket.remotePort !== "number") return original.call(socket, writev, data, encoding, cb);
+    const pieces = writev
+      ? data.map((c) => (typeof c.chunk === "string" ? Buffer.from(c.chunk, c.encoding) : Buffer.from(c.chunk)))
+      : [typeof data === "string" ? Buffer.from(data, encoding) : Buffer.from(data)];
+    load().then(async ({ swaps, blocked }) => {
+      const destination = `${socket.remoteAddress}:${socket.remotePort}`;
+      const refuse = (message) => {
+        const error = Object.assign(new Error(message), { code: "ECONNREFUSED" });
+        cb(error);
+        socket.destroy(error);
+      };
+      if (blocked.includes(destination)) {
+        say("refused a connection to", destination);
+        return refuse("KeyHandoff refused this destination");
+      }
+      const texts = pieces.map((p) => p.toString("latin1"));
+      const hit = swaps.find((s) => texts.some((t) => found(s, t)));
+      if (!hit) return original.call(socket, writev, data, encoding, cb);
+      await report(hit, destination);
+      refuse("KeyHandoff stopped a key's stand-in going somewhere else");
     }, () => original.call(socket, writev, data, encoding, cb));
   };
 }

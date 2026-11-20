@@ -3673,7 +3673,6 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn a_once_key_keeps_its_local_server_policy_when_released_to_a_run() {
         // A recognised prefix used to replace the local policy with its default;
@@ -3713,7 +3712,6 @@ mod tests {
         }
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn cards_and_team_updates_cannot_widen_local_server_policy() {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
@@ -4163,7 +4161,12 @@ else:
     /// `.json`. It fails if any stranger ever gets the key, or if a cell the
     /// docs claim isn't protected. Run it with
     /// `cargo test --lib coverage_matrix -- --ignored --nocapture`.
-    #[cfg(target_os = "linux")]
+    ///
+    /// On Windows only Node.js is hooked so far (PAR-08), so every other
+    /// cell gets the real key there. Those cells are written up as exposed,
+    /// not failed, and only Node.js must be protected; the Windows results go
+    /// to `coverage-windows.md` and `.json`.
+    #[cfg(any(target_os = "linux", windows))]
     #[test]
     #[ignore]
     fn coverage_matrix() {
@@ -4172,24 +4175,28 @@ else:
         const STRIPE: &[u8] = b"sk_test_51SyntheticMatrixKey0123456789abcdXYZ";
         const SAMPLES: usize = 5;
         let have = |p: &str, arg: &str| Command::new(p).arg(arg).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok();
-        assert!(have("node", "--version") && have("openssl", "version") && have("setsid", "--version"), "needs node, openssl and setsid");
+        assert!(have("node", "--version") && have("openssl", "version") && (cfg!(windows) || have("setsid", "--version")), "needs node, openssl and setsid");
+        // Python is `python` on Windows; Git for Windows supplies sh, curl and openssl.
+        let py = if cfg!(windows) { "python" } else { "python3" };
+        let results = if cfg!(windows) { "coverage-windows" } else { "coverage" };
         let me = app("Matrix");
         let h = me.handoff.clone();
         let dir = me.data.join("matrix");
         fs::create_dir_all(&dir).unwrap();
-        let dir = dir.canonicalize().unwrap();
+        // Without Windows' \\?\ prefix, which the clients' TLS libraries can't open.
+        let dir = PathBuf::from(dir.canonicalize().unwrap().display().to_string().trim_start_matches(r"\\?\"));
         let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval");
         for entry in fs::read_dir(eval.join("coverage/clients")).unwrap().flatten() {
             fs::copy(entry.path(), dir.join(entry.file_name())).unwrap();
         }
         // Certificates from a test CA, and one Node server per name (and a plain one).
         let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
-        sh("openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
+        sh("MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
         let mut servers = Vec::new();
         let mut ports = serde_json::Map::new();
         for (name, plain) in [("api.stripe.test", false), ("evil.test", false), ("plain", true)] {
             if !plain {
-                sh(&format!("openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
+                sh(&format!("MSYS_NO_PATHCONV=1 openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
             }
             let mut args = vec![eval.join("coverage/server.mjs").display().to_string(), name.into(), format!("{name}.pem"), format!("{name}.key"), format!("{name}.jsonl")];
             if plain {
@@ -4203,7 +4210,9 @@ else:
         }
         fs::write(dir.join("matrix.json"), serde_json::json!({ "ca": dir.join("ca.pem"), "ports": ports }).to_string()).unwrap();
         fs::write(dir.join(".env"), "STRIPE_API_KEY=handoff:Stripe\n").unwrap();
-        let go_built = have("go", "version")
+        // Go is unhooked on both systems; on Windows it would only repeat the exposed cells.
+        let go_built = !cfg!(windows)
+            && have("go", "version")
             && Command::new("go").args(["build", "-o", "go_nethttp", "go_nethttp.go"]).current_dir(&dir).env("GOFLAGS", "-mod=mod").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success());
         {
             let mut core = h.lock();
@@ -4264,8 +4273,15 @@ else:
         let key = std::str::from_utf8(STRIPE).unwrap();
         let mut rows = Vec::new();
         for c in &cells {
+            let command: Vec<&str> = c.command.iter().map(|&a| if a == "python3" { py } else { a }).collect();
+            // Where the program isn't hooked, it gets the real key (Windows,
+            // everything but Node.js: PAR-08); that's the documented
+            // exposure, recorded rather than failed.
+            let hooked_here = !cfg!(windows) || command[0] == "node";
+            let claimed = c.claimed && hooked_here;
             let available = match c.needs {
                 Some((p, arg)) => {
+                    let p = if p == "python3" { py } else { p };
                     let mut parts = arg.splitn(2, ' ');
                     let (a, b) = (parts.next().unwrap(), parts.next());
                     Command::new(p).arg(a).args(b).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
@@ -4273,7 +4289,7 @@ else:
                 None => go_built,
             };
             if !available {
-                rows.push(serde_json::json!({ "client": c.client, "tls": c.tls, "protocol": c.protocol, "result": "not run: not installed here", "claimed": c.claimed }));
+                rows.push(serde_json::json!({ "client": c.client, "tls": c.tls, "protocol": c.protocol, "result": "not run: not installed here", "claimed": claimed }));
                 continue;
             }
             let (mut hooked, mut direct) = (Vec::new(), Vec::new());
@@ -4284,15 +4300,16 @@ else:
                     let _ = fs::remove_file(dir.join(f));
                 }
                 h.lock().tripwire.blocked.clear();
-                let (out, code) = finished(&start(&dir, &profile, c.command, None));
+                let (out, code) = finished(&start(&dir, &profile, &command, None));
                 assert_eq!(code, 0, "{}: {out}", c.client);
                 hooked.extend(time_of(&out));
                 if sample == 0 {
                     (good, evil, text) = (read("api.stripe.test.jsonl") + &read("plain.jsonl"), read("evil.test.jsonl") + &read("plain.jsonl"), out);
-                    placeholder = h.lock().tripwire.runs.last().unwrap().placeholders[0].1.clone();
+                    // An unhooked run gets the key itself, so no placeholder.
+                    placeholder = if hooked_here { h.lock().tripwire.runs.last().unwrap().placeholders[0].1.clone() } else { "\0no placeholder".into() };
                 }
                 // The same client with the key itself, no KeyHandoff, for the baseline time.
-                let plain = Command::new(c.command[0]).args(&c.command[1..]).current_dir(&dir).env("STRIPE_API_KEY", key).output().unwrap();
+                let plain = Command::new(command[0]).args(&command[1..]).current_dir(&dir).env("STRIPE_API_KEY", key).output().unwrap();
                 direct.extend(time_of(&String::from_utf8_lossy(&plain.stdout)));
             }
             let got = |log: &str| {
@@ -4308,14 +4325,16 @@ else:
             };
             let plain_cell = c.command.contains(&"curl_plain.sh");
             let (to_server, to_stranger) = (if plain_cell { "-" } else { got(&good) }, got(&evil));
-            assert_ne!(to_stranger, "key", "{} {}: a stranger got the key", c.client, c.protocol);
+            if hooked_here {
+                assert_ne!(to_stranger, "key", "{} {}: a stranger got the key", c.client, c.protocol);
+            }
             let protected = (plain_cell || to_server == "key") && (to_stranger == "nothing" || to_stranger.starts_with("the request"));
             let added = median(hooked.clone()).zip(median(direct.clone())).map(|(a, b)| a - b);
             let blocked = text.contains("KeyHandoff stopped") || text.contains("KeyHandoff refused");
             rows.push(serde_json::json!({
-                "client": c.client, "tls": c.tls, "protocol": c.protocol, "claimed": c.claimed,
+                "client": c.client, "tls": c.tls, "protocol": c.protocol, "claimed": claimed,
                 "server_got": to_server, "stranger_got": to_stranger, "stranger_blocked": blocked,
-                "result": if protected { "protected" } else { "key safe, not protected" },
+                "result": if protected { "protected" } else if to_stranger == "key" { "exposed: not hooked here (PAR-08)" } else if !hooked_here && to_server == "nothing" { "not run: the client couldn't connect here" } else { "key safe, not protected" },
                 "hooked_ms": median(hooked), "direct_ms": median(direct), "added_ms": added,
             }));
         }
@@ -4342,11 +4361,14 @@ else:
             let result = if r["claimed"].as_bool() == Some(true) { format!("{} (claimed)", s("result")) } else { s("result") };
             md += &format!("| {} | {} | {} | {} | {} | {} |\n", s("client"), s("tls"), s("protocol"), s("server_got"), s("stranger_got"), result);
         }
-        md += "\nNot in this run: Postgres and Redis over TLS (no `psql` or `redis-cli` here), Java (JSSE), Rust with rustls, HTTP/3 (this curl has no QUIC), Windows (schannel). \n";
+        if cfg!(windows) {
+            md += "\nOn Windows only Node.js is hooked so far, so every other program gets the real key under `keyhandoff run`, with its printed copies masked (PAR-08). **Exposed** cells show that: a stranger that program sends the key to gets it.\n";
+        }
+        md += "\nNot in this run: Postgres and Redis over TLS (no `psql` or `redis-cli` here), Java (JSSE), Rust with rustls, HTTP/3 (this curl has no QUIC), schannel (curl.exe, .NET). \n";
         md += &format!("\nEnvironment: {}\n\nRegenerate: `cd src-tauri && cargo test --lib coverage_matrix -- --ignored --nocapture`.\n", serde_json::to_string(&env).unwrap());
         fs::create_dir_all(eval.join("results")).unwrap();
-        fs::write(eval.join("results/coverage.md"), &md).unwrap();
-        fs::write(eval.join("results/coverage.json"), serde_json::to_string_pretty(&serde_json::json!({ "environment": env, "cells": rows })).unwrap()).unwrap();
+        fs::write(eval.join(format!("results/{results}.md")), &md).unwrap();
+        fs::write(eval.join(format!("results/{results}.json")), serde_json::to_string_pretty(&serde_json::json!({ "environment": env, "cells": rows })).unwrap()).unwrap();
         println!("{md}");
         let unprotected: Vec<_> = rows.iter().filter(|r| r["claimed"].as_bool() == Some(true) && r["result"] != "protected").map(|r| format!("{} {}", r["client"], r["protocol"])).collect();
         assert!(unprotected.is_empty(), "claimed but not protected: {unprotected:?}");
@@ -4362,7 +4384,13 @@ else:
     /// teammate on the same team folder must be refused every destination
     /// that was stopped. Writes `eval/results/replays.md` and `.json`. Run
     /// with `cargo test --lib attack_replays -- --ignored --nocapture`.
-    #[cfg(target_os = "linux")]
+    ///
+    /// On Windows only Node.js is hooked so far (PAR-08): the Node.js
+    /// replays must be stopped there exactly as on Linux, and the others,
+    /// which get the real key, are written up as exposed rather than failed.
+    /// The test can't start a wrapper shell there, so the agent replays run
+    /// as plain commands. Results go to `replays-windows.md` and `.json`.
+    #[cfg(any(target_os = "linux", windows))]
     #[test]
     #[ignore]
     fn attack_replays() {
@@ -4370,6 +4398,8 @@ else:
         use std::process::{Command, Stdio};
         const STRIPE: &[u8] = b"sk_test_51SyntheticReplayKey0123456789abcdXYZ";
         let key = std::str::from_utf8(STRIPE).unwrap();
+        let py = if cfg!(windows) { "python" } else { "python3" };
+        let results = if cfg!(windows) { "replays-windows" } else { "replays" };
         let (ann, ben) = (app("Ann"), app("Ben"));
         let shared = temp("replay-team");
         fs::create_dir_all(&shared).unwrap();
@@ -4381,20 +4411,20 @@ else:
 
         let dir = ann.data.join("project");
         fs::create_dir_all(&dir).unwrap();
-        let dir = dir.canonicalize().unwrap();
+        let dir = PathBuf::from(dir.canonicalize().unwrap().display().to_string().trim_start_matches(r"\\?\"));
         let eval = Path::new(env!("CARGO_MANIFEST_DIR")).join("../eval");
         for entry in fs::read_dir(eval.join("replays")).unwrap().flatten() {
             fs::copy(entry.path(), dir.join(entry.file_name())).unwrap();
         }
         let sh = |script: &str| assert!(Command::new("sh").arg("-c").arg(script).current_dir(&dir).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap().success(), "{script}");
-        sh("openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
+        sh("MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -subj /CN=KeyHandoff-test-CA");
         let names = ["api.stripe.test", "api.github.test", "webhook.test", "collect.test", "paste.test", "plain"];
         let mut servers = Vec::new();
         let mut ports = serde_json::Map::new();
         for name in names {
             let plain = name == "plain";
             if !plain {
-                sh(&format!("openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
+                sh(&format!("MSYS_NO_PATHCONV=1 openssl req -newkey rsa:2048 -nodes -keyout {name}.key -out {name}.csr -subj /CN={name} && printf 'subjectAltName=DNS:{name}' > {name}.ext && openssl x509 -req -in {name}.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out {name}.pem -days 2 -extfile {name}.ext"));
             }
             let mut args = vec![eval.join("coverage/server.mjs").display().to_string(), name.into(), format!("{name}.pem"), format!("{name}.key"), format!("{name}.jsonl")];
             if plain {
@@ -4435,9 +4465,13 @@ else:
                 })
             })
             .collect();
+        // A copy of sh named claude stands in for the agent (Unix only: the
+        // runner can't start under a wrapper shell on Windows).
         let claude = ann.data.join("agent/claude");
-        fs::create_dir_all(claude.parent().unwrap()).unwrap();
-        fs::copy("/bin/sh", &claude).unwrap();
+        if cfg!(unix) {
+            fs::create_dir_all(claude.parent().unwrap()).unwrap();
+            fs::copy("/bin/sh", &claude).unwrap();
+        }
 
         let reveals = crate::placeholder::reveals;
 
@@ -4477,9 +4511,13 @@ else:
                 let _ = fs::remove_file(dir.join(format!("{n}.jsonl")));
             }
             let alerts_before = ann.handoff.lock().tripwire.alerts.len();
-            let command: Vec<&str> = r.command.iter().map(String::as_str).collect();
-            let (out, code) = finished(&start(&dir, &profiles[0], &command, r.agent.then_some(claude.as_path())));
-            let placeholder = ann.handoff.lock().tripwire.runs.last().map(|run| run.placeholders[0].1.clone()).unwrap_or_default();
+            let command: Vec<&str> = r.command.iter().map(|a| if a == "python3" { py } else { a.as_str() }).collect();
+            // Unhooked here (Windows, everything but Node.js: PAR-08), the
+            // program gets the real key: recorded, not failed.
+            let hooked_here = !cfg!(windows) || command[0] == "node";
+            let wrapper = (r.agent && cfg!(unix)).then_some(claude.as_path());
+            let (out, code) = finished(&start(&dir, &profiles[0], &command, wrapper));
+            let placeholder = ann.handoff.lock().tripwire.runs.last().and_then(|run| run.placeholders.first()).map(|p| p.1.clone()).unwrap_or_default();
             let collected = r.collector.map(|c| fs::read(dir.join(format!("{c}.jsonl"))).unwrap_or_default()).unwrap_or_default();
             // What the attacking code itself held, in what it saved, printed or committed.
             let mut held = out.clone().into_bytes();
@@ -4500,15 +4538,17 @@ else:
                 "nothing"
             };
             let own_server = r.collector == Some("api.stripe.test");
-            if !own_server {
+            if !own_server && hooked_here {
                 assert!(!reveals(&collected, STRIPE, 3), "{}: the key left the machine", r.name);
                 assert!(!reveals(&held, STRIPE, 3), "{}: the attacking code held the key: {out}", r.name);
             }
             let stopped = !alerts.is_empty();
-            let names_command = alerts.iter().all(|a| a.command == crate::os::display_command(r.command.iter().map(String::as_str)).unwrap_or_default());
+            // The alert names the program as the runner found it: `node.exe` on Windows.
+            let shown: Vec<String> = command.iter().enumerate().map(|(i, a)| if i == 0 && !a.contains(['/', '\\']) { format!("{a}{}", std::env::consts::EXE_SUFFIX) } else { a.to_string() }).collect();
+            let names_command = alerts.iter().all(|a| a.command == crate::os::display_command(shown.iter().map(String::as_str)).unwrap_or_default());
             // Every send to somewhere other than the key's server, DNS included, is stopped and attributed.
             let sends = (r.collector.is_some() && !own_server) || r.name.contains("DNS");
-            if sends {
+            if sends && hooked_here {
                 assert!(stopped && names_command, "{}: not stopped and attributed: {out}", r.name);
             }
             if stopped {
@@ -4521,7 +4561,8 @@ else:
             rows.push(serde_json::json!({
                 "replay": r.name,
                 "command": r.command.join(" "),
-                "agent": r.agent,
+                "agent": r.agent && cfg!(unix),
+                "hooked": hooked_here,
                 "exit": code,
                 "attacker_held": if reveals(&held, STRIPE, 3) { "the key" } else if reveals(&held, placeholder.as_bytes(), 3) { "a placeholder" } else { "nothing usable (masked)" },
                 "left_the_machine": off_machine,
@@ -4541,12 +4582,29 @@ else:
             "import json, socket, ssl, sys\ncfg = json.load(open('replay.json'))\nname = sys.argv[1]\ntry:\n    if ':' in name:\n        host, port = name.rsplit(':', 1)\n        s = socket.create_connection((host, int(port)))\n    else:\n        ctx = ssl.create_default_context(cafile=cfg['ca'])\n        s = ctx.wrap_socket(socket.create_connection(('127.0.0.1', cfg['ports'][name])), server_hostname=name)\n    s.sendall(b'GET / HTTP/1.1\\r\\nHost: x\\r\\nConnection: close\\r\\n\\r\\n'); s.recv(10)\n    print('reached')\nexcept OSError:\n    print('refused')\n",
         )
         .unwrap();
+        fs::write(
+            dir.join("ben_visit.mjs"),
+            "import { readFileSync } from 'node:fs';
+import net from 'node:net';
+import tls from 'node:tls';
+const cfg = JSON.parse(readFileSync('replay.json'));
+const name = process.argv[2];
+const [host, port] = name.includes(':') ? name.split(':') : ['127.0.0.1', cfg.ports[name]];
+const s = name.includes(':') ? net.connect(Number(port), host) : tls.connect({ host, port, servername: name, ca: readFileSync(cfg.ca) });
+s.on(name.includes(':') ? 'connect' : 'secureConnect', () => s.write('GET / HTTP/1.1\\r\\nHost: x\\r\\nConnection: close\\r\\n\\r\\n'));
+s.on('data', () => { console.log('reached'); s.destroy(); });
+s.on('error', () => console.log('refused'));
+",
+        )
+        .unwrap();
         for d in &stopped_destinations {
             if !names.contains(&d.as_str()) && !d.starts_with("127.0.0.1:") {
                 team_rows.push(serde_json::json!({ "destination": d, "teammate": "not a name the test can visit" }));
                 continue;
             }
-            let (out, _) = finished(&start(&dir, &profiles[1], &["python3", "ben_visit.py", d.as_str()], None));
+            // Python isn't hooked on Windows (PAR-08), so Ben visits with Node there.
+            let visit: &[&str] = if cfg!(windows) { &["node", "ben_visit.mjs", d.as_str()] } else { &[py, "ben_visit.py", d.as_str()] };
+            let (out, _) = finished(&start(&dir, &profiles[1], visit, None));
             assert!(out.contains("refused"), "Ben reached {d}: {out}");
             team_rows.push(serde_json::json!({ "destination": d, "teammate": "refused" }));
         }
@@ -4560,6 +4618,9 @@ else:
             let _ = s.wait();
         }
         let mut md = String::from("# Attack replays\n\nReconstructed stealers and AI-agent leaks (see eval/replays/README.md) under `keyhandoff run`, with a synthetic Stripe key whose server is `api.stripe.test`. **Attacker held**: what the attacking code had in hand (what it saved, printed or committed). **Left the machine**: what the collector received, decoding up to three layers of base64. **Stopped**: the send was refused before a byte of it left, and KeyHandoff kept an alert.\n\n");
+        if cfg!(windows) {
+            md += "On Windows only Node.js is hooked so far (PAR-08). The other replays get the real key, so what they hold and send shows the exposure there; the agent replays run as plain commands, since the test can't start a wrapper shell on Windows.\n\n";
+        }
         md += "| Replay | Attacker held | Left the machine | Stopped | Alert | Traced to its run |\n|---|---|---|---|---|---|\n";
         for r in &rows {
             md += &format!(
@@ -4579,8 +4640,8 @@ else:
         }
         md += "\nRegenerate: `cd src-tauri && cargo test --lib attack_replays -- --ignored --nocapture`.\n";
         fs::create_dir_all(eval.join("results")).unwrap();
-        fs::write(eval.join("results/replays.md"), &md).unwrap();
-        fs::write(eval.join("results/replays.json"), serde_json::to_string_pretty(&serde_json::json!({ "replays": rows, "teammate": team_rows })).unwrap()).unwrap();
+        fs::write(eval.join(format!("results/{results}.md")), &md).unwrap();
+        fs::write(eval.join(format!("results/{results}.json")), serde_json::to_string_pretty(&serde_json::json!({ "replays": rows, "teammate": team_rows })).unwrap()).unwrap();
         println!("{md}");
         for p in &profiles {
             let _ = fs::remove_file(os::runtime_dir().join(format!("handoff-{p}-keys.sock")));

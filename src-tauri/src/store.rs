@@ -716,8 +716,8 @@ mod tests {
         fs::read_dir(dir).unwrap().flat_map(|e| fs::read(e.unwrap().path()).unwrap()).collect()
     }
 
-    // Starts from a Linux file-held key, the kind of profile that migrates.
-    #[cfg(target_os = "linux")]
+    // Starts from a key the OS held (a 0600 file on Linux, DPAPI on
+    // Windows), the kind of profile that migrates.
     #[test]
     fn only_the_passphrase_or_recovery_code_opens_the_vault() {
         let dir = temp_dir("slots");
@@ -726,7 +726,7 @@ mod tests {
 
         // A profile from before key slots: its key in a 0600 file any program
         // running as you could read.
-        let (old, backend) = os::master_key(&dir, "t", Some("file")).unwrap();
+        let (old, backend) = os::master_key(&dir, "t", os::OLD_KEY_BACKEND).unwrap();
         let key = old.0.clone();
         let store = Store { dir: dir.clone(), profile: "t".into(), key: old };
         let mut vault = store.vault().unwrap();
