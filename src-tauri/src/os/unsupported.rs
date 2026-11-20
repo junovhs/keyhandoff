@@ -98,3 +98,9 @@ pub fn descends_from(_pid: u32, _ancestor: u32) -> bool {
 pub fn agent(_pid: u32) -> Option<String> {
     None
 }
+
+impl crate::os::Peer {
+    pub fn unattended_origin(&self) -> Option<&'static str> {
+        None
+    }
+}
