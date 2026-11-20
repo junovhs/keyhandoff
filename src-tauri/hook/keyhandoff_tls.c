@@ -21,8 +21,12 @@
  * covered; its placeholder goes out unchanged and the server refuses it.
  *
  * KEYHANDOFF_HOOK ("<64 hex token>:<key socket>") is read once at load and
- * removed from the environment before the program's own code starts, then
- * put back for programs it starts (exec, posix_spawn, system, popen).
+ * removed from the environment before the program's own code starts. A
+ * program it starts (exec, posix_spawn, system, popen) gets
+ * "@<fd>:<key socket>" instead, with the token on an inherited pipe its own
+ * hook reads once at load: a process's starting environment stays readable
+ * at /proc/<pid>/environ to anything running as you, from exec until the
+ * hook loads, so the token never goes there (SR-20).
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -98,15 +102,42 @@ static void hp_init(void);
 
 __attribute__((constructor)) static void hook_init(void) {
     char *value = getenv(ENV_NAME);
-    if (!value || strlen(value) < TOKEN_HEX + 2 || value[TOKEN_HEX] != ':' || strlen(value + TOKEN_HEX + 1) >= sizeof socket_path)
-        return;
-    memcpy(token, value, TOKEN_HEX);
-    strcpy(socket_path, value + TOKEN_HEX + 1);
-    snprintf(hook_env, sizeof hook_env, "%s=%s", ENV_NAME, value);
+    if (!value) return;
+    const char *sock;
+    if (value[0] == '@') {
+        /* Started by a hooked program: the token is on an inherited pipe. */
+        char *end;
+        long fd = strtol(value + 1, &end, 10);
+        if (end == value + 1 || *end != ':' || fd < 0 || fd > 65535) {
+            unsetenv(ENV_NAME);
+            return;
+        }
+        sock = end + 1;
+        size_t got = 0;
+        while (got < TOKEN_HEX) {
+            ssize_t r = read((int)fd, token + got, TOKEN_HEX - got);
+            if (r < 0 && errno == EINTR) continue;
+            if (r <= 0) break;
+            got += (size_t)r;
+        }
+        close((int)fd);
+        if (got != TOKEN_HEX || strlen(sock) >= sizeof socket_path) {
+            explicit_bzero(token, sizeof token);
+            unsetenv(ENV_NAME);
+            return;
+        }
+    } else {
+        if (strlen(value) < TOKEN_HEX + 2 || value[TOKEN_HEX] != ':' || strlen(value + TOKEN_HEX + 1) >= sizeof socket_path) return;
+        memcpy(token, value, TOKEN_HEX);
+        sock = value + TOKEN_HEX + 1;
+    }
+    strcpy(socket_path, sock);
+    snprintf(hook_env, sizeof hook_env, "%s=%s:%s", ENV_NAME, token, socket_path);
     /* unsetenv only drops the pointer: the token would stay in the process's
      * first environment block, which /proc/<pid>/environ shows to anything
-     * running as you. Overwrite it where it lies. */
-    memset(value, 'x', TOKEN_HEX);
+     * running as you. Overwrite it where it lies (from the runner, the
+     * environment held it; from a hooked parent, only the pipe did). */
+    if (value[0] != '@') memset(value, 'x', TOKEN_HEX);
     /* Node runs its own TLS; keyhandoff_node.cjs reads the token there and
      * removes it, from a copy outside that block. */
     char exe[4096];
@@ -1301,57 +1332,90 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 
 /* ---- Keeping the hook in programs this one starts ---- */
 
-/* `envp` plus KEYHANDOFF_HOOK and this library in LD_PRELOAD, in a new
- * array the caller frees (with its LD_PRELOAD entry), or `envp` itself. */
-static char **with_hook(char *const envp[], char **preload) {
-    *preload = 0;
-    if (!active) return (char **)envp;
+/* A pipe holding the token, its read end inherited by the next program and
+ * its write end closed, and the KEYHANDOFF_HOOK entry naming it, which the
+ * caller frees. The read end, or -1 if no pipe could be made: the program
+ * then starts unhooked, and its placeholders fail closed. */
+static int token_pipe(char **entry) {
+    *entry = 0;
+    int p[2];
+    if (pipe(p)) return -1;
+    ssize_t w;
+    do w = write(p[1], token, TOKEN_HEX); while (w < 0 && errno == EINTR);
+    close(p[1]);
+    size_t size = sizeof ENV_NAME + 1 + 12 + strlen(socket_path) + 1;
+    if (w != TOKEN_HEX || !(*entry = malloc(size))) {
+        close(p[0]);
+        return -1;
+    }
+    snprintf(*entry, size, "%s=@%d:%s", ENV_NAME, p[0], socket_path);
+    return p[0];
+}
+
+/* What a program this one starts gets: `envp` without any KEYHANDOFF_HOOK,
+ * plus one naming a fresh token pipe, and this library in LD_PRELOAD. */
+struct spawn_env {
+    char **env;
+    char *preload, *entry;
+    int fd;
+};
+
+static struct spawn_env with_hook(char *const envp[]) {
+    struct spawn_env s = { (char **)envp, 0, 0, -1 };
+    if (!active) return s;
     Dl_info info;
     const char *self = dladdr((void *)hook_init, &info) ? info.dli_fname : 0;
     size_t n = 0;
-    int has_hook = 0, preload_at = -1;
-    for (; envp && envp[n]; n++) {
-        if (!strncmp(envp[n], ENV_NAME "=", sizeof ENV_NAME)) has_hook = 1;
+    int preload_at = -1;
+    for (; envp && envp[n]; n++)
         if (!strncmp(envp[n], "LD_PRELOAD=", 11)) preload_at = (int)n;
-    }
     char **out = calloc(n + 3, sizeof *out);
-    if (!out) return (char **)envp;
+    if (!out) return s;
     size_t k = 0;
+    /* Any copy of the token itself (a Node parent sets one for its own
+     * hook) stays out of the next program's environment. */
     for (size_t i = 0; i < n; i++)
-        if ((int)i != preload_at) out[k++] = envp[i];
-    if (!has_hook) out[k++] = hook_env;
+        if ((int)i != preload_at && strncmp(envp[i], ENV_NAME "=", sizeof ENV_NAME)) out[k++] = envp[i];
+    s.fd = token_pipe(&s.entry);
+    if (s.entry) out[k++] = s.entry;
     const char *old = preload_at >= 0 ? envp[preload_at] + 11 : "";
     if (self && !strstr(old, self)) {
         size_t size = 12 + strlen(self) + 1 + strlen(old) + 1;
-        if ((*preload = malloc(size))) snprintf(*preload, size, "LD_PRELOAD=%s%s%s", self, *old ? ":" : "", old);
-        out[k++] = *preload ? *preload : (char *)envp[preload_at];
+        if ((s.preload = malloc(size))) snprintf(s.preload, size, "LD_PRELOAD=%s%s%s", self, *old ? ":" : "", old);
+        if (s.preload) out[k++] = s.preload;
+        else if (preload_at >= 0) out[k++] = envp[preload_at];
     } else if (preload_at >= 0) {
         out[k++] = envp[preload_at];
     }
     out[k] = 0;
-    return out;
+    s.env = out;
+    return s;
 }
 
-static void done_with(char **env, char *const envp[], char *preload) {
-    if (env != (char **)envp) free(env);
-    free(preload);
+/* After the program started (the child has its own copy of the pipe) or
+ * failed to. */
+static void done_with(struct spawn_env *s, char *const envp[]) {
+    int saved = errno;
+    if (s->env != (char **)envp) free(s->env);
+    free(s->preload);
+    free(s->entry);
+    if (s->fd >= 0) close(s->fd);
+    errno = saved;
 }
 
 int execve(const char *path, char *const argv[], char *const envp[]) {
     REAL(int, execve, (const char *, char *const[], char *const[]));
-    char *preload;
-    char **env = with_hook(envp, &preload);
-    int r = real_execve(path, argv, env);
-    done_with(env, envp, preload);
+    struct spawn_env s = with_hook(envp);
+    int r = real_execve(path, argv, s.env);
+    done_with(&s, envp);
     return r;
 }
 
 int execvpe(const char *file, char *const argv[], char *const envp[]) {
     REAL(int, execvpe, (const char *, char *const[], char *const[]));
-    char *preload;
-    char **env = with_hook(envp, &preload);
-    int r = real_execvpe(file, argv, env);
-    done_with(env, envp, preload);
+    struct spawn_env s = with_hook(envp);
+    int r = real_execvpe(file, argv, s.env);
+    done_with(&s, envp);
     return r;
 }
 
@@ -1366,37 +1430,43 @@ int execvp(const char *file, char *const argv[]) {
 int posix_spawn(pid_t *pid, const char *path, const posix_spawn_file_actions_t *actions, const posix_spawnattr_t *attr, char *const argv[],
                 char *const envp[]) {
     REAL(int, posix_spawn, (pid_t *, const char *, const posix_spawn_file_actions_t *, const posix_spawnattr_t *, char *const[], char *const[]));
-    char *preload;
-    char **env = with_hook(envp, &preload);
-    int r = real_posix_spawn(pid, path, actions, attr, argv, env);
-    done_with(env, envp, preload);
+    struct spawn_env s = with_hook(envp);
+    int r = real_posix_spawn(pid, path, actions, attr, argv, s.env);
+    done_with(&s, envp);
     return r;
 }
 
 int posix_spawnp(pid_t *pid, const char *file, const posix_spawn_file_actions_t *actions, const posix_spawnattr_t *attr, char *const argv[],
                  char *const envp[]) {
     REAL(int, posix_spawnp, (pid_t *, const char *, const posix_spawn_file_actions_t *, const posix_spawnattr_t *, char *const[], char *const[]));
-    char *preload;
-    char **env = with_hook(envp, &preload);
-    int r = real_posix_spawnp(pid, file, actions, attr, argv, env);
-    done_with(env, envp, preload);
+    struct spawn_env s = with_hook(envp);
+    int r = real_posix_spawnp(pid, file, actions, attr, argv, s.env);
+    done_with(&s, envp);
     return r;
 }
 
 /* system() and popen() spawn inside libc, out of reach, so the environment
- * carries the hook for the moment they start. */
+ * names a token pipe for the moment they start. */
 int system(const char *command) {
     REAL(int, system, (const char *));
-    if (active) setenv(ENV_NAME, hook_env + sizeof ENV_NAME, 1);
+    char *entry = 0;
+    int fd = active ? token_pipe(&entry) : -1;
+    if (entry) putenv(entry);
     int r = real_system(command);
-    if (active) unsetenv(ENV_NAME);
+    if (entry) unsetenv(ENV_NAME);
+    free(entry);
+    if (fd >= 0) close(fd);
     return r;
 }
 
 FILE *popen(const char *command, const char *type) {
     REAL(FILE *, popen, (const char *, const char *));
-    if (active) setenv(ENV_NAME, hook_env + sizeof ENV_NAME, 1);
+    char *entry = 0;
+    int fd = active ? token_pipe(&entry) : -1;
+    if (entry) putenv(entry);
     FILE *r = real_popen(command, type);
-    if (active) unsetenv(ENV_NAME);
+    if (entry) unsetenv(ENV_NAME);
+    free(entry);
+    if (fd >= 0) close(fd);
     return r;
 }

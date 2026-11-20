@@ -1,8 +1,9 @@
 # Attacks on placeholders from code running inside a program started by
 # `keyhandoff run`, each trying to get the real key out. One mode per run:
 #
-#   environ    read the hook's token from /proc/self/environ (and a child's)
-#              and ask KeyHandoff for the key with it
+#   environ    read the hook's token from /proc/self/environ, and from a
+#              child's from the moment it starts, and ask KeyHandoff for the
+#              key with it
 #   certfile   trust an attacker CA through SSL_CERT_FILE, then present a
 #              certificate for the key's host signed by it
 #   syscall    send the placeholder with a raw write(2) syscall, past libc
@@ -20,11 +21,14 @@ def tls(name, port, ca=None):
 
 if mode == "environ":
     blocks = [open("/proc/self/environ", "rb").read()]
+    # A child's starting environment, read over and over from the moment it
+    # starts: before its own hook loads, as well as after (SR-20).
     child = subprocess.Popen(["sleep", "1"])
-    try:
-        blocks.append(open("/proc/%d/environ" % child.pid, "rb").read())
-    except OSError:
-        pass
+    for _ in range(2000):
+        try:
+            blocks.append(open("/proc/%d/environ" % child.pid, "rb").read())
+        except OSError:
+            break
     child.wait()
     found = [v for b in blocks for v in b.split(b"\0") if v.startswith(b"KEYHANDOFF_HOOK=")]
     tokens = [v.split(b"=", 1)[1].decode(errors="replace") for v in found]
