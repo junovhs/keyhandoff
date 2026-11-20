@@ -1430,13 +1430,10 @@ impl Handoff {
     /// rename/rotation.
     pub fn give_run(&self, peer: &Peer, names: &[String], placeholders: bool) -> Result<(Vec<Secret>, Option<String>), String> {
         let unattended = self.unattended_origin(peer);
-        #[cfg(windows)]
         let session = peer.agent.as_deref().and_then(|agent| Some(SessionScope {
             process: os::agent_session(peer.pid, agent)?,
             folder: peer.folder.as_ref()?.canonicalize().ok()?,
         }));
-        #[cfg(not(windows))]
-        let session = None;
         self.give_scoped(peer, names, session, placeholders, unattended)
     }
 
@@ -3441,9 +3438,9 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(windows)]
+    #[cfg(any(target_os = "linux", windows))]
     #[test]
-    fn windows_session_grants_follow_the_runner_and_stop_at_the_scope_boundary() {
+    fn session_grants_follow_the_runner_and_stop_at_the_scope_boundary() {
         use crate::run::tests::finished;
         use std::io::Write;
         use std::process::{Child, Command, Stdio};
@@ -3463,26 +3460,40 @@ mod tests {
             fs::write(dir.join(".env"), "TEST_KEY=handoff:First\n").unwrap();
         }
 
-        // Like the existing Linux agent fixture, the shell stands in for an agent.
-        // Keep it alive across runner launches. Windows supplies every PID and birth time.
-        let agent = me.data.join("codex.exe");
-        fs::copy(std::env::var_os("ComSpec").unwrap(), &agent).unwrap();
+        // A copy of the shell named codex stands in for the agent, kept alive
+        // across runner launches and fed commands on stdin. Alone it's a
+        // dedicated CLI; with one argument (`shared`) it isn't. Only the
+        // shell and its syntax differ between the OSes.
+        #[cfg(windows)]
+        let (agent, shell_from, shared_arg, python) = (me.data.join("codex.exe"), std::env::var_os("ComSpec").unwrap(), "/Q", "python");
+        #[cfg(target_os = "linux")]
+        let (agent, shell_from, shared_arg, python) = (me.data.join("codex"), std::ffi::OsString::from("/bin/sh"), "-s", "python3");
+        fs::copy(shell_from, &agent).unwrap();
         let launch = |args: &[&str]| {
-            Command::new(&agent).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
+            Command::new(&agent).args(args).env_remove("CLAUDECODE").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
         };
         let mut first = launch(&[]);
         let mut second = launch(&[]);
-        let mut shared = launch(&["/Q"]);
+        let mut shared = launch(&[shared_arg]);
         let runner = std::env::current_exe().unwrap();
         let request = |shell: &mut Child, dir: &Path, tag: &str, answer: Option<Answer>| {
             let out = dir.join(format!("{}.out", OsRng.next_u32()));
             let script = format!("import os; assert os.environ['TEST_KEY'] == 'synthetic-session-key'; print('{tag}')");
-            let spec = serde_json::json!([profile, out, "python", "-c", script]);
+            let spec = serde_json::json!([profile, out, python, "-c", script]);
             fs::write(dir.join("spec.json"), spec.to_string()).unwrap();
             let input = shell.stdin.as_mut().unwrap();
-            writeln!(input, "cd /d \"{}\"\r", dir.display()).unwrap();
-            writeln!(input, "set /p KEYHANDOFF_TEST_RUN=<spec.json\r").unwrap();
-            writeln!(input, "\"{}\" run::tests::runner_entry --exact -q\r", runner.display()).unwrap();
+            #[cfg(windows)]
+            {
+                writeln!(input, "cd /d \"{}\"\r", dir.display()).unwrap();
+                writeln!(input, "set /p KEYHANDOFF_TEST_RUN=<spec.json\r").unwrap();
+                writeln!(input, "\"{}\" run::tests::runner_entry --exact -q\r", runner.display()).unwrap();
+            }
+            #[cfg(target_os = "linux")]
+            {
+                writeln!(input, "cd '{}'", dir.display()).unwrap();
+                writeln!(input, "KEYHANDOFF_TEST_RUN=\"$(cat spec.json)\" '{}' run::tests::runner_entry --exact -q", runner.display()).unwrap();
+            }
+            input.flush().unwrap();
             let shown = answer.map(|answer| answer_when_asked(h, answer));
             let (output, code) = finished(&out);
             if answer == Some(Answer::Deny) {

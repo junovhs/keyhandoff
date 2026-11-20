@@ -8,7 +8,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::thread;
 
-use crate::os::{Peer, ServeKeys};
+use crate::os::{AgentProcess, Peer, ServeKeys};
 
 pub fn socket(profile: &str) -> PathBuf {
     super::runtime_dir().join(format!("handoff-{profile}-keys.sock"))
@@ -214,6 +214,44 @@ mod tests {
         // This test process, started by cargo, isn't a cron job.
         assert_ne!(me, Some("a cron job"));
     }
+}
+
+/// The dedicated interactive agent CLI process (`claude`, or `codex` alone or
+/// as `codex exec`) among `pid` and the processes that started it, if it's
+/// the `expected` agent: the scope a session grant is bound to. Each process
+/// must be older than the one it started, and its start time (in clock ticks
+/// since boot) tells a reused pid apart. Hosts that can run several chats in
+/// one process, and any other mode, can't establish a session. As on
+/// Windows.
+pub fn agent_session(mut pid: u32, expected: &str) -> Option<AgentProcess> {
+    let mut child_birth = u64::MAX;
+    for _ in 0..64 {
+        let p = pid as i32;
+        // `starttime` is field 22 of stat, 19 after the state.
+        let birth = u64::try_from(stat_field(p, 19)?).ok()?;
+        if birth > child_birth {
+            return None;
+        }
+        let image = fs::read_link(format!("/proc/{p}/exe")).ok()?;
+        // The native installers start a version-named file through a
+        // `claude` link, so the command name is checked as well as the file.
+        let comm = fs::read_to_string(format!("/proc/{p}/comm")).unwrap_or_default().trim_end().to_string();
+        let file = image.file_name()?.to_str()?.to_string();
+        if let Some((agent, name)) = [comm, file].into_iter().find_map(|n| super::super::agent_named(&n).map(|a| (a, n))) {
+            if agent != expected || !(name == "claude" || name == "codex") {
+                return None;
+            }
+            let argv = args(p);
+            let dedicated = argv.len() == 1 || (name == "codex" && argv.get(1).is_some_and(|a| a == "exec"));
+            return dedicated.then_some(AgentProcess { pid, created: birth, image });
+        }
+        child_birth = birth;
+        match stat_field(p, 1) {
+            Some(ppid) if ppid > 1 => pid = ppid as u32,
+            _ => return None,
+        }
+    }
+    None
 }
 
 /// Whether `pid` is `ancestor` or was started, directly or not, by it.

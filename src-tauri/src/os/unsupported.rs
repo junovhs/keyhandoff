@@ -99,6 +99,10 @@ pub fn agent(_pid: u32) -> Option<String> {
     None
 }
 
+pub fn agent_session(_pid: u32, _expected: &str) -> Option<crate::os::AgentProcess> {
+    None
+}
+
 impl crate::os::Peer {
     pub fn unattended_origin(&self) -> Option<&'static str> {
         None
