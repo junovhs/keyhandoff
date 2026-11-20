@@ -302,6 +302,22 @@ fn recovery_code() -> Zeroizing<String> {
 /// A typed recovery code as its 32 symbols, forgiving case, dashes, spaces
 /// and the letters people write for 0 and 1.
 fn code_bytes(code: &str) -> Result<Zeroizing<Vec<u8>>, ()> {
+    let out = symbols(code)?;
+    if out.len() != 32 {
+        return Err(());
+    }
+    Ok(out)
+}
+
+/// Whether `typed` is group `group` (0 to 7) of `code`, read as forgivingly
+/// as a whole code is.
+pub fn group_matches(code: &str, group: usize, typed: &str) -> bool {
+    let (Ok(code), Ok(typed)) = (code_bytes(code), symbols(typed)) else { return false };
+    group < 8 && typed.len() == 4 && code[group * 4..group * 4 + 4] == typed[..]
+}
+
+/// Typed Crockford base32 symbols, any number of them.
+fn symbols(code: &str) -> Result<Zeroizing<Vec<u8>>, ()> {
     let mut out = Zeroizing::new(Vec::with_capacity(32));
     for c in code.chars().filter(|c| !c.is_whitespace() && *c != '-') {
         let c = match c.to_ascii_uppercase() {
@@ -313,9 +329,6 @@ fn code_bytes(code: &str) -> Result<Zeroizing<Vec<u8>>, ()> {
             return Err(());
         }
         out.push(c as u8);
-    }
-    if out.len() != 32 {
-        return Err(());
     }
     Ok(out)
 }

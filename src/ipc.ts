@@ -198,6 +198,8 @@ export interface GateView {
   migrating: boolean;
   /** The recovery code, shown once after setup to write down. */
   recovery: string | null;
+  /** The two of its eight groups (0 to 7) to type back before it goes. */
+  recovery_ask: [number, number] | null;
   min_passphrase: number;
   /** A TPM PIN unlocks it, so the lock screen asks for that first. */
   pin: boolean;
@@ -217,7 +219,8 @@ export const gateApi = {
   addPin: (pin: string) => invoke<void>("add_pin", { pin }),
   removePin: () => invoke<void>("remove_pin"),
   recover: (code: string, passphrase: string) => invoke<void>("recover", { code, passphrase }),
-  recoveryDone: () => invoke<void>("recovery_done"),
+  /** The asked groups of the recovery code, typed back; refused if they don't match. */
+  recoveryDone: (groups: string[]) => invoke<void>("recovery_done", { groups }),
   lock: () => invoke<void>("lock"),
   remember: (on: boolean) => invoke<void>("remember", { on }),
   /** Install the waiting update and restart into it. */

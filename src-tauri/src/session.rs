@@ -14,6 +14,7 @@ use std::time::Duration;
 use zeroize::Zeroizing;
 
 use crate::core::Handoff;
+use crate::slots;
 use crate::store::{Locked, Settings, Store};
 
 enum State {
@@ -39,9 +40,17 @@ pub struct Session {
     remembered: Mutex<bool>,
     /// Files opened before unlock, opened right after it.
     pub files: Mutex<Vec<PathBuf>>,
-    /// The recovery code from setup, shown until you say it's written down.
-    pub recovery: Mutex<Option<Zeroizing<String>>>,
+    /// The recovery code from setup, shown until two of its groups are typed
+    /// back, which shows it was written down.
+    pub recovery: Mutex<Option<Recovery>>,
     start: Start,
+}
+
+/// The recovery code shown after setup, and the two of its eight groups
+/// (0 to 7, in order) asked back before it goes.
+pub struct Recovery {
+    pub code: Zeroizing<String>,
+    pub ask: [usize; 2],
 }
 
 /// How a locked profile opens: with the passphrase, or the recovery code.
@@ -66,6 +75,26 @@ impl Session {
             recovery: Mutex::new(None),
             start,
         })
+    }
+
+    /// Show `code` until two of its groups, chosen at random, are typed back.
+    pub fn hold_recovery(&self, code: Zeroizing<String>) {
+        use rand_core::{OsRng, RngCore};
+        let first = (OsRng.next_u32() % 8) as usize;
+        let second = (first + 1 + (OsRng.next_u32() % 7) as usize) % 8;
+        *guard(&self.recovery) = Some(Recovery { code, ask: [first.min(second), first.max(second)] });
+    }
+
+    /// The recovery code is put away only once the asked groups match.
+    pub fn confirm_recovery(&self, typed: &[String]) -> Result<(), String> {
+        let mut held = guard(&self.recovery);
+        let Some(r) = held.as_ref() else { return Ok(()) };
+        let right = typed.len() == 2 && r.ask.iter().zip(typed).all(|(&group, t)| slots::group_matches(&r.code, group, t));
+        if !right {
+            return Err("That doesn't match the code. Check what you wrote down, or show the code again.".into());
+        }
+        held.take();
+        Ok(())
     }
 
     /// setup (no passphrase yet), locked or open, and whether an older
@@ -243,6 +272,32 @@ mod tests {
                 now,
             )
             .unwrap();
+    }
+
+    #[test]
+    fn setup_finishes_only_when_the_asked_groups_of_the_code_are_typed_back() {
+        let dir = std::env::temp_dir().join(format!("handoff-test-recovery-{}", OsRng.next_u64()));
+        os::private_dir(&dir).unwrap();
+        let fresh = Session::new(dir.clone(), "t", Box::new(|_, _| unreachable!())).unwrap();
+        let (_, _, setup_code) = Locked::open_in(dir.clone(), "t").unwrap().set_up(PASS).unwrap();
+        let code = setup_code.to_string();
+        fresh.hold_recovery(setup_code);
+        let ask = fresh.recovery.lock().unwrap().as_ref().unwrap().ask;
+        assert!(ask[0] < ask[1] && ask[1] < 8, "two different groups, in order");
+
+        let groups: Vec<&str> = code.split('-').collect();
+        let wrong = vec![groups[(ask[0] + 1) % 8].to_string(), groups[ask[1]].to_string()];
+        assert!(fresh.confirm_recovery(&wrong).is_err());
+        assert!(fresh.confirm_recovery(&[groups[ask[0]].to_string()]).is_err(), "both groups are needed");
+        assert!(fresh.recovery.lock().unwrap().is_some(), "a wrong answer keeps the code on screen");
+
+        // Typed the way people write it: lower case, spaced, O for zero.
+        let loose = |g: &str| format!(" {} ", g.to_lowercase().replace('0', "o"));
+        let right = vec![loose(groups[ask[0]]), loose(groups[ask[1]])];
+        assert!(fresh.confirm_recovery(&right).is_ok());
+        assert!(fresh.recovery.lock().unwrap().is_none(), "the code is put away once checked");
+        drop(fresh);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

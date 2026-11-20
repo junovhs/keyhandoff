@@ -124,6 +124,8 @@ struct GateView {
     migrating: bool,
     /// Shown once, after setup, to write down.
     recovery: Option<String>,
+    /// The two groups of it (0 to 7) to type back before it goes.
+    recovery_ask: Option<[usize; 2]>,
     min_passphrase: usize,
     /// A TPM PIN unlocks it, so the lock screen asks for that first.
     pin: bool,
@@ -135,10 +137,12 @@ struct GateView {
 #[tauri::command]
 fn gate(s: S, updates: State<'_, Arc<Updates>>) -> GateView {
     let (state, migrating) = s.state();
+    let recovery = s.recovery.lock().unwrap_or_else(|e| e.into_inner());
     GateView {
         state,
         migrating,
-        recovery: s.recovery.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|c| c.to_string()),
+        recovery: recovery.as_ref().map(|r| r.code.to_string()),
+        recovery_ask: recovery.as_ref().map(|r| r.ask),
         min_passphrase: slots::MIN_PASSPHRASE,
         pin: s.has_pin(),
         min_pin: slots::MIN_PIN,
@@ -182,7 +186,7 @@ async fn set_up(app: AppHandle, passphrase: String) -> Result<(), String> {
     let passphrase = Zeroizing::new(passphrase);
     opening(app, Box::new(move |locked, session| {
         let (store, settings, code) = locked.set_up(&passphrase)?;
-        *session.recovery.lock().unwrap_or_else(|e| e.into_inner()) = Some(code);
+        session.hold_recovery(code);
         Ok((store, settings))
     }))
     .await
@@ -219,10 +223,11 @@ fn remove_pin(app: AppHandle, h: H) -> Result<(), String> {
     done(&app, h.remove_pin())
 }
 
+/// Two groups of the recovery code, typed back to show it was written down.
 #[tauri::command]
-fn recovery_done(app: AppHandle, s: S) {
-    s.recovery.lock().unwrap_or_else(|e| e.into_inner()).take();
-    changed(&app);
+fn recovery_done(app: AppHandle, s: S, groups: Vec<String>) -> Result<(), String> {
+    let groups = Zeroizing::new(groups);
+    done(&app, s.confirm_recovery(&groups))
 }
 
 #[tauri::command]

@@ -6,7 +6,7 @@ import { attempt, gateApi, type GateView } from "./ipc";
  * like Home (headline, then the form, buttons at the bottom), so opening the
  * vault swaps the words and keeps the window still. */
 export function Gate({ gate }: { gate: GateView }) {
-  if (gate.recovery) return <RecoveryCode code={gate.recovery} />;
+  if (gate.recovery && gate.recovery_ask) return <RecoveryCode code={gate.recovery} ask={gate.recovery_ask} />;
   if (gate.state === "setup") return <SetUp gate={gate} />;
   return <Unlock gate={gate} />;
 }
@@ -186,27 +186,64 @@ function Unlock({ gate }: { gate: GateView }) {
   );
 }
 
-function RecoveryCode({ code }: { code: string }) {
-  const [sure, setSure] = useState(false);
+const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
+
+/** The recovery code, then two of its groups typed back from paper, so a
+ * code that was never written down is caught while it can still be shown. */
+function RecoveryCode({ code, ask }: { code: string; ask: [number, number] }) {
+  const [checking, setChecking] = useState(false);
+  const [groups, setGroups] = useState(["", ""]);
+  const { busy, error, run } = useBusy();
+  if (!checking) {
+    return (
+      <div className="gate">
+        <Art />
+        <div className="hero">
+          <h1 className="display sm">Write down this code</h1>
+          <p className="lede">If you forget your passphrase, this code is the only way back to your keys.</p>
+        </div>
+        <p className="code mono">{code}</p>
+        <p className="help">
+          Keep it on paper, not on this computer. Next, you'll type part of it back from what you wrote.
+        </p>
+        <span className="grow-space" />
+        <div className="btn-row">
+          <button className="btn primary grow" onClick={() => setChecking(true)}>I've written it down</button>
+        </div>
+      </div>
+    );
+  }
+  const filled = groups.every((g) => g.replace(/[\s-]/g, "").length === 4);
+  const set = (i: number, value: string) => setGroups(groups.map((g, j) => (j === i ? value : g)));
   return (
-    <div className="gate">
+    <form className="gate" onSubmit={(e) => { e.preventDefault(); if (filled) void run(() => gateApi.recoveryDone(groups)); }}>
       <Art />
       <div className="hero">
-        <h1 className="display sm">Write down this code</h1>
-        <p className="lede">If you forget your passphrase, this code is the only way back to your keys.</p>
+        <h1 className="display sm">Check what you wrote</h1>
+        <p className="lede">Type these two groups of four from your paper.</p>
       </div>
-      <p className="code mono">{code}</p>
+      {ask.map((group, i) => (
+        <input
+          key={group}
+          className="name-in mono"
+          value={groups[i]}
+          autoFocus={i === 0}
+          spellCheck={false}
+          autoComplete="off"
+          maxLength={9}
+          placeholder={`${ORDINAL[group]} group`}
+          aria-label={`${ORDINAL[group]} group of the recovery code`}
+          onChange={(e) => set(i, e.target.value)}
+        />
+      ))}
+      {error && <p className="err">{error}</p>}
       <p className="help">
-        Keep it on paper, not on this computer. It's shown this once; you can't see it again.
+        <button type="button" className="link inline" onClick={() => { setChecking(false); setGroups(["", ""]); }}>Show the code again</button>
       </p>
       <span className="grow-space" />
       <div className="btn-row">
-        {sure ? (
-          <button className="btn primary grow" onClick={() => void gateApi.recoveryDone()}>Yes, it's written down</button>
-        ) : (
-          <button className="btn primary grow" onClick={() => setSure(true)}>I've written it down</button>
-        )}
+        <button className="btn primary grow" disabled={busy || !filled}>Check</button>
       </div>
-    </div>
+    </form>
   );
 }
