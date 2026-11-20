@@ -1,8 +1,10 @@
 name: release
-# A version in src-tauri/Cargo.toml with no vX.Y.Z tag yet becomes a GitHub Release:
-# a Windows installer, a Linux .deb and AppImage, and SHA256SUMS, with CHANGELOG.md's
-# section for that version as its notes. Then the website rebuilds so its download
-# links point at it. CI never writes to main or CHANGELOG.md.
+# A version in src-tauri/Cargo.toml with no vX.Y.Z release yet becomes a DRAFT
+# GitHub Release: a Windows installer, a Linux .deb and AppImage, and SHA256SUMS,
+# with CHANGELOG.md's section for that version as its notes. CI holds no signing
+# key (ADR 0005): the owner signs the packages offline and publishes the draft
+# with scripts/sign-release.sh (docs/releasing.md). Publishing makes the tag, and
+# refresh-site.yml then rebuilds the website. CI never writes to main or CHANGELOG.md.
 on:
   push:
     branches: [main]
@@ -20,13 +22,18 @@ env:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    # Write access only so the token can see draft releases.
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
     steps:
       - uses: actions/checkout@v4
       - id: v
-        name: version, tag and changelog section
+        name: version, tag, draft and changelog section
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           NOTES=notes.md bash scripts/release-plan.sh | tee -a "$GITHUB_OUTPUT"
@@ -61,13 +68,12 @@ jobs:
           sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev \
             libayatana-appindicator3-dev libxdo-dev libdbus-1-dev libssl-dev patchelf file
       - run: npm ci
-      - name: build ${{ matrix.bundles }}
-        # The updater key signs each package; installed copies accept only
-        # packages signed with it (the public half is in tauri.conf.json).
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --ci --bundles ${{ matrix.bundles }}
+      - name: build ${{ matrix.bundles }}, unsigned
+        # No updater key here: installed copies accept only packages signed with
+        # it, and only the owner's machine holds it (ADR 0005). The updater
+        # artifacts are the packages themselves, signed later by sign-release.sh.
+        shell: bash
+        run: npx tauri build --ci --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: name the packages
         shell: bash
         run: |
@@ -75,7 +81,7 @@ jobs:
           v="${{ needs.plan.outputs.version }}"
           b=src-tauri/target/release/bundle
           mkdir -p dist
-          take() { cp "$b/$1" "dist/$2"; cp "$b/$1.sig" "dist/$2.sig"; }
+          take() { cp "$b/$1" "dist/$2"; }
           if [ "$RUNNER_OS" = "Windows" ]; then
             take nsis/KeyHandoff_"$v"_x64-setup.exe "keyhandoff-$v-windows-x64-setup.exe"
           else
@@ -89,7 +95,7 @@ jobs:
           path: dist/keyhandoff-*
           if-no-files-found: error
 
-  publish:
+  draft:
     needs: [plan, build]
     runs-on: ubuntu-latest
     permissions:
@@ -100,24 +106,15 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
-      - name: publish v${{ needs.plan.outputs.version }}
+      - name: draft v${{ needs.plan.outputs.version }}
+        # A draft is invisible to installed copies and to the site. The hashes
+        # printed here are what sign-release.sh checks the download against.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           v="${{ needs.plan.outputs.version }}"
           bash scripts/release-notes.sh "$v" > notes.md
-          bash scripts/updater-manifest.sh "$v" release-assets notes.md > release-assets/latest.json
-          cat release-assets/latest.json
           (cd release-assets && sha256sum -- keyhandoff-* > SHA256SUMS && cat SHA256SUMS)
-          gh release create "v$v" release-assets/keyhandoff-* release-assets/SHA256SUMS release-assets/latest.json --target "$GITHUB_SHA" \
+          gh release create "v$v" release-assets/keyhandoff-* release-assets/SHA256SUMS --draft --target "$GITHUB_SHA" \
             --title "KeyHandoff $v" --notes-file notes.md
-
-  refresh-site:
-    needs: [plan, publish]
-    if: needs.plan.outputs.release == 'true'
-    uses: ./.github/workflows/refresh-site.yml
-    with:
-      release_tag: v${{ needs.plan.outputs.version }}
-    secrets:
-      CLOUDFLARE_SITE_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_HOOK }}
