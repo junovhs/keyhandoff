@@ -21,7 +21,8 @@ src-tauri/src/
   hook/            The TLS hook keyhandoff run preloads on Linux (C)
   os/              Per-OS backends: clipboard capture, offer and read, master key,
                    drag-out, one instance per profile, the key socket or pipe
-                   and who is asking (linux/, windows/)
+                   and who is asking (linux/, windows/). Only this folder
+                   differs per OS; everything else is shared (ADR 0006)
 loaders/           One-line loaders programs use to fill handoff: pointers
 scripts/           Development helpers
 ```
