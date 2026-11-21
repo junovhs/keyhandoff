@@ -85,8 +85,8 @@ const INCIDENTS = [
           </div>
         </div>
         <span class="sp"></span>
-        <a class="l hide-s" href="#blind-spot">The blind spot</a>
-        <a class="l hide-s" href="#solo">What it does</a>
+        <a class="l hide-s" href="#blind-spot">Why</a>
+        <a class="l hide-s" href="#solo">A key&rsquo;s life</a>
         <a class="l" href="#download">Download</a>
         <a class="l" href="/docs/">Docs</a>
         <a class="l hide-s" href="/docs/reference/">Reference</a>
@@ -97,14 +97,14 @@ const INCIDENTS = [
     <header class="wrap hero">
       <div class="hero-copy">
         <span class="hero-pill">Free for everyone · No servers, no accounts</span>
-        <h1>The open source <br /><span class="pearl-text">secrets manager.</span></h1>
+        <h1 data-stop="born" data-label="New key">The open source <br /><span class="pearl-text">secrets manager.</span></h1>
         <p class="lede">Save, use and share API keys without anyone ever seeing them. KeyHandoff keeps each key safe for its whole life.</p>
         <ul class="points">
           <li><Icon name="key" size={20} /><span><b>Save, use and share keys safely.</b> From the provider&rsquo;s page to your code to your teammate, a key is never left out in plain sight.</span></li>
           <li><Icon name="terminal" size={20} /><span><b>Your programs use keys without holding them.</b> They get a stand-in. The real key goes in only on the way to its own server.</span></li>
           <li><Icon name="bot" size={20} /><span><b>It knows when an AI agent is asking.</b> Claude Code or Codex can&rsquo;t use a key until you say yes.</span></li>
         </ul>
-        <div class="cta">
+        <div class="cta" data-born>
           <a class="btn primary" href="#download"><Icon name="down" />Download</a>
           <a class="btn secondary" href={GITHUB}>See the code <Icon name="out" /></a>
         </div>
@@ -193,7 +193,7 @@ const INCIDENTS = [
 
     <section class="wrap panel" id="solo">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="key" />1 · Keep it</span>
+        <span class="eyebrow" data-stop="sealed" data-label="Sealed"><Icon name="key" />1 · Save it</span>
         <h2>Copy a new key once, and it goes straight into your vault.</h2>
         <p class="sub">When you need it somewhere, KeyHandoff types it in for you.</p>
       </div>
@@ -247,7 +247,7 @@ const INCIDENTS = [
 
     <section class="wrap split" id="code">
       <div class="split-copy rv">
-        <span class="eyebrow"><Icon name="terminal" />2 · Use it</span>
+        <span class="eyebrow" data-stop="used" data-label="In use"><Icon name="terminal" />2 · Use it</span>
         <h2>Your code uses the key, and you decide which programs get it.</h2>
         <p class="sub">Your <code>.env</code> holds a pointer like <code>handoff:OpenAI</code> where the key used to be. When your program starts, it asks KeyHandoff over a private pipe on your machine, and the first time, you say whether that program in that folder is allowed.</p>
       </div>
@@ -261,7 +261,7 @@ const INCIDENTS = [
 
     <section class="wrap" id="standin">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="shield" />Stand-ins and tripwires</span>
+        <span class="eyebrow" data-stop="standin" data-label="Stand-in"><Icon name="shield" />Stand-ins and tripwires</span>
         <h2>Your program only holds a stand-in. The real key exists only inside encryption.</h2>
         <p class="sub">On Linux, start a program with <code>keyhandoff run</code> and it gets a stand-in shaped exactly like your key. The real key goes in only on an encrypted connection to the key&rsquo;s own server, after KeyHandoff checks that server&rsquo;s certificate itself.</p>
       </div>
@@ -299,10 +299,25 @@ const INCIDENTS = [
       </div>
       <p class="limits rv"><a href="/docs/keyhandoff-run/">How stand-ins and tripwires work</a></p>
     </section>
+    <section class="wrap split" id="agents">
+      <div class="split-copy rv">
+        <span class="eyebrow" data-stop="agent" data-label="Asked you"><Icon name="bot" />3 · AI agents</span>
+        <h2>When an AI agent asks for a key, KeyHandoff asks you.</h2>
+        <p class="sub">KeyHandoff recognises Claude Code and Codex. Approvals you saved for yourself never count for an agent. You can let one agent session use a key, see every command it ran with it, and take it back whenever you like.</p>
+      </div>
+      <div class="prompt rv">
+        <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>An AI agent is asking</span></div>
+        <p class="prompt-q"><b>Claude Code</b> wants the <b>Stripe</b> key</p>
+        <p class="prompt-where"><Icon name="terminal" size={14} />npm test &nbsp;·&nbsp; ~/work/billing-api</p>
+        <div class="prompt-btns"><span class="btn secondary small">Not now</span><span class="btn primary small">Allow this session</span></div>
+        <div class="agent-recent"><span>This session ran</span><code>npm test</code><code>node scripts/refund.js</code><span class="agent-revoke">Revoke</span></div>
+      </div>
+    </section>
+
 
     <section class="wrap panel" id="team">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />3 · Share it</span>
+        <span class="eyebrow" data-stop="shared" data-label="Shared"><Icon name="users" />4 · Share it</span>
         <h2>Need to share a key? We solved that too.</h2>
       </div>
       <div class="team-stage rv" id="duo" data-step="intro">
@@ -394,42 +409,22 @@ const INCIDENTS = [
       </div>
     </section>
 
-    <section class="wrap" id="circle">
+    <section class="wrap" id="leak">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />How teams work</span>
-        <h2>Start on your own. Add teammates when you need them.</h2>
+        <span class="eyebrow" data-stop="guarded" data-label="Guarded"><Icon name="alert" />5 · If it leaks</span>
+        <h2>Even if a stand-in gets out, it&rsquo;s worthless, and it leads straight back to the leak.</h2>
       </div>
-      <div class="lc-stage rv" id="circle-stage" data-step="0">
-        <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>Ben makes a team, so he&rsquo;s its keeper.</span>
-          <span class="s1"><b>2</b>He invites Ann and Priya.</span>
-          <span class="s2"><b>3</b>They join, and the keys follow.</span>
-          <span class="s3"><b>4</b>Change a key once. Everyone gets it.</span>
-          <span class="s4"><b>5</b>Ben removes Priya, and her copies stop working.</span>
-        </p>
-        <div class="ob" aria-hidden="true">
-          <div class="ob-plane">
-            <span class="ob-ring"></span>
-            <svg class="ob-spokes" viewBox="0 0 560 560">
-              <line class="sp-ben" x1="280" y1="280" x2="280" y2="530" />
-              <line class="sp-ann" x1="280" y1="280" x2="63" y2="155" />
-              <line class="sp-priya" x1="280" y1="280" x2="497" y2="155" />
-            </svg>
-            <span class="ob-wave"></span>
-            <span class="ob-spark spk-a"></span><span class="ob-spark spk-p"></span>
-            <span class="ob-bolt bolt-a"></span><span class="ob-bolt bolt-p"></span><span class="ob-bolt bolt-b"></span>
-            <span class="ob-up ob-mem ann" style="--x:63px; --y:155px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Ann</span><span class="ob-invited">Invited</span></span>
-            <span class="ob-up ob-mem priya" style="--x:497px; --y:155px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Priya</span><span class="ob-invited">Invited</span></span>
-            <span class="ob-up ob-vault" style="--x:280px; --y:280px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><Vault size=88 stroke-width=1.5 /><span class="nm">Team vault</span></span>
-            <span class="ob-up ob-mem ben" style="--x:280px; --y:530px"><span class="ob-chip"><KeyRound size={13} />3 keys</span><UserRound size={56} stroke-width={1.75} /><span class="nm">Ben <span class="ob-role"><Crown size=12 stroke-width=2.25 />Keeper</span></span></span>
-          </div>
-        </div>
+      <div class="leak-steps rv">
+        <div class="leak-step"><Icon name="shield" size={22} /><b>Stopped before it leaves</b><p>A stand-in headed anywhere but its own key&rsquo;s server is refused before a byte goes out, and you get an alert naming the program.</p></div>
+        <div class="leak-step"><Icon name="users" size={22} /><b>Your whole team is covered</b><p>That destination is refused on every teammate&rsquo;s computer too, through the team folder you already share.</p></div>
+        <div class="leak-step"><Icon name="search" size={22} /><b>Traced to the run</b><p>Paste a leaked stand-in into KeyHandoff, even base64-encoded, and it tells you which key, which command and when.</p></div>
       </div>
     </section>
 
+
     <section class="wrap" id="built-in">
       <div class="head center rv">
-        <span class="eyebrow"><Icon name="shield" />Built in, everywhere</span>
+        <span class="eyebrow" data-stop="locked" data-label="Locked"><Icon name="shield" />6 · Built in, everywhere</span>
         <h2>It feels simple to use, but there&rsquo;s serious security underneath.</h2>
       </div>
       <div class="cutaway rv">
@@ -454,7 +449,7 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap end rv" id="download" data-release-tag={release?.tag}>
-      <span class="tile lg"><Logo height={42} /></span>
+      <span class="tile lg" data-stop="free" data-label="Free"><Logo height={42} /></span>
       <h2>Safe secrets should be free. <br /><span class="pearl-text">So we made them free.</span></h2>
       <p class="sub">KeyHandoff is free and open source, for you, your team and everyone else. Fewer leaked keys makes the whole internet safer.</p>
       {release ? (
@@ -513,6 +508,7 @@ const INCIDENTS = [
 
     <script>
       import "../scripts/site.ts";
+      import "../scripts/keypath.ts";
     </script>
   </body>
 </html>
