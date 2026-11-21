@@ -85,11 +85,22 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .birth { position: relative; justify-self: center; width: min(100%, 460px); aspect-ratio: 1; display: grid; place-items: center; }
 .halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .2), rgba(196, 236, 230, .06) 55%, transparent 75%); }
 .gen-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--text); font-size: 16px; font-weight: 600; box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
-html:not(.js) .gen-btn { display: none; }
+html:not(.js) .gen-btn, html:not(.js) .gen-cursor { display: none; }
 /* keypath.ts adds .go: the button is pressed, lights up, and gives way to the key. */
 html.js .halo { opacity: 0; }
-.birth.go .halo { animation: birth-halo 1s var(--ease) .45s forwards; }
-.birth.go .gen-btn { animation: gen-press .9s var(--ease) forwards; }
+.birth.go .halo { animation: birth-halo 1s var(--ease) 1.05s forwards; }
+.birth.go .gen-btn { animation: gen-press .9s var(--ease) .6s forwards; }
+/* A full-size pointer glides in from below right, its tip lands on the button, and it clicks. */
+.gen-cursor { position: absolute; left: 50%; top: 50%; margin: -2px 0 0 18px; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; transform: translate(120px, 140px); pointer-events: none; }
+.birth.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
+@keyframes gen-cursor {
+  0% { opacity: 0; transform: translate(120px, 140px); }
+  15% { opacity: 1; }
+  40% { transform: translate(0, 0); }
+  46% { transform: translate(0, 0) scale(.85); }
+  52% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(40px, 60px); opacity: 0; }
+}
 @keyframes gen-press {
   0% { transform: none; }
   20% { transform: scale(.94); background: #2a2a30; border-color: rgba(216, 209, 255, .8); box-shadow: 0 0 0 4px rgba(216, 209, 255, .15), 0 0 40px rgba(216, 209, 255, .35); }
@@ -98,7 +109,7 @@ html.js .halo { opacity: 0; }
 }
 @keyframes birth-halo { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  html.js .gen-btn { display: none; }
+  html.js .gen-btn, html.js .gen-cursor { display: none; }
   html.js .halo { animation: none; opacity: 1; }
 }
 
@@ -666,6 +677,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 /* The glow is a plain gradient behind the key, not stacked blur filters, so it costs nothing to redraw at hero size. */
 .kp-aura { position: absolute; left: -80px; top: -80px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .55), rgba(196, 236, 230, .18) 45%, transparent); transition: opacity .5s; }
 .kp-key:not(.alive) .kp-aura { opacity: 0; }
+.kp-key:not(.alive) .kp-spin { visibility: hidden; }
 .kp-key.plain .kp-aura { opacity: .25; }
 .kp-key.standin .kp-aura { opacity: 0; }
 .kp-shape, .kp-glint { position: absolute; inset: 0; -webkit-mask: var(--key-mask) center / contain no-repeat; mask: var(--key-mask) center / contain no-repeat; transition: opacity .5s; }

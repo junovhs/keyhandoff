@@ -204,7 +204,8 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
    *  at each point for the first third of the way to the next, then moving,
    *  and never off screen. */
   function target() {
-    const anchor = scrollY + innerHeight * 0.5;
+    // Reading line: mid-screen, but never below the birthplace at the top of the page, so tall screens start with the key at home.
+    const anchor = scrollY + Math.min(innerHeight * 0.5, pts[0].y);
     let len = total;
     if (anchor <= pts[0].y) len = 0;
     else
@@ -244,6 +245,11 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
 
   /** The scene in the middle of the screen, if the reader has paused on one. */
   function sceneHere() {
+    // While its birthplace in the hero is on screen, the key stays home there,
+    // even on tall screens where the next scene is already in view.
+    const b = bornEl.getBoundingClientRect();
+    const mid = b.top + b.height / 2;
+    if (mid > 0 && mid < innerHeight) return null;
     let best: HTMLElement | null = null, dist = Infinity;
     for (const s of scenes) {
       const r = s.getBoundingClientRect();
@@ -326,6 +332,7 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
       const seg = Math.min(tl.len * trail, end);
       tl.el.style.strokeDasharray = `${seg} ${total + tl.len}`;
       tl.el.style.strokeDashoffset = `${-(end - seg)}`;
+      tl.el.style.visibility = seg < 1 ? "hidden" : ""; // a zero-length dash still draws its round cap as a dot
     }
     running = true;
     requestAnimationFrame(frame);
@@ -351,6 +358,6 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
     setTimeout(() => {
       root.classList.add("born");
       key.classList.add("alive");
-    }, reduced ? 0 : 450);
-  }, reduced ? 0 : 700);
+    }, reduced ? 0 : 1050); // the cursor clicks at 0.6s, the key arrives as the button gives way
+  }, reduced ? 0 : 400);
 }
