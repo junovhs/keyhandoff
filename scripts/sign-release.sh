@@ -68,7 +68,8 @@ bash scripts/updater-manifest.sh "$v" "$work" "$work/notes.md" > "$work/latest.j
 gh release upload "v$v" -R "$repo" --clobber "$work"/*.sig "$work/latest.json"
 echo "Signatures and latest.json are on the draft."
 
-# 5. Publishing makes the tag, reaches installed copies and rebuilds the site.
+# 5. Publishing makes the tag and reaches installed copies; then the site is
+# deployed from here so its download links follow.
 read -r -p "Publish v$v to everyone now? [y/N] " answer
 if [ "$answer" != y ] && [ "$answer" != Y ]; then
   echo "Left as a signed draft. Publish later with: gh release edit v$v -R $repo --draft=false --latest"
@@ -76,3 +77,4 @@ if [ "$answer" != y ] && [ "$answer" != Y ]; then
 fi
 gh release edit "v$v" -R "$repo" --draft=false --latest >/dev/null
 echo "Published: https://github.com/$repo/releases/tag/v$v"
+bash scripts/deploy-site.sh || echo "The site didn't update; run scripts/deploy-site.sh again from main."

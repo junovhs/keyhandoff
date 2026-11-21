@@ -1,25 +1,25 @@
-name: deploy-site
-# Builds keyhandoff.dev and deploys it to Cloudflare whenever the site, or the app
-# styles and art the site draws its mock windows with, change on main.
+name: site
+# Checks keyhandoff.dev still builds whenever the site, or the app styles and
+# art the site draws its mock windows with, change. It doesn't deploy: the
+# owner does, from their own computer, with scripts/deploy-site.sh, so the
+# repository holds no Cloudflare credential (ADR 0005).
 on:
   push:
     branches: [main]
-    paths:
-      - 'site/**'
-      - 'src/styles.css'
-      - 'src/art-paths.ts'
-      - '.github/workflows/deploy-site.yml'
+    paths: ['site/**', 'src/styles.css', 'src/art-paths.ts', '.github/workflows/site.yml']
+  pull_request:
+    paths: ['site/**', 'src/styles.css', 'src/art-paths.ts', '.github/workflows/site.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-site
+  group: site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -37,7 +37,3 @@ jobs:
       - run: npm run build
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npx wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 160d0b3e0853c977c068cfca57526f34

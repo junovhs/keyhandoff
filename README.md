@@ -249,7 +249,7 @@ See [the typing implementation notes](docs/typing.md) for the native interface a
 <summary><b>Release</b></summary>
 <br>
 
-Set `version` in `src-tauri/Cargo.toml` and add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md). Once both are on `main`, [the release workflow](.github/workflows/release.yml) builds the Windows installer, `.deb` and AppImage and drafts a release with `SHA256SUMS`. CI never holds the updater key: the owner signs the draft offline and publishes it with `scripts/sign-release.sh`, which also writes the updater's `latest.json`, and publishing rebuilds keyhandoff.dev so its download links follow. See [docs/releasing.md](docs/releasing.md). The only repository secret is `CLOUDFLARE_SITE_DEPLOY_HOOK`.
+Set `version` in `src-tauri/Cargo.toml` and add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md). Once both are on `main`, [the release workflow](.github/workflows/release.yml) builds the Windows installer, `.deb` and AppImage and drafts a release with `SHA256SUMS`. CI never holds the updater key: the owner signs the draft offline and publishes it with `scripts/sign-release.sh`, which also writes the updater's `latest.json`, then deploys keyhandoff.dev from the owner's computer so its download links follow. See [docs/releasing.md](docs/releasing.md). The repository holds no secrets.
 
 </details>
 
