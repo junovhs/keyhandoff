@@ -210,9 +210,8 @@ const INCIDENTS = [
     </header>
 
     <section class="wrap" id="blind-spot">
-      <h2 class="big-q rv">29 million new secrets turned up in public code in 2025.</h2>
-      <p class="stat-source rv">Source: <a href="https://www.gitguardian.com/state-of-secrets-sprawl-report-2026">GitGuardian, The State of Secrets Sprawl 2026</a>. See also {INCIDENTS.map((n, i) => <>{i ? (i === INCIDENTS.length - 1 ? " and " : ", ") : ""}<a href={n.href}>{n.name}</a></>)}.</p>
-      <p class="pivot rv">KeyHandoff keeps yours safe <span class="pearl-text">from the moment it&rsquo;s made.</span></p>
+      <h2 class="big-q rv">29 million new secrets turned up in public code in 2025. <br /><span class="pearl-text">KeyHandoff keeps yours safe from the moment it&rsquo;s made.</span></h2>
+      <p class="stat-source rv">Source: <a href="https://www.gitguardian.com/state-of-secrets-sprawl-report-2026">GitGuardian, The State of Secrets Sprawl 2026</a></p>
       <!-- How a key is born safe. The finished picture is there at once: made on
            Stripe, caught off the clipboard, sealed in the vault, every automatic check
            ticked. scripts/birth.ts replays it whenever it comes into view: a cursor
@@ -224,7 +223,6 @@ const INCIDENTS = [
             <span class="bt-label">Secret key</span>
             <div class="bt-field"><code data-bt-val>sk_live_51Nq8vTz<span>••••••••••••</span></code><span class="bt-copy" data-bt-copy><Clipboard size={14} />Copy</span></div>
           </div>
-          <p class="bt-say"><b>Made</b> on your provider&rsquo;s page.</p>
         </div>
         <div class="bt-col">
           <div class="bt-clip">
@@ -234,9 +232,9 @@ const INCIDENTS = [
             <span class="bt-clip-state"><span class="full"><code>sk_live_51N…</code></span><span class="empty">Wiped</span></span>
           </div>
           <ul class="bt-checks">
-            <li class="c1"><Check size={16} />Checked nothing is watching</li>
-            <li class="c2"><Check size={16} />Caught your one copy</li>
-            <li class="c3"><Check size={16} />Wiped it, and its history</li>
+            <li class="c1"><Check size={16} />Nothing watching</li>
+            <li class="c2"><Check size={16} />Caught</li>
+            <li class="c3"><Check size={16} />Wiped</li>
           </ul>
         </div>
         <div class="bt-col">
@@ -248,7 +246,7 @@ const INCIDENTS = [
             <span class="born-at" data-born-at></span>
           </div>
           <ul class="bt-checks">
-            <li class="c4"><Check size={16} />Sealed, never shown again</li>
+            <li class="c4"><Check size={16} />Sealed</li>
           </ul>
         </div>
         <span class="bt-key"></span>

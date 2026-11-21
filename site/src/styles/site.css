@@ -157,8 +157,8 @@ html:not(.js) .hv-cursor { display: none; }
 .bt-clip-state .full { opacity: 0; }
 .bt-clip-state .full code { font: 500 13px var(--mono); color: var(--text); padding: 3px 7px; border-radius: 6px; background: rgba(216, 209, 255, .12); }
 .bt-clip-state .empty { color: var(--accent-ink); font-weight: 600; }
-.bt-checks { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.bt-checks li { display: flex; align-items: center; gap: 10px; font-size: 17px; color: var(--text); transition: opacity .3s, color .3s; white-space: nowrap; }
+.bt-checks { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 18px; margin: 0; padding: 0; list-style: none; }
+.bt-checks li { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 500; color: var(--text); transition: opacity .3s, color .3s; white-space: nowrap; }
 .bt-checks li svg { flex-shrink: 0; padding: 3px; box-sizing: content-box; border-radius: 50%; background: var(--pearl); color: var(--on-pearl, #0d0b14); transition: transform .3s var(--ease); }
 /* The vault. */
 .bt-vault { padding: 16px; gap: 6px; }
@@ -169,7 +169,8 @@ html:not(.js) .hv-cursor { display: none; }
 .bt-new { background: rgba(216, 209, 255, .08); color: var(--accent-ink); }
 .bt-new code { color: var(--text); }
 .bt-sealed { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--pearl); color: var(--on-pearl, #0d0b14); font-size: 11px; font-weight: 600; }
-.born-at { position: absolute; right: -40px; top: -46px; width: 130px; height: 130px; pointer-events: none; }
+.born-at { position: absolute; right: -96px; top: 50%; width: 120px; height: 120px; margin-top: -60px; pointer-events: none; }
+@media (max-width: 1000px) { .born-at { right: 50%; top: auto; bottom: -150px; margin: 0 -60px 0 0; } }
 /* The replay. */
 .birth.bt-run:not(.k2) [data-bt-val] { opacity: 0; }
 .birth.bt-run:not(.k3) .bt-clip-state .empty, .birth.bt-run.k4 .bt-clip-state .full { opacity: 0; }
@@ -239,7 +240,7 @@ h3 { margin: 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font
 .sub { margin: 0; color: var(--text-2); font-size: 18px; max-width: 66ch; }
 
 /* who can read it */
-.big-q { max-width: none; margin: 0 0 14px; text-align: center; font-size: clamp(30px, 3.9vw, 48px); line-height: 1.12; }
+.big-q { max-width: none; margin: 0 0 14px; text-align: center; font-size: clamp(28px, 2.8vw, 42px); line-height: 1.18; }
 .big-q em { font-style: normal; color: var(--text-2); }
 .big-q code { font: inherit; color: var(--exposed); }
 .readers { position: relative; display: grid; grid-template-columns: 1fr 180px 1fr; grid-template-rows: repeat(3, 1fr); gap: 0 9%; align-items: center; min-height: 500px; }
@@ -738,7 +739,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 
 /* The pearl as text: the one accent, as in the app. */
 .pearl-text { background: var(--pearl); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.stat-source { margin: 0 0 24px; text-align: center; font-size: 14px; color: var(--text-3); }
+.stat-source { margin: 0 0 44px; text-align: center; font-size: 14px; color: var(--text-3); }
 .stat-source a { color: var(--text-2); }
 @media (max-width: 720px) { .stat-source { margin-bottom: 20px; } }
 .download.primary .dl-meta { color: rgba(13, 11, 20, .62); }
@@ -977,3 +978,5 @@ html.js .rv.in { opacity: 1; transform: none; }
   .kp-key.alive .kp-body { transition: none; }
   .sc-lines line, .sc-tunnel { animation: none !important; }
 }
+.big-q .pearl-text { display: block; margin-top: .12em; }
+@media (min-width: 900px) { .big-q .pearl-text { white-space: nowrap; } }

@@ -2,7 +2,7 @@
 // resting state. Each time it comes into view this replays it: a cursor clicks
 // Create secret key and the key is born out of the new value; Copy; Safe Copy
 // catches the one copy (it had already checked nothing was watching), wipes the
-// clipboard and its history; the key flies into the vault and is sealed.
+// clipboard and its history; the key flies into the vault and is sealed. It loops.
 // While it plays, the page's travelling key (keypath.ts) waits hidden at the vault.
 
 const birth = document.querySelector<HTMLElement>("[data-birth]");
@@ -50,12 +50,24 @@ if (birth && !reduced) {
     later(2850, () => step(3)); // caught: the one copy
     later(3700, () => step(4)); // wiped, history too
     later(4200, () => { key.style.transform = at(q(".bt-new"), 0.06, 0.5); });
-    later(4800, () => { step(5); key.classList.remove("show"); }); // sealed, never shown
-    later(5600, () => { birth.classList.remove("bt-run"); step(0); document.documentElement.classList.remove("birth-hold"); });
+    later(4800, () => { step(5); key.style.transform = at(q("[data-born-at]")); }); // sealed, never shown
+    // Rest on the finished picture, the key by the vault, then play again.
+    later(5600, () => { birth.classList.remove("bt-run"); step(0); cursor.classList.remove("show"); });
+    later(9000, () => { key.classList.remove("show"); later(300, play); });
   };
 
+  // As soon as any of it shows, the travelling key steps aside for this one, so
+  // the replay never opens with a key already in the vault. It loops while in view;
+  // once the section is gone the travelling key takes over from the vault.
+  let played = false;
   new IntersectionObserver(([e]) => {
-    if (e.isIntersecting) play();
-    else { clear(); birth.classList.remove("bt-run"); step(0); key.className = "bt-key"; cursor.classList.remove("show"); document.documentElement.classList.remove("birth-hold"); }
-  }, { threshold: 0.55 }).observe(birth);
+    if (e.intersectionRatio === 0) {
+      clear(); played = false;
+      birth.classList.remove("bt-run"); step(0); key.className = "bt-key"; cursor.classList.remove("show");
+      document.documentElement.classList.remove("birth-hold");
+      return;
+    }
+    if (!played) document.documentElement.classList.add("birth-hold");
+    if (!played && e.intersectionRatio >= 0.5) { played = true; play(); }
+  }, { threshold: [0, 0.5] }).observe(birth);
 }

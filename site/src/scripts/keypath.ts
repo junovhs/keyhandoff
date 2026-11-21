@@ -347,7 +347,6 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
   layout();
   // The key is there whenever its birthplace is on screen, so the picture reads
   // at once. The cursor clicking Copy only plays over it, each time it comes into view.
-  root.classList.add("born");
   key.classList.add("alive");
   if (!reduced) new IntersectionObserver(([e]) => stageEl.classList.toggle("go", e.isIntersecting), { threshold: 0.6 }).observe(stageEl);
 }
