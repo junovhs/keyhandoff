@@ -8,7 +8,7 @@ import Tile from "../components/Tile.astro";
 import AppIcon from "../components/AppIcon.astro";
 import AppPages from "../components/AppPages.astro";
 import AppGlyph from "../components/AppGlyph.astro";
-import { ArrowUpRight, Crown, FileInput, FolderOpen, IdCard, KeyRound, Plus, Search, Send, Settings, SquareTerminal, UserRound, Vault } from "@lucide/astro";
+import { ArrowUpRight, Clipboard, Crown, FileKey, Folder, Mail, MessageSquare, FileInput, FolderOpen, IdCard, KeyRound, Plus, Search, Send, Settings, SquareTerminal, UserRound, Vault } from "@lucide/astro";
 import appCss from "../../../src/styles.css?raw";
 import { scopeAppCss } from "../lib/app-css.mjs";
 import { getLatestRelease, formatSize, ALL_RELEASES } from "../lib/releases.mjs";
@@ -160,7 +160,7 @@ const INCIDENTS = [
               <div class="top"><AppIcon name="shield" /><b>Send a key</b><span>for Ann</span></div>
               <div class="safe-body">
                 <div class="safe-stage"><AppPages mark="lock" /><h2 class="display">Sealed</h2><p class="sub">Only Ann&rsquo;s computer can open it.</p></div>
-                <div class="below"><div class="file-row"><div class="chip"><AppIcon name="file" /><span class="mono">Key for Ann.handoff</span></div><button class="btn primary" tabindex="-1" data-hv-copyfile>Copy</button></div></div>
+                <div class="below"><div class="file-row"><div class="chip grab" data-hv-file><AppIcon name="file" /><span class="mono">Key for Ann.handoff</span></div><button class="btn primary" tabindex="-1" data-hv-copyfile>Copy</button></div></div>
               </div>
             </div>
             <div class="sheet hv hv-program">
@@ -187,6 +187,15 @@ const INCIDENTS = [
             </div>
           </div>
         </div>
+        <!-- Where a sealed key can go: drag it into a chat or an email, save it to a
+             folder, or copy it as text. The cursor uses a different one each loop. -->
+        <ul class="hv-tray">
+          <li data-hv-to="chat"><MessageSquare size={20} /><span>Teams or Slack</span></li>
+          <li data-hv-to="mail"><Mail size={20} /><span>Email</span></li>
+          <li data-hv-to="folder"><Folder size={20} /><span>Save to a folder</span></li>
+          <li data-hv-to="clip"><Clipboard size={20} /><span>Copy as text</span></li>
+        </ul>
+        <span class="hv-ghost"><FileKey size={15} />Key for Ann.handoff</span>
         <svg class="hv-cursor" viewBox="0 0 16 22" width="26" height="36"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
 

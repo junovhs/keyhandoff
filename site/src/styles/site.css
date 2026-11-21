@@ -103,6 +103,15 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .hv-cursor.show { opacity: 1; }
 .hv-cursor.press path { transform: scale(.85); transform-origin: 2px 2px; }
 html:not(.js) .hv-cursor { display: none; }
+/* Where a sealed key can go, beside the window while it's sealed. */
+.hv-tray { position: absolute; right: calc(100% + 28px); top: 50%; translate: 12px -50%; display: grid; gap: 10px; width: 190px; margin: 0; padding: 0; list-style: none; opacity: 0; transition: opacity .35s var(--ease), translate .45s var(--ease); pointer-events: none; }
+.hero-app[data-hv="sealed"] .hv-tray { opacity: 1; translate: 0 -50%; }
+.hv-tray li { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--raised); color: var(--text-2); font-size: 14px; font-weight: 500; transition: border-color .3s, background .3s, color .3s, box-shadow .3s; }
+.hv-tray li.hit { color: var(--text); border-color: rgba(216, 209, 255, .7); background: #17161c; box-shadow: 0 0 0 4px rgba(216, 209, 255, .12), 0 0 30px rgba(216, 209, 255, .25); }
+.hv-ghost { position: absolute; left: 0; top: 0; z-index: 4; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; background: var(--pearl); color: var(--on-pearl, #0d0b14); font: 500 12.5px var(--mono); white-space: nowrap; box-shadow: 0 14px 30px rgba(0, 0, 0, .55); opacity: 0; pointer-events: none; transition: transform .8s cubic-bezier(.45, 0, .2, 1), opacity .25s; }
+.hv-ghost.show { opacity: 1; }
+@media (max-width: 1100px) { .hv-tray { display: none; } }
+
 /* The bullet being shown lights up; the others stay readable. */
 .points li { transition: color .35s, opacity .35s; }
 .points:has(li.on) li:not(.on) { color: var(--text-2); }
