@@ -13,8 +13,8 @@ import appCss from "../../../src/styles.css?raw";
 import { scopeAppCss } from "../lib/app-css.mjs";
 import { getLatestRelease, formatSize, ALL_RELEASES } from "../lib/releases.mjs";
 
-const title = "KeyHandoff: safe secrets, free for everyone";
-const description = "Secrets leak by the millions, almost always in the handling. KeyHandoff keeps API keys out of chats, files and stray programs, from the provider’s page to your code and your team. Free and open source. No servers, no accounts.";
+const title = "KeyHandoff: the open source secrets manager";
+const description = "The free, open source secrets manager. Save, use and share API keys without anyone ever seeing them. Programs and AI agents use keys without holding them, and KeyHandoff asks you before an agent gets one. No servers, no accounts.";
 const GITHUB = "https://github.com/junovhs/keyhandoff";
 // Null until the first release; then the end of the page offers its installers.
 const release = await getLatestRelease();
@@ -96,8 +96,14 @@ const INCIDENTS = [
 
     <header class="wrap hero">
       <div class="hero-copy">
-        <h1>Secrets leak <br />by the <span class="pearl-text">millions.</span></h1>
-        <p class="lede"><strong>Almost never because encryption broke.</strong> A key gets pasted in a chat, left in a <code>.env</code> file, lifted off a laptop. KeyHandoff takes the handling away, from the provider&rsquo;s page to your code and your team. Free and open source, for everyone.</p>
+        <span class="hero-pill">Free for everyone · No servers, no accounts</span>
+        <h1>The open source <br /><span class="pearl-text">secrets manager.</span></h1>
+        <p class="lede">Save, use and share API keys without anyone ever seeing them. KeyHandoff keeps each key safe for its whole life.</p>
+        <ul class="points">
+          <li><Icon name="key" size={20} /><span><b>Save, use and share keys safely.</b> From the provider&rsquo;s page to your code to your teammate, a key is never left out in plain sight.</span></li>
+          <li><Icon name="terminal" size={20} /><span><b>Your programs use keys without holding them.</b> They get a stand-in. The real key goes in only on the way to its own server.</span></li>
+          <li><Icon name="bot" size={20} /><span><b>It knows when an AI agent is asking.</b> Claude Code or Codex can&rsquo;t use a key until you say yes.</span></li>
+        </ul>
         <div class="cta">
           <a class="btn primary" href="#download"><Icon name="down" />Download</a>
           <a class="btn secondary" href={GITHUB}>See the code <Icon name="out" /></a>

@@ -663,3 +663,9 @@ html.js .rv.in { opacity: 1; transform: none; }
 .stat-source a { color: var(--text-2); }
 @media (max-width: 720px) { .stat-source { margin-bottom: 20px; } }
 .download.primary .dl-meta { color: rgba(13, 11, 20, .62); }
+.hero-pill { display: inline-flex; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--text); background: linear-gradient(var(--ground), var(--ground)) padding-box, var(--pearl-line) border-box; border: 1px solid transparent; }
+.points { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 14px; max-width: 52ch; }
+.points li { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; line-height: 1.5; color: var(--text-2); }
+.points li b { color: var(--text); font-weight: 600; }
+.points .icon { margin-top: 2px; color: var(--accent-ink); }
+@media (min-width: 1001px) { .hero h1 { font-size: clamp(40px, 4.9vw, 64px); } }
