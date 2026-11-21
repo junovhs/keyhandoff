@@ -80,37 +80,43 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .trust li:last-child { border-right: 0; }
 .trust .icon { color: var(--accent-ink); }
 
-/* The key's birthplace. A provider-style "Create secret key" button is
-   pressed, and keypath.ts brings the key to life where it was. */
-.birth { position: relative; justify-self: center; width: min(100%, 460px); aspect-ratio: 1; display: grid; place-items: center; }
-.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .2), rgba(196, 236, 230, .06) 55%, transparent 75%); }
-.gen-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--text); font-size: 16px; font-weight: 600; box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
-html:not(.js) .gen-btn, html:not(.js) .gen-cursor { display: none; }
-/* keypath.ts adds .go: the button is pressed, lights up, and gives way to the key. */
-html.js .halo { opacity: 0; }
-.birth.go .halo { animation: birth-halo 1s var(--ease) 1.05s forwards; }
-.birth.go .gen-btn { animation: gen-press .9s var(--ease) .6s forwards; }
-/* A full-size pointer glides in from below right, its tip lands on the button, and it clicks. */
-.gen-cursor { position: absolute; left: 50%; top: 50%; margin: -2px 0 0 18px; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; transform: translate(120px, 140px); pointer-events: none; }
-.birth.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
+/* The key's birthplace: the real vault window. keypath.ts adds .go, a cursor
+   presses Add a key, the new row slides in, and the key comes to life in front of it. */
+.hero-app { position: relative; justify-self: end; width: min(100%, 420px); }
+.kh.hero-win { max-width: none; height: 580px; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
+.hero-win .vault-actions { position: relative; }
+.hero-win .search input { pointer-events: none; }
+.born-at { position: absolute; left: -200px; top: 190px; width: 220px; height: 220px; pointer-events: none; }
+.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
+.hero-win .fresh { background: rgba(216, 209, 255, .06); }
+.hero-win .fresh .ledger-key { color: #1a1625; background: var(--pearl); border-color: transparent; }
+.hero-app.go .hero-win .fresh { animation: row-flash 1.2s var(--ease) .75s; }
+.hero-app.go .add { animation: add-press .6s var(--ease) .6s; }
+@keyframes row-flash { 20% { background: rgba(216, 209, 255, .22); } }
+@keyframes add-press { 30% { transform: scale(.95); box-shadow: 0 0 0 4px rgba(216, 209, 255, .18), 0 0 36px rgba(216, 209, 255, .4); } }
+/* A full-size pointer glides in from below right, its tip lands on Add a key, and it clicks. */
+.gen-cursor { position: absolute; left: 22%; top: 50%; z-index: 3; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; }
+html:not(.js) .gen-cursor { display: none; }
+.hero-app.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
 @keyframes gen-cursor {
-  0% { opacity: 0; transform: translate(120px, 140px); }
+  0% { opacity: 0; transform: translate(110px, 150px); }
   15% { opacity: 1; }
   40% { transform: translate(0, 0); }
   46% { transform: translate(0, 0) scale(.85); }
   52% { transform: translate(0, 0); opacity: 1; }
-  100% { transform: translate(40px, 60px); opacity: 0; }
+  100% { transform: translate(40px, 70px); opacity: 0; }
 }
-@keyframes gen-press {
-  0% { transform: none; }
-  20% { transform: scale(.94); background: #2a2a30; border-color: rgba(216, 209, 255, .8); box-shadow: 0 0 0 4px rgba(216, 209, 255, .15), 0 0 40px rgba(216, 209, 255, .35); }
-  45% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(.6); opacity: 0; }
-}
-@keyframes birth-halo { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  html.js .gen-btn, html.js .gen-cursor { display: none; }
-  html.js .halo { animation: none; opacity: 1; }
+  html.js .gen-cursor { display: none; }
+}
+
+/* Each section fills the screen; scripts/pager.ts turns them like pages. */
+@media (min-width: 900px) and (min-height: 620px) {
+  .hero, section.wrap { min-height: calc(100svh - 96px); }
+  .hero, section.wrap, body > footer, .keypath { translate: 0 var(--bend, 0); }
+  .springing :is(.hero, section.wrap, body > footer, .keypath) { transition: translate .35s cubic-bezier(.2, .9, .3, 1.2); }
+  .hero { padding: 24px 0; align-content: center; }
+  section.wrap { display: flex; flex-direction: column; justify-content: center; padding: 40px 0; }
 }
 
 /* A pointer cursor some scenes move around. */
@@ -552,7 +558,8 @@ html.js .rv.in { opacity: 1; transform: none; }
   .lede, .sub { font-size: 17px; }
   .downloads { grid-template-columns: 1fr; }
   .points li { font-size: 17px; }
-  .birth { width: min(100%, 320px); }
+  .hero-app { width: min(100%, 380px); }
+  .born-at { display: none; }
   .readers { grid-template-columns: minmax(0, 1fr); }
   section { padding: 72px 0; }
   .count { font-size: 12px; }
@@ -659,7 +666,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 
 /* ===== The key and its scenes (scripts/keypath.ts) =====
    The KeyHandoff logo key, solid and holographic, is the page's character.
-   It's born in the hero's halo (.birth), follows the reader down, and when they
+   It's born in front of the hero's vault window (.born-at), follows the reader down, and when they
    pause at a section it docks into that section's scene (.scene) and plays
    it: the director sets data-step and cumulative classes s1, s2... on the
    scene, and moves the key through poses given in % of the scene. Scrolling

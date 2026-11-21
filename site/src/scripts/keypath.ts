@@ -1,5 +1,5 @@
 // The key is the homepage's character. A solid holographic KeyHandoff logo
-// key is born large in the hero's halo ([data-born]) and follows the reader
+// key starts large in front of the hero's vault window ([data-born-at]) and follows the reader
 // down on long swooping curves. When the reader pauses at a section, the key
 // docks into that section's scene ([data-scene]) and acts it out: each step
 // sets data-step and cumulative classes (s1, s2...) on the scene for its
@@ -87,7 +87,9 @@ const scenes = [...document.querySelectorAll<HTMLElement>("[data-scene]")].filte
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (bornAt && home && scenes.length) init(bornAt, home);
 
-function init(bornEl: HTMLElement, homeEl: HTMLElement) {
+function init(stageEl: HTMLElement, homeEl: HTMLElement) {
+  // The hero plays its press on [data-born]; the key itself appears at [data-born-at].
+  const bornEl = stageEl.querySelector<HTMLElement>("[data-born-at]") ?? stageEl;
   const root = document.createElement("div");
   root.className = "keypath";
   root.setAttribute("aria-hidden", "true");
@@ -350,14 +352,9 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
   addEventListener("load", layout);
   lastScroll = performance.now();
   layout();
-  // Birth: the hero's Create secret key button is pressed (CSS on .birth),
-  // then a flash, rings and sparks, and the key spins into being.
-  // The button stays in view a moment first, so the reader sees what gets pressed.
-  setTimeout(() => {
-    bornEl.classList.add("go");
-    setTimeout(() => {
-      root.classList.add("born");
-      key.classList.add("alive");
-    }, reduced ? 0 : 1050); // the cursor clicks at 0.6s, the key arrives as the button gives way
-  }, reduced ? 0 : 400);
+  // The key is there from the first frame, in front of the vault window, so the
+  // hero reads at once. The cursor pressing Add a key only plays on top of it.
+  root.classList.add("born");
+  key.classList.add("alive");
+  if (!reduced) setTimeout(() => stageEl.classList.add("go"), 300);
 }
