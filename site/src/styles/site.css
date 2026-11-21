@@ -126,56 +126,87 @@ html:not(.js) .hv-cursor { display: none; }
 .points li.on .icon { color: var(--accent-ink); }
 .hero-win .fresh .ledger-key { color: #1a1625; background: var(--pearl); border-color: transparent; }
 
-/* The key's birth, under the 29 million: the provider's page on the left, the key
-   in the middle, Safe Copy on the right. All there at once; keypath.ts adds .go
-   when it comes into view and the cursor clicks Copy over the finished picture. */
-.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 320px; align-items: center; width: 100%; max-width: 1000px; height: 390px; margin: 0 auto; }
-.bp-provider { position: relative; gap: 12px; }
-.bp-made { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--accent-ink); }
-.bp-val code { display: block; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font: 500 13.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; }
-.bp-val code span { color: var(--text-3); }
-.bp-copy { align-self: flex-end; }
-/* The protected moment: a sheltered passage from the provider's page to Safe
-   Copy, still air around the key while it crosses. A sheen drifts through it. */
-.bp-flow { grid-column: 2; grid-row: 1; position: relative; height: 230px; margin: 0 -26px; border-radius: 999px; border: 1px solid transparent; overflow: hidden;
-  background: radial-gradient(60% 80% at 50% 50%, rgba(216, 209, 255, .1), transparent 70%) padding-box, linear-gradient(#060608, #060608) padding-box,
-    linear-gradient(90deg, rgba(216, 209, 255, .15), rgba(216, 209, 255, .55) 30%, rgba(196, 236, 230, .55) 70%, rgba(196, 236, 230, .15)) border-box;
-  box-shadow: 0 0 60px rgba(216, 209, 255, .08), inset 0 0 40px rgba(216, 209, 255, .05); }
-.bp-flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: linear-gradient(90deg, transparent, rgba(216, 209, 255, .35) 20%, rgba(196, 236, 230, .35) 80%, transparent); }
-.bp-flow::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .06) 48%, rgba(216, 209, 255, .1) 52%, transparent 65%); background-size: 250% 100%; animation: bp-sheen 4s var(--ease) infinite; }
-@keyframes bp-sheen { from { background-position: 120% 0; } to { background-position: -20% 0; } }
-.bp-provider, .kh.bp-safe { position: relative; z-index: 1; }
-.born-at { grid-column: 2; grid-row: 1; justify-self: center; width: 220px; height: 220px; position: relative; pointer-events: none; }
-.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
-.kh.bp-safe { grid-column: 3; max-width: none; width: 320px; height: 372px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04); }
-.bp-safe .safe { inset: 0; }
-.bp-safe .pages { width: 88px; height: 88px; }
-.bp-safe .safe-body { gap: 14px; }
-.bp-safe .safe-stage .sub { font-size: 16px; }
-.birthplace.go .bp-copy { animation: add-press .6s var(--ease) .6s; }
-@keyframes add-press { 30% { transform: scale(.93); box-shadow: 0 0 0 4px rgba(216, 209, 255, .18), 0 0 36px rgba(216, 209, 255, .4); } }
-/* A full-size pointer glides in from below right, its tip lands on Copy, and it clicks. */
-.gen-cursor { position: absolute; right: 22px; bottom: 6px; z-index: 3; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; }
+/* How a key is born safe, under the 29 million: made on Stripe, caught off the
+   clipboard by Safe Copy, sealed in the vault, every automatic step ticked. With no
+   classes this is the finished picture. scripts/birth.ts replays it: .bt-run
+   resets it, then k1..k5 (cumulative) bring each beat back while .bt-key flies. */
+.pivot { margin: 0 0 40px; text-align: center; font-size: clamp(22px, 2.3vw, 30px); font-weight: 600; letter-spacing: -.03em; color: var(--text); }
+.birth { position: relative; display: grid; grid-template-columns: 350px 260px 350px; justify-content: space-between; align-items: start; width: 100%; max-width: 1120px; margin: 0 auto; }
+.bt-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; justify-items: center; align-content: start; }
+.bt-col:nth-child(2) { padding-top: 10px; }
+.bt-stripe, .bt-vault { position: relative; width: 100%; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--raised); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); }
+.bt-stripe-top { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.bt-stripe-top span:not(.bt-create) { color: var(--text-3); }
+.bt-create { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; height: 30px; padding: 0 10px; border-radius: 8px; background: #fff; color: #0a0a0b; font-size: 13.5px; font-weight: 600; }
+.bt-label { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.bt-field { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 5px 0 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); }
+.bt-field code { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; font: 500 14.5px/1.6 var(--mono); color: var(--text); transition: opacity .3s; }
+.bt-field code span { color: var(--text-3); }
+.bt-copy { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 7px; background: var(--raised); border: 1px solid var(--line-strong); font-size: 12.5px; font-weight: 600; color: var(--text); }
+.bt-say { margin: 0; font-size: 18px; color: var(--text-2); }
+.bt-say b { color: var(--text); }
+/* The clipboard, inside Safe Copy's still air: a pearl ring while it watches. */
+.bt-clip { position: relative; display: grid; place-items: center; gap: 10px; width: 220px; height: 220px; border-radius: 50%; color: var(--text-2); }
+.bt-ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid transparent; background: radial-gradient(closest-side, rgba(216, 209, 255, .14), rgba(216, 209, 255, .03) 70%, transparent) padding-box, linear-gradient(var(--ground), var(--ground)) padding-box, var(--pearl-line) border-box; }
+.bt-ring::after { content: ""; position: absolute; inset: -10px; border-radius: 50%; border: 1px dashed rgba(216, 209, 255, .35); animation: bt-spin 24s linear infinite; }
+@keyframes bt-spin { to { rotate: 1turn; } }
+.bt-clip > svg { position: relative; margin-top: 18px; }
+.bt-clip-badge { position: absolute; top: -12px; left: 50%; translate: -50% 0; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: var(--ground); border: 1px solid var(--line-strong); font-size: 12px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.bt-clip-state { position: relative; display: grid; margin-bottom: 30px; font-size: 15px; }
+.bt-clip-state > span { grid-area: 1 / 1; justify-self: center; transition: opacity .25s; }
+.bt-clip-state .full { opacity: 0; }
+.bt-clip-state .full code { font: 500 13px var(--mono); color: var(--text); padding: 3px 7px; border-radius: 6px; background: rgba(216, 209, 255, .12); }
+.bt-clip-state .empty { color: var(--accent-ink); font-weight: 600; }
+.bt-checks { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.bt-checks li { display: flex; align-items: center; gap: 10px; font-size: 17px; color: var(--text); transition: opacity .3s, color .3s; white-space: nowrap; }
+.bt-checks li svg { flex-shrink: 0; padding: 3px; box-sizing: content-box; border-radius: 50%; background: var(--pearl); color: var(--on-pearl, #0d0b14); transition: transform .3s var(--ease); }
+/* The vault. */
+.bt-vault { padding: 16px; gap: 6px; }
+.bt-vault-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 17px; color: var(--accent-ink); }
+.bt-vault-top b { color: var(--text); }
+.bt-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px; border-radius: 8px; color: var(--text-3); overflow: hidden; transition: height .45s var(--ease), opacity .35s, background .5s; }
+.bt-row code { font: 500 14px var(--mono); color: var(--text-2); }
+.bt-new { background: rgba(216, 209, 255, .08); color: var(--accent-ink); }
+.bt-new code { color: var(--text); }
+.bt-sealed { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--pearl); color: var(--on-pearl, #0d0b14); font-size: 11px; font-weight: 600; }
+.born-at { position: absolute; right: -40px; top: -46px; width: 130px; height: 130px; pointer-events: none; }
+/* The replay. */
+.birth.bt-run:not(.k2) [data-bt-val] { opacity: 0; }
+.birth.bt-run:not(.k3) .bt-clip-state .empty, .birth.bt-run.k4 .bt-clip-state .full { opacity: 0; }
+.birth.bt-run.k3:not(.k4) .bt-clip-state .full { opacity: 1; }
+.birth.bt-run.k3:not(.k4) .bt-clip-state .empty { opacity: 0; }
+.birth.bt-run:not(.k1) .c1, .birth.bt-run:not(.k3) .c2, .birth.bt-run:not(.k4) .c3, .birth.bt-run:not(.k5) .c4 { opacity: .25; }
+.birth.bt-run:not(.k5) .bt-new { height: 0; opacity: 0; }
+.birth.bt-run.k5 .bt-new { animation: bt-flash 1.4s var(--ease); }
+@keyframes bt-flash { 0%, 25% { background: rgba(216, 209, 255, .3); } }
+.birth.bt-run.k5 .bt-shield { animation: shield-glow 2s var(--ease); }
+.birth.bt-run.k3:not(.k4) .bt-ring { box-shadow: 0 0 50px rgba(216, 209, 255, .35); }
+.bt-press { animation: hv-press .26s var(--ease); }
+/* The key itself, born out of the new value and flown along the way. */
+.bt-key { position: absolute; left: 0; top: 0; z-index: 4; width: 46px; height: 75px; margin: -37px 0 0 -23px; pointer-events: none; opacity: 0;
+  -webkit-mask: var(--key-mask) center / contain no-repeat; mask: var(--key-mask) center / contain no-repeat;
+  background: linear-gradient(125deg, #ddd5ff, #c4ece6 20%, #f4d4e8 40%, #d3cdff 60%, #9df6e0 80%, #ddd5ff) 0 0 / 300% 300%;
+  filter: drop-shadow(0 0 10px rgba(216, 209, 255, .7)); transition: transform .7s cubic-bezier(.45, 0, .2, 1), opacity .3s; }
+.bt-key.show { opacity: 1; }
+.bt-key.pop { animation: bt-pop .6s var(--ease); }
+@keyframes bt-pop { 0% { scale: .2; filter: drop-shadow(0 0 30px #fff) brightness(2); } 60% { scale: 1.2; } }
+.bt-cursor { position: absolute; left: 0; top: 0; right: auto; bottom: auto; z-index: 5; transition: transform .6s cubic-bezier(.45, 0, .2, 1), opacity .3s; }
+.bt-cursor.show { opacity: 1; }
+.bt-cursor.press path { transform: scale(.85); transform-origin: 2px 2px; }
+html.birth-hold .kp-key { visibility: hidden; }
+/* Shared by the replays: a full-size pointer. */
+.gen-cursor { position: absolute; z-index: 3; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; }
 html:not(.js) .gen-cursor { display: none; }
-.birthplace.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
-@keyframes gen-cursor {
-  0% { opacity: 0; transform: translate(110px, 120px); }
-  15% { opacity: 1; }
-  40% { transform: translate(0, 0); }
-  46% { transform: translate(0, 0) scale(.85); }
-  52% { transform: translate(0, 0); opacity: 1; }
-  100% { transform: translate(40px, 70px); opacity: 0; }
-}
 @media (max-width: 1000px) {
-  .birthplace { grid-template-columns: 1fr; height: auto; gap: 24px; justify-items: center; }
-  .bp-provider { width: min(100%, 320px); }
-  .bp-flow { display: none; }
-  .born-at, .kh.bp-safe { grid-column: 1; grid-row: auto; }
-  .born-at { height: 140px; }
+  .birth { grid-template-columns: minmax(0, 320px); justify-content: center; gap: 44px; }
+  .bt-checks li { white-space: normal; }
+  .bt-stripe-top { font-size: 15px; }
+  .bt-create { font-size: 12px; padding: 0 8px; }
+  .bt-field code { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html.js .gen-cursor { display: none; }
-  .bp-flow::after { animation: none; }
+  .bt-ring::after { animation: none; }
 }
 
 /* Each section fills the screen; scripts/pager.ts turns them like pages. */
