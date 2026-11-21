@@ -255,6 +255,44 @@ pub(crate) mod tests {
         assert!(options(&args("--profile")).is_err());
     }
 
+    /// PAR-10: when the Node.js hook can't get its list of destinations to
+    /// refuse, it refuses plain sends instead of letting them through.
+    #[test]
+    fn the_node_hook_refuses_plain_sends_when_keyhandoff_cant_answer() {
+        use std::io::Read;
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let got = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut buf = Vec::new();
+            let _ = s.read_to_end(&mut buf);
+            buf
+        });
+        let nowhere = if cfg!(windows) {
+            format!(r"\\.\pipe\keyhandoff-test-nowhere-{port}")
+        } else {
+            std::env::temp_dir().join(format!("keyhandoff-test-nowhere-{port}")).display().to_string()
+        };
+        let hook = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("hook/keyhandoff_node.cjs");
+        let script = format!(
+            "const s = require('node:net').connect({port}, '127.0.0.1', () => s.write('secret-ish', (e) => console.log(e ? 'refused' : 'sent')));\
+             s.on('error', () => {{}}); s.on('close', () => console.log('closed'));"
+        );
+        let out = std::process::Command::new("node")
+            .arg("--require")
+            .arg(&hook)
+            .arg("-e")
+            .arg(&script)
+            .env("KEYHANDOFF_HOOK", format!("{}:{nowhere}", "0".repeat(64)))
+            .output()
+            .expect("node");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(stdout.contains("refused"), "the send went through: {stdout} {}", String::from_utf8_lossy(&out.stderr));
+        assert!(got.join().unwrap().is_empty(), "the server got bytes");
+    }
+
     #[derive(Clone, Default)]
     struct Capture(Arc<Mutex<Vec<u8>>>);
     impl Write for Capture {

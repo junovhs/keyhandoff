@@ -47,35 +47,53 @@ function install(token, socketPath) {
   const net = require("node:net");
   const tls = require("node:tls");
 
-  /** One request to KeyHandoff; resolves to its reply, every line. */
+  /**
+   * One request to KeyHandoff; resolves to its reply, every line. An error
+   * at the end of the exchange (Windows reports the server closing its pipe
+   * end as one) doesn't throw away what already arrived: the caller checks
+   * the reply is whole.
+   */
   function ask(line) {
     return new Promise((resolve) => {
       const chunks = [];
       const conn = net.connect(socketPath, () => conn.end(line));
       conn[OWN] = true;
       conn.on("data", (d) => chunks.push(d));
+      conn.on("error", () => {});
       conn.on("close", () => resolve(Buffer.concat(chunks).toString("latin1")));
-      conn.on("error", () => resolve(""));
     });
   }
 
   let config;
-  /** The run's placeholders and the destinations to refuse, asked for once. */
+  /**
+   * The run's placeholders and the destinations to refuse, asked for once.
+   * A whole reply ends with an empty line. Without one after a few tries
+   * the hook can't know what to refuse, so it refuses every network write
+   * (`failed`) rather than let a blocked destination through.
+   */
   function load() {
-    config ??= ask(`{"hook":"${token}"}\n`).then((reply) => {
-      const swaps = [];
-      const blocked = [];
-      for (const line of reply.split("\n")) {
-        if (line.startsWith("!")) blocked.push(line.slice(1).toLowerCase());
-        else if (line.includes("\t")) {
-          const [placeholder, hosts, ca] = line.split("\t");
-          swaps.push({ placeholder, hosts: hosts.split(",").filter(Boolean), ca: ca || null, forms: forms(placeholder) });
+    config ??= (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, 50 * attempt));
+        const reply = await ask(`{"hook":"${token}"}\n`);
+        if (reply !== "\n" && !reply.endsWith("\n\n")) continue;
+        const swaps = [];
+        const blocked = [];
+        for (const line of reply.split("\n")) {
+          if (line.startsWith("!")) blocked.push(line.slice(1).toLowerCase());
+          else if (line.includes("\t")) {
+            const [placeholder, hosts, ca] = line.split("\t");
+            swaps.push({ placeholder, hosts: hosts.split(",").filter(Boolean), ca: ca || null, forms: forms(placeholder) });
+          }
         }
+        return { swaps, blocked };
       }
-      return { swaps, blocked };
-    });
+      config = undefined; // ask again on the next write
+      return { failed: true, swaps: [], blocked: [] };
+    })();
     return config;
   }
+  const UNREACHABLE = "KeyHandoff couldn't be asked which destinations to refuse";
 
   // Encoded forms, as the C hook knows them: base64 three levels deep at
   // each offset (the first three, one level, can be swapped), URL-safe
@@ -200,8 +218,12 @@ function install(token, socketPath) {
       cb(error);
       socket.destroy(error);
     };
-    load().then(async ({ swaps, blocked }) => {
+    load().then(async ({ failed, swaps, blocked }) => {
       const destination = (socket.servername || socket._host || socket.remoteAddress || "an unknown server").toLowerCase();
+      if (failed) {
+        say("couldn't check, so refused a connection to", destination);
+        return refuse(UNREACHABLE);
+      }
       if (blocked.includes(destination)) {
         say("refused a connection to", destination);
         return refuse("KeyHandoff refused this destination");
@@ -243,13 +265,19 @@ function install(token, socketPath) {
     const pieces = writev
       ? data.map((c) => (typeof c.chunk === "string" ? Buffer.from(c.chunk, c.encoding) : Buffer.from(c.chunk)))
       : [typeof data === "string" ? Buffer.from(data, encoding) : Buffer.from(data)];
-    load().then(async ({ swaps, blocked }) => {
-      const destination = `${socket.remoteAddress}:${socket.remotePort}`;
+    // Where it's going, read now: once the write waits on KeyHandoff, the
+    // peer may be gone and the address with it.
+    const destination = `${socket.remoteAddress}:${socket.remotePort}`;
+    load().then(async ({ failed, swaps, blocked }) => {
       const refuse = (message) => {
         const error = Object.assign(new Error(message), { code: "ECONNREFUSED" });
         cb(error);
         socket.destroy(error);
       };
+      if (failed) {
+        say("couldn't check, so refused a connection to", destination);
+        return refuse(UNREACHABLE);
+      }
       if (blocked.includes(destination)) {
         say("refused a connection to", destination);
         return refuse("KeyHandoff refused this destination");
