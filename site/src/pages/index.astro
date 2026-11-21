@@ -224,30 +224,35 @@ const INCIDENTS = [
             <div class="bt-field"><code data-bt-val>sk_live_51Nq8vTz<span>••••••••••••</span></code><span class="bt-copy" data-bt-copy><Clipboard size={14} />Copy</span></div>
           </div>
         </div>
-        <div class="bt-col">
-          <div class="bt-clip">
-            <span class="bt-ring"></span>
-            <span class="bt-clip-badge"><Shield size={13} />Safe Copy</span>
-            <Clipboard size={52} strokeWidth={1.4} />
-            <span class="bt-clip-state"><span class="full"><code>sk_live_51N…</code></span><span class="empty">Wiped</span></span>
+        <div class="kh bt-win">
+          <div class="app">
+            <header class="titlebar"><span class="brand"><svg class="logo" viewBox="28 8 64 104" height="22" width="13.5"><path fill-rule="evenodd" fill="currentColor" d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z" /></svg></span><span class="name">KeyHandoff</span></header>
+            <main class="stage">
+              <div class="vault-heading">
+                <svg class="vault-mark bt-shield" viewBox="0 0 32 32" width="34" height="34"><defs><linearGradient id="bt-vault-pearl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ddd5ff" /><stop offset=".4" stop-color="#c4ece6" /><stop offset=".75" stop-color="#f4d4e8" /><stop offset="1" stop-color="#d3cdff" /></linearGradient></defs><path d="M16 3.5 26 7.25v7.6c0 6.4-4.2 11.3-10 13.65C10.2 26.15 6 21.25 6 14.85v-7.6Z" fill="none" stroke="url(#bt-vault-pearl)" stroke-width="1.7" stroke-linejoin="round" /><circle cx="16" cy="14.25" r="2.4" fill="#f2f0fa" /></svg>
+                <div><h1 class="display sm">Your secure keys</h1><p class="lede">3 keys sealed on this machine</p></div>
+              </div>
+              <div class="btn-row vault-actions"><button class="btn primary grow" tabindex="-1"><Plus size={17} />Add a key</button><button class="btn secondary grow" tabindex="-1"><Send size={16} />Send a key</button></div>
+              <div class="vault"><div class="search"><Search size={17} /><input type="search" placeholder="Search 3 keys" tabindex="-1" disabled /></div>
+              <div class="key-ledger">
+                <div class="ledger-row fresh bt-new"><span class="ledger-key"><KeyRound size={15} /></span><span class="ledger-text"><span class="ledger-name mono">STRIPE_SECRET_KEY</span></span></div>
+                <div class="ledger-row"><span class="ledger-key"><KeyRound size={15} /></span><span class="ledger-text"><span class="ledger-name mono">OPENAI_API_KEY</span></span></div>
+                <div class="ledger-row"><span class="ledger-key"><KeyRound size={15} /></span><span class="ledger-text"><span class="ledger-name mono">GITHUB_TOKEN</span></span></div>
+              </div></div>
+              <footer class="identity-dock"><button class="pocket-card" tabindex="-1"><IdCard /><span>Share my card<small>.handoff file</small></span><ArrowUpRight size={14} /></button><strong class="dock-name">Ben</strong><button class="dock-settings" tabindex="-1"><Settings /></button></footer>
+            </main>
+            <div class="safe bw bw-listen">
+              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
+              <div class="safe-body"><div class="safe-stage"><AppPages mark="none" /><h2 class="display">Copy your key</h2><p class="sub">Listening for one copy</p></div>
+                <div class="below"><ul class="checks"><li class="ok"><Check size={15} />No clipboard apps running</li><li class="ok"><Check size={15} />Nothing has read your clipboard</li></ul></div></div>
+            </div>
+            <div class="safe bw bw-caught">
+              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
+              <div class="safe-body"><div class="safe-stage"><AppPages mark="check" /><h2 class="display">Caught</h2><p class="sub">Clipboard wiped.</p></div>
+                <div class="below"><ul class="checks"><li class="ok"><Check size={15} />Gone from clipboard history</li><li class="ok"><Check size={15} />Sealing it in your vault</li></ul></div></div>
+            </div>
           </div>
-          <ul class="bt-checks">
-            <li class="c1"><Check size={16} />Nothing watching</li>
-            <li class="c2"><Check size={16} />Caught</li>
-            <li class="c3"><Check size={16} />Wiped</li>
-          </ul>
-        </div>
-        <div class="bt-col">
-          <div class="bt-vault">
-            <div class="bt-vault-top"><svg class="bt-shield" viewBox="0 0 32 32" width="26" height="26"><path d="M16 3.5 26 7.25v7.6c0 6.4-4.2 11.3-10 13.65C10.2 26.15 6 21.25 6 14.85v-7.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /><circle cx="16" cy="14.25" r="2.4" fill="currentColor" /></svg><b>Your vault</b></div>
-            <div class="bt-row bt-new"><KeyRound size={15} /><code>STRIPE_SECRET_KEY</code><span class="bt-sealed"><Lock size={12} />Sealed</span></div>
-            <div class="bt-row"><KeyRound size={15} /><code>OPENAI_API_KEY</code></div>
-            <div class="bt-row"><KeyRound size={15} /><code>GITHUB_TOKEN</code></div>
-            <span class="born-at" data-born-at></span>
-          </div>
-          <ul class="bt-checks">
-            <li class="c4"><Check size={16} />Sealed</li>
-          </ul>
+          <span class="born-at" data-born-at></span>
         </div>
         <span class="bt-key"></span>
         <svg class="gen-cursor bt-cursor" viewBox="0 0 16 22" width="30" height="40"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
