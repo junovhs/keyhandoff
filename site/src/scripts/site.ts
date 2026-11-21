@@ -1,4 +1,4 @@
-// Scroll reveals, the hero's .env search, the blind-spot diagram, Just you, the team handoff and how teams work. Everything here
+// Scroll reveals, the blind-spot diagram, Just you, the team handoff and how teams work. Everything here
 // is decoration: without it the page shows its full content.
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -14,8 +14,6 @@ const reveal = new IntersectionObserver(
 );
 document.querySelectorAll(".rv").forEach((el) => (reduced ? el.classList.add("in") : reveal.observe(el)));
 
-const scan = document.getElementById("scan");
-if (scan) runScan(scan);
 const solo = document.getElementById("solo-stage");
 // Safe Copy listening, caught, the vault, then KeyHandoff typing the key in.
 if (solo) runFrames(solo, [["0", 2200], ["1", 3000], ["2", 2400], ["3", 6400]], "3", soloTyping(solo));
@@ -124,99 +122,6 @@ function runReaders(root: HTMLElement) {
   seen.observe(root);
 }
 
-/** Plays the hero in four steps: close up on typing .env, pull back to the keys it finds, a cursor
- *  turns KeyHandoff on, and the keys become pointers. It plays once when seen, then on Replay. */
-function runScan(root: HTMLElement) {
-  const q = document.getElementById("scan-q")!;
-  const rows = Array.from(root.querySelectorAll<HTMLElement>(".row"));
-  const values = Array.from(root.querySelectorAll<HTMLElement>(".v"));
-  const toggle = document.getElementById("kh-switch")!;
-  const cursor = document.getElementById("scan-cursor")!;
-  let run = 0;
-
-  // Positions are inside the window, so the hero's tilt carries the cursor with it.
-  const moveCursor = (x: number, y: number) => (cursor.style.transform = `translate(${x}px, ${y}px)`);
-  const parkCursor = () => {
-    cursor.style.transition = "none";
-    moveCursor(toggle.offsetLeft + toggle.offsetWidth + 40, toggle.offsetTop + 120);
-    void cursor.offsetWidth; // apply the jump before the transition comes back
-    cursor.style.transition = "";
-  };
-
-  const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
-
-  function setState(state: State, animate: boolean) {
-    root.dataset.state = state;
-    for (const v of values) {
-      const text = state === "safe" ? v.dataset.pointer! : v.dataset.key!;
-      if (animate) scramble(v, text);
-      else {
-        rolling.set(v, text);
-        v.textContent = text;
-      }
-    }
-  }
-
-  async function play(id: number) {
-    setState("exposed", false);
-    toggle.classList.remove("on");
-    cursor.classList.remove("show");
-    parkCursor();
-    root.classList.remove("found");
-    rows.forEach((r) => r.classList.remove("on"));
-    q.textContent = "";
-    root.classList.add("zoom", "pressing");
-    await wait(800);
-    if (id !== run) return;
-    root.classList.remove("pressing");
-    for (const ch of ".env") {
-      q.textContent += ch;
-      await wait(220);
-      if (id !== run) return;
-    }
-    await wait(600);
-    if (id !== run) return;
-    root.classList.remove("zoom");
-    await wait(700);
-    for (const r of rows) {
-      if (id !== run) return;
-      r.classList.add("on");
-      await wait(90);
-    }
-    root.classList.add("found");
-    await wait(2200);
-    if (id !== run) return;
-    cursor.classList.add("show");
-    moveCursor(toggle.offsetLeft + toggle.offsetWidth - 22, toggle.offsetTop + toggle.offsetHeight / 2);
-    await wait(1000);
-    if (id !== run) return;
-    toggle.classList.add("press");
-    await wait(140);
-    toggle.classList.remove("press");
-    toggle.classList.add("on");
-    setState("safe", true);
-    await wait(900);
-    cursor.classList.remove("show");
-  }
-
-  rows.forEach((r) => r.classList.add("on"));
-  root.classList.add("found");
-  if (reduced) {
-    // No zoom or typing: the keys, then the pointers.
-    setTimeout(() => {
-      toggle.classList.add("on");
-      setState("safe", false);
-    }, 3000);
-    return;
-  }
-  document.getElementById("scan-again")!.addEventListener("click", () => void play(++run));
-  const start = new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting) return;
-    start.disconnect();
-    void play(++run);
-  }, { threshold: 0.4 });
-  start.observe(root);
-}
 
 const GLYPHS = "abcdefghijkmnpqrstuvwxyz0123456789";
 const rolling = new WeakMap<HTMLElement, string>();

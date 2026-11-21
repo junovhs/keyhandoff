@@ -80,65 +80,33 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .trust li:last-child { border-right: 0; }
 .trust .icon { color: var(--accent-ink); }
 
-/* hero: the search */
-.scan-stage { position: relative; min-width: 0; perspective: 1500px; }
-.scan-stage::before, .scan-stage::after { content: ""; position: absolute; inset: -16% -18% -4% 34%; z-index: -1; filter: blur(30px); transition: opacity .9s var(--ease); }
-.scan-stage::before { background: radial-gradient(closest-side at 62% 42%, rgba(216, 209, 255, .22), rgba(196, 236, 230, .08) 72%, transparent); }
-.scan-stage::after { background: radial-gradient(closest-side at 62% 42%, rgb(216, 209, 255), rgba(216, 209, 255, .37) 72%, transparent); opacity: 0; }
-[data-state="safe"].scan-stage::before { opacity: 0; }
-[data-state="safe"].scan-stage::after { opacity: 1; }
-.scan { margin: 0; border: 1px solid #333338; border-radius: 16px; background: rgba(10, 10, 11, .94); box-shadow: 0 30px 90px rgba(0, 0, 0, .7), -8px 0 0 -1px #1a1a1d; overflow: hidden; transform: rotateY(-7deg) rotateX(2deg); transform-origin: 60% 50%; transition: border-color .9s var(--ease), box-shadow .9s var(--ease); }
-[data-state="safe"] .scan { border-color: rgba(216, 209, 255, .48); box-shadow: 0 30px 90px rgba(0, 0, 0, .7), 0 0 70px rgba(216, 209, 255, .18), -8px 0 0 -1px #1a1a1d; }
-.win-bar { display: flex; align-items: center; gap: 7px; padding: 14px 16px 6px; }
-.replay-again { display: flex; align-items: center; gap: 6px; height: 30px; margin-left: auto; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: none; color: var(--text-2); font: 500 13px var(--font); cursor: pointer; white-space: nowrap; }
-.replay-again:hover { color: var(--text); background: var(--raised); }
-.win-bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3f; }
-.win-bar i:nth-child(2) { background: #3a3a3f; }
-.win-bar i:nth-child(3) { background: #3a3a3f; }
-/* Step one zooms in on the search box; the frame keeps its size while the view inside pulls back. */
-.scan-body { transform-origin: 0 0; transition: transform 1.1s var(--ease); }
-.zoom .scan-body { transform: translate(-6px, 4px) scale(1.65); }
-.scan-top { display: flex; align-items: center; justify-content: space-between; margin: 0 12px; padding: 8px 6px; }
-.win-title { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 500; }
-.win-title .icon { color: var(--accent-ink); }
-.caps { display: flex; gap: 4px; }
-kbd { font-size: 11px; font-weight: 500; color: #dedede; background: var(--raised); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 7px; transition: transform .12s, color .12s, border-color .12s, background .12s; }
-.pressing kbd { transform: translateY(1px); border-bottom-width: 1px; color: #fff; background: var(--accent); border-color: var(--accent); }
-.scan-field { display: flex; align-items: center; gap: 10px; height: 44px; margin: 0 12px 6px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--ground); color: var(--text-2); min-width: 0; }
-.q { display: flex; align-items: center; font-size: 15px; font-weight: 500; color: var(--text); min-width: 16px; }
-.caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; background: var(--accent-ink); animation: blink 1s steps(2) infinite; }
-.found .q .caret { opacity: 0; animation: none; }
-.count { margin-left: auto; font-size: 13px; font-weight: 500; white-space: nowrap; opacity: 0; transition: opacity .3s; }
-.count > span { display: none; align-items: center; gap: 6px; }
-[data-state="exposed"] .count-bad { display: flex; color: var(--exposed); }
-[data-state="safe"] .count-ok { display: flex; color: var(--accent-ink); }
-.found .count, html:not(.js) .count { opacity: 1; }
-.scan-rows { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 18px; }
-.row { font: 400 15px/1.55 var(--mono); }
-html.js .row:not(.on) { opacity: 0; transform: translateY(4px); }
-html.js .row { transition: opacity .25s, transform .25s var(--ease); }
-.row.path { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 12.5px; margin-bottom: 5px; }
-.row.var { display: flex; align-items: center; padding: 3px 0; white-space: nowrap; overflow: hidden; }
-.row .k { color: #d0d0d0; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.row .v { flex-shrink: 0; margin-left: 8px; padding: 0 6px; border-radius: 4px; transition: color .5s, background .5s, box-shadow .5s; }
-[data-state="exposed"] .v { color: var(--exposed); background: var(--exposed-bg); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
-[data-state="safe"] .v { color: var(--accent-ink); background: var(--safe-bg); box-shadow: inset 0 0 0 1px rgba(216, 209, 255, .15); }
-.scan-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px; border-top: 1px solid var(--line); }
-.scan { position: relative; }
-.scan-say { font-size: 15px; font-weight: 600; min-width: 0; }
-/* The KeyHandoff switch the cursor turns on. */
-.kh-switch { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 10px 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 14px; font-weight: 600; transition: border-color .3s, transform .12s; }
-.kh-switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--line-strong); transition: background .3s var(--ease); }
-.kh-switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .3s var(--ease); }
-.kh-switch.on { border-color: var(--accent); }
-.kh-switch.on i { background: var(--accent-grad); }
-.kh-switch.on i::after { transform: translateX(14px); }
-.kh-switch.press { transform: scale(.96); }
+/* The key's birthplace. keypath.ts draws the key at its centre; this holds
+   the halo, the plain key it's born from, and the characters left over. */
+.birth { position: relative; justify-self: center; width: min(100%, 460px); aspect-ratio: 1; display: grid; place-items: center; }
+.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .26), rgba(196, 236, 230, .1) 55%, transparent 78%); }
+.halo::after { content: ""; position: absolute; inset: 15%; border-radius: 50%; border: 1px solid rgba(216, 209, 255, .22); box-shadow: 0 0 40px rgba(216, 209, 255, .1) inset; }
+.plain-string { position: relative; display: flex; font: 500 24px/1 var(--mono); color: #e6e6ea; white-space: nowrap; }
+.plain-string i { font-style: normal; display: block; width: 1ch; text-align: center; }
+.mote { position: absolute; left: var(--x); top: var(--y); font: 500 15px/1 var(--mono); font-style: normal; color: #d8d1ff; opacity: 0; }
+/* With script: the string types in, collapses into the key, the halo wakes, and the leftovers twinkle. */
+html.js .plain-string i { opacity: 0; animation: birth-type .25s calc(.2s + var(--i) * .045s) forwards, birth-in .5s cubic-bezier(.6, 0, .9, .4) calc(1.25s + (8 - var(--i)) * .012s) forwards; }
+html.js .halo { opacity: 0; transform: scale(.7); animation: birth-halo 1.2s var(--ease) 1.65s forwards, halo-breathe 6s ease-in-out 2.9s infinite; }
+html.js .mote { animation: mote 5.5s ease-in-out calc(2.4s + var(--d)) infinite; }
+html:not(.js) .plain-string { display: none; }
+@keyframes birth-type { to { opacity: 1; } }
+@keyframes birth-in { from { opacity: 1; } to { opacity: 0; transform: translateX(calc((7.5 - var(--i)) * 1ch)) scale(.2); filter: blur(2px); } }
+@keyframes birth-halo { to { opacity: 1; transform: none; } }
+@keyframes halo-breathe { 50% { transform: scale(1.04); opacity: .8; } }
+@keyframes mote { 0%, 100% { opacity: 0; transform: translateY(4px); } 45% { opacity: .55; } 70% { opacity: .2; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  html.js .plain-string { display: none; }
+  html.js .halo { animation: none; opacity: 1; transform: none; }
+  html.js .mote { animation: none; opacity: .35; }
+}
+
+/* A pointer cursor some scenes move around. */
 .cursor { position: absolute; left: 0; top: 0; z-index: 5; fill: #fff; stroke: #000; stroke-width: 1.2; opacity: 0; pointer-events: none; transition: transform .9s var(--ease), opacity .3s; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .6)); }
 .cursor.show { opacity: 1; }
-.scan-say > span { display: none; align-items: center; gap: 7px; }
-.found[data-state="exposed"] .say-bad { display: flex; color: var(--exposed); }
-[data-state="safe"] .say-ok { display: flex; color: var(--accent-ink); }
 .segmented { display: grid; grid-template-columns: auto auto; gap: 4px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 10px; }
 .segmented button { height: 34px; padding: 0 14px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font: 500 13.5px var(--font); cursor: pointer; transition: color .15s, background .15s; }
 .segmented button:hover { color: var(--text); }
@@ -544,8 +512,6 @@ html.js .rv.in { opacity: 1; transform: none; }
   .hide-s { display: none; }
   .hero, .split { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .hero { padding-top: 28px; }
-  .scan { transform: none; }
-  .scan-stage::before, .scan-stage::after { inset: -10% 0 0 20%; }
   section { padding: 88px 0; }
   .hero { row-gap: 56px; }
   .solo-stage { height: 860px; }
@@ -576,9 +542,10 @@ html.js .rv.in { opacity: 1; transform: none; }
   .nav .btn.small { width: 38px; padding: 0; }
   .lede, .sub { font-size: 17px; }
   .downloads { grid-template-columns: 1fr; }
-  .scan-rows { min-height: 0; }
-  .row { font-size: 12px; }
-  .row .k { flex: 0 1 auto; max-width: 42%; }
+  .points li { font-size: 17px; }
+  .birth { width: min(100%, 320px); }
+  .plain-string { font-size: 17px; }
+  .mote { font-size: 13px; }
   .readers { grid-template-columns: minmax(0, 1fr); }
   section { padding: 72px 0; }
   .count { font-size: 12px; }
@@ -664,10 +631,9 @@ html.js .rv.in { opacity: 1; transform: none; }
 @media (max-width: 720px) { .stat-source { margin-bottom: 20px; } }
 .download.primary .dl-meta { color: rgba(13, 11, 20, .62); }
 .hero-pill { display: inline-flex; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--text); background: linear-gradient(var(--ground), var(--ground)) padding-box, var(--pearl-line) border-box; border: 1px solid transparent; }
-.points { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 14px; max-width: 52ch; }
-.points li { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; line-height: 1.5; color: var(--text-2); }
-.points li b { color: var(--text); font-weight: 600; }
-.points .icon { margin-top: 2px; color: var(--accent-ink); }
+.points { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 14px; }
+.points li { display: flex; gap: 14px; align-items: center; font-size: 19px; font-weight: 500; line-height: 1.35; color: var(--text); }
+.points .icon { flex: none; color: var(--accent-ink); }
 @media (min-width: 1001px) { .hero h1 { font-size: clamp(40px, 4.9vw, 64px); } }
 
 /* AI agents: the same approval card as Use it, plus the session's commands. */
@@ -686,13 +652,13 @@ html.js .rv.in { opacity: 1; transform: none; }
 
 /* ===== The key and its scenes (scripts/keypath.ts) =====
    The KeyHandoff logo key, solid and holographic, is the page's character.
-   It's born beside the hero buttons, follows the reader down, and when they
+   It's born in the hero's halo (.birth), follows the reader down, and when they
    pause at a section it docks into that section's scene (.scene) and plays
    it: the director sets data-step and cumulative classes s1, s2... on the
    scene, and moves the key through poses given in % of the scene. Scrolling
    again stops the scene and the key comes along. */
 @property --holo { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-.keypath { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; z-index: 6; }
+.keypath { position: absolute; left: 0; top: 0; width: 100%; overflow: clip; pointer-events: none; z-index: 6; }
 .kp-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .kp-tail { fill: none; stroke-linecap: round; }
 .kp-tail.t1 { stroke: url(#kp-pearl); stroke-width: 2; opacity: .18; }
@@ -702,10 +668,10 @@ html.js .rv.in { opacity: 1; transform: none; }
 .kp-spin { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .kp-body { position: absolute; left: -26px; top: -42px; width: 52px; height: 84px; transition: filter .5s; filter: drop-shadow(0 0 6px rgba(255, 255, 255, .55)) drop-shadow(0 0 22px rgba(216, 209, 255, .7)) drop-shadow(0 0 60px rgba(196, 236, 230, .35)); }
 .kp-shape, .kp-glint { position: absolute; inset: 0; -webkit-mask: var(--key-mask) center / contain no-repeat; mask: var(--key-mask) center / contain no-repeat; transition: opacity .5s; }
-.kp-shape { background: conic-gradient(from var(--holo), #ddd5ff, #c4ece6, #f4d4e8, #d3cdff, #9df6e0, #e3b5eb, #ddd5ff); animation: kp-holo 4s linear infinite; }
+.kp-shape { background: linear-gradient(125deg, #ddd5ff, #c4ece6 20%, #f4d4e8 40%, #d3cdff 60%, #9df6e0 80%, #ddd5ff) 0 0 / 300% 300%; animation: kp-holo 9s ease-in-out infinite alternate; }
 .kp-glint { background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .95) 48%, transparent 60%) -120% 0 / 220% 100% no-repeat; animation: kp-glint 2.8s var(--ease) infinite; mix-blend-mode: screen; }
 .kp-plain { position: absolute; inset: 0; -webkit-mask: var(--key-mask) center / contain no-repeat; mask: var(--key-mask) center / contain no-repeat; background: #d9d9de; opacity: 0; transition: opacity .5s; }
-@keyframes kp-holo { to { --holo: 360deg; } }
+@keyframes kp-holo { to { background-position: 100% 100%; } }
 @keyframes kp-glint { 0%, 40% { background-position: 140% 0; } 100% { background-position: -120% 0; } }
 /* Looks: plain (a bare key in a file), stand-in (a grey copy), sealed (inside a pearl capsule). */
 .kp-key.plain .kp-plain { opacity: 1; }

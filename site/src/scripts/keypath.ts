@@ -1,5 +1,5 @@
 // The key is the homepage's character. A solid holographic KeyHandoff logo
-// key is born beside the hero buttons ([data-born]) and follows the reader
+// key is born large in the hero's halo ([data-born]) and follows the reader
 // down on long swooping curves. When the reader pauses at a section, the key
 // docks into that section's scene ([data-scene]) and acts it out: each step
 // sets data-step and cumulative classes (s1, s2...) on the scene for its
@@ -132,6 +132,14 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
     return { x: b.x + (b.w * k[0]) / 100, y: b.y + (b.h * k[1]) / 100 };
   };
   const scaleFor = () => (innerWidth < 760 ? 0.7 : 1);
+  // In the hero the key is the one thing to look at, sized to its halo.
+  const heroScale = () => (bornEl.offsetWidth * 0.44) / 84;
+  /** Travelling size: hero size at birth, shrinking to normal over the first half of the first leg. */
+  const travelScale = () => {
+    const t = Math.min(1, along / Math.max(1, (lens[1] ?? 1) * 0.5));
+    const e = 1 - (1 - t) ** 3;
+    return heroScale() + (scaleFor() - heroScale()) * e;
+  };
   // On narrow screens each scene keeps its 1040px layout and shrinks to fit.
   const DESIGN_W = 1040;
   const shrink = new Map<HTMLElement, number>();
@@ -156,7 +164,7 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
     const b = bornEl.getBoundingClientRect();
     const h = homeEl.getBoundingClientRect();
     pts = [
-      { x: Math.min(innerWidth - 60, b.right + 150), y: b.top + scrollY + b.height / 2 },
+      { x: b.left + b.width / 2, y: b.top + scrollY + b.height / 2 },
       ...scenes.map((s) => posePt(s, SCENES[s.dataset.scene!][0].k)),
       { x: h.left + h.width / 2, y: h.top + scrollY + h.height / 2 },
     ];
@@ -187,7 +195,7 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
     if (!cur.x) {
       along = target();
       const p = route.getPointAtLength(along);
-      Object.assign(cur, { x: p.x, y: p.y, r: 0, s: scaleFor() });
+      Object.assign(cur, { x: p.x, y: p.y, r: 0, s: travelScale() });
     }
     kick();
   }
@@ -289,7 +297,7 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
       const p = route.getPointAtLength(along);
       const q = route.getPointAtLength(Math.min(total, along + 2));
       const r = along >= total - 1 ? 0 : (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI - 90;
-      goal = { x: p.x, y: p.y, r, s: scaleFor() };
+      goal = { x: p.x, y: p.y, r, s: travelScale() };
     }
     setLook(wantLook);
     const ease = reduced ? 1 : playing ? 0.11 : 0.2;
@@ -335,9 +343,10 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
   addEventListener("load", layout);
   lastScroll = performance.now();
   layout();
-  // Birth: flash, rings and sparks, then the key spins into being.
+  // Birth: the plain key's characters collapse (CSS on .birth), then a flash,
+  // rings and sparks, and the key spins into being.
   setTimeout(() => {
     root.classList.add("born");
     key.classList.add("alive");
-  }, reduced ? 0 : 500);
+  }, reduced ? 0 : 1550);
 }

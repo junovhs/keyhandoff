@@ -32,11 +32,12 @@ const FOOTER: { title: string; links: [string, string][] }[] = [
   { title: "Project", links: [["GitHub", GITHUB], ["Releases", ALL_RELEASES], ["Report a vulnerability", `${GITHUB}/security`]] },
 ];
 
-// All sample values, shaped like real keys and truncated.
-const ENV_FILES = [
-  { path: "~/work/billing-api/.env", vars: [{ name: "STRIPE_SECRET_KEY", key: "sk_live_51Nq8vTz", pointer: "handoff:Stripe" }] },
-  { path: "~/work/report-bot/.env", vars: [{ name: "OPENAI_API_KEY", key: "sk-proj-Xk29fLm", pointer: "handoff:OpenAI" }] },
-  { path: "~/side/prototype/.env", vars: [{ name: "AWS_SECRET_KEY", key: "wJ8rTq0ZnB5y", pointer: "handoff:AWS" }] },
+// The plain key the hero's key is born from, shaped like a real one and truncated.
+const BIRTH_KEY = "sk_live_51Nq8vTz";
+// Leftover characters that twinkle in the halo: [char, x %, y %, delay s].
+const MOTES: [string, number, number, number][] = [
+  ["s", 18, 30, 0], ["k", 80, 22, 1.4], ["5", 86, 64, 2.6], ["N", 14, 70, 0.8],
+  ["q", 30, 88, 3.4], ["8", 70, 86, 2], ["v", 50, 10, 4.2], ["T", 92, 44, 3.1],
 ];
 
 // What each reader gets from a plain .env, and from one that holds pointers.
@@ -98,48 +99,23 @@ const INCIDENTS = [
       <div class="hero-copy">
         <span class="hero-pill">Free for everyone · No servers, no accounts</span>
         <h1>The open source <br /><span class="pearl-text">secrets manager.</span></h1>
-        <p class="lede">Save, use and share API keys without anyone ever seeing them. KeyHandoff keeps each key safe for its whole life.</p>
         <ul class="points">
-          <li><Icon name="key" size={20} /><span><b>Save, use and share keys safely.</b> From the provider&rsquo;s page to your code to your teammate, a key is never left out in plain sight.</span></li>
-          <li><Icon name="terminal" size={20} /><span><b>Your programs use keys without holding them.</b> They get a stand-in. The real key goes in only on the way to its own server.</span></li>
-          <li><Icon name="bot" size={20} /><span><b>It knows when an AI agent is asking.</b> Claude Code or Codex can&rsquo;t use a key until you say yes.</span></li>
+          <li><Icon name="key" size={22} />Save, use and share keys safely.</li>
+          <li><Icon name="terminal" size={22} />Your programs never hold the real key.</li>
+          <li><Icon name="bot" size={22} />AI agents have to ask you first.</li>
         </ul>
-        <div class="cta" data-born>
+        <div class="cta">
           <a class="btn primary" href="#download"><Icon name="down" />Download</a>
           <a class="btn secondary" href={GITHUB}>See the code <Icon name="out" /></a>
         </div>
       </div>
 
-      <div class="scan-stage" id="scan" data-state="exposed">
-        <figure class="scan">
-          <div class="win-bar"><i></i><i></i><i></i><button type="button" class="replay-again" id="scan-again"><Icon name="right" size={14} />Replay</button></div>
-          <div class="scan-body">
-          <div class="scan-top">
-            <span class="win-title"><Icon name="search" size={18} />Find in files</span>
-            <span class="caps" aria-hidden="true"><kbd>Ctrl</kbd><kbd>F</kbd></span>
-          </div>
-          <div class="scan-field">
-            <Icon name="search" size={18} />
-            <span class="q"><span id="scan-q">.env</span><i class="caret"></i></span>
-            <span class="count"><span class="count-bad"><Icon name="alert" size={15} />3 live keys</span><span class="count-ok"><Icon name="shield" size={15} />0 keys</span></span>
-          </div>
-          <div class="scan-rows" id="scan-rows">
-            {ENV_FILES.map((f) => (
-              <div class="group">
-                <div class="row path"><Icon name="file" />{f.path}</div>
-                {f.vars.map((v) => (
-                  <div class="row var"><span class="k">{v.name}=</span><span class="v" data-key={v.key} data-pointer={v.pointer}>{v.key}</span></div>
-                ))}
-              </div>
-            ))}
-          </div>
-          </div>
-          <div class="scan-foot">
-            <span class="scan-say" aria-live="polite"><span class="say-bad">Anyone can read these.</span><span class="say-ok">Now they&rsquo;re just pointers.</span></span>
-            <span class="kh-switch" id="kh-switch"><Logo height={18} />KeyHandoff<i></i></span>
-          </div>
-          <svg class="cursor" id="scan-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
-        </figure>
+      <!-- The key is born here: a plain key's characters stream in and collapse
+           into it (scripts/keypath.ts draws the key; this is its halo). -->
+      <div class="birth" data-born aria-hidden="true">
+        <span class="halo"></span>
+        <span class="plain-string">{BIRTH_KEY.split("").map((c, i) => <i style={`--i:${i}`}>{c}</i>)}</span>
+        {MOTES.map(([c, x, y, d]) => <i class="mote" style={`--x:${x}%;--y:${y}%;--d:${d}s`}>{c}</i>)}
       </div>
 
       <ul class="trust">
