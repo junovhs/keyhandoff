@@ -92,7 +92,7 @@ const INCIDENTS = [
       <div class="hero-copy">
         <span class="hero-pill">Free for everyone · No servers, no accounts</span>
         <h1>The open source <br /><span class="pearl-text">secrets manager.</span></h1>
-        <ul class="points">
+        <ul class="points" data-points>
           <li><Icon name="key" size={22} />Save, use and share keys safely.</li>
           <li><Icon name="terminal" size={22} />Your programs never hold the real key.</li>
           <li><Icon name="bot" size={22} />AI agents have to ask you first.</li>
@@ -103,8 +103,10 @@ const INCIDENTS = [
         </div>
       </div>
 
-      <!-- The real vault window, drawn with the app's own stylesheet (.kh). -->
-      <div class="hero-app" aria-hidden="true">
+      <!-- The real vault window, drawn with the app's own stylesheet (.kh). It reads
+           as it stands; scripts/hero.ts then has a cursor work it through each
+           bullet: save a key, send one, a program asks, an AI agent asks. -->
+      <div class="hero-app" data-hero-app aria-hidden="true">
         <div class="kh hero-win">
           <div class="app">
             <header class="titlebar">
@@ -113,12 +115,12 @@ const INCIDENTS = [
             </header>
             <main class="stage">
               <div class="vault-heading">
-                <svg class="vault-mark" viewBox="0 0 32 32" width="34" height="34"><defs><linearGradient id="hero-vault-pearl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ddd5ff" /><stop offset=".4" stop-color="#c4ece6" /><stop offset=".75" stop-color="#f4d4e8" /><stop offset="1" stop-color="#d3cdff" /></linearGradient></defs><path d="M16 3.5 26 7.25v7.6c0 6.4-4.2 11.3-10 13.65C10.2 26.15 6 21.25 6 14.85v-7.6Z" fill="none" stroke="url(#hero-vault-pearl)" stroke-width="1.7" stroke-linejoin="round" /><circle cx="16" cy="14.25" r="2.4" fill="#f2f0fa" /></svg>
+                <svg class="vault-mark" data-hv-shield viewBox="0 0 32 32" width="34" height="34"><defs><linearGradient id="hero-vault-pearl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ddd5ff" /><stop offset=".4" stop-color="#c4ece6" /><stop offset=".75" stop-color="#f4d4e8" /><stop offset="1" stop-color="#d3cdff" /></linearGradient></defs><path d="M16 3.5 26 7.25v7.6c0 6.4-4.2 11.3-10 13.65C10.2 26.15 6 21.25 6 14.85v-7.6Z" fill="none" stroke="url(#hero-vault-pearl)" stroke-width="1.7" stroke-linejoin="round" /><circle cx="16" cy="14.25" r="2.4" fill="#f2f0fa" /></svg>
                 <div><h1 class="display sm">Your secure keys</h1><p class="lede">4 keys sealed on this machine</p></div>
               </div>
               <div class="btn-row vault-actions">
-                <button class="btn primary grow add" tabindex="-1"><Plus size={17} />Add a key</button>
-                <button class="btn secondary grow" tabindex="-1"><Send size={16} />Send a key</button>
+                <button class="btn primary grow add" data-hv-add tabindex="-1"><Plus size={17} />Add a key</button>
+                <button class="btn secondary grow" data-hv-send tabindex="-1"><Send size={16} />Send a key</button>
               </div>
               <div class="tools-row">
                 <button class="quiet" tabindex="-1"><FolderOpen size={15} />Open file</button>
@@ -140,8 +142,52 @@ const INCIDENTS = [
                 <button class="dock-settings" tabindex="-1"><Settings /></button>
               </footer>
             </main>
+            <div class="safe hv hv-copy">
+              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
+              <div class="safe-body"><div class="safe-stage"><AppPages mark="none" /><h2 class="display">Copy your key</h2><p class="sub">From anywhere · 42s</p></div></div>
+            </div>
+            <div class="safe hv hv-caught">
+              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
+              <div class="safe-body">
+                <div class="safe-stage"><AppPages mark="check" /><h2 class="display">Caught</h2><p class="sub">Clipboard wiped.</p></div>
+                <div class="below">
+                  <span class="name-in">STRIPE_SECRET_KEY</span>
+                  <div class="keep-buttons"><button tabindex="-1"><AppIcon name="once" />Use once</button><button tabindex="-1"><AppIcon name="calendar" />Keep 30 days</button><button tabindex="-1" data-hv-keep><AppIcon name="forever" />Keep forever</button></div>
+                </div>
+              </div>
+            </div>
+            <div class="safe sealed hv hv-sealed">
+              <div class="top"><AppIcon name="shield" /><b>Send a key</b><span>for Ann</span></div>
+              <div class="safe-body">
+                <div class="safe-stage"><AppPages mark="lock" /><h2 class="display">Sealed</h2><p class="sub">Only Ann&rsquo;s computer can open it.</p></div>
+                <div class="below"><div class="file-row"><div class="chip"><AppIcon name="file" /><span class="mono">Key for Ann.handoff</span></div><button class="btn primary" tabindex="-1" data-hv-copyfile>Copy</button></div></div>
+              </div>
+            </div>
+            <div class="sheet hv hv-program">
+              <div class="head"><AppGlyph mark="key" size={52} /><div><span class="lede">A program wants a key</span><h2 class="display md">server.js</h2></div></div>
+              <div class="facts">
+                <div class="fact"><SquareTerminal size={17} strokeWidth={1.75} /><span class="mono">node server.js</span></div>
+                <div class="fact"><FolderOpen size={17} strokeWidth={1.75} /><span class="mono">~/code/shop</span></div>
+                <div class="fact on"><KeyRound size={17} strokeWidth={1.75} /><span>STRIPE_SECRET_KEY</span></div>
+              </div>
+              <p class="help">It gets a stand-in. The real key goes straight to api.stripe.com.</p>
+              <span class="grow-space"></span>
+              <div class="btn-row"><button class="btn secondary" tabindex="-1">Deny</button><button class="btn secondary" tabindex="-1">Allow once</button><button class="btn primary grow" tabindex="-1" data-hv-always>Always allow</button></div>
+            </div>
+            <div class="sheet hv hv-agent">
+              <div class="head"><AppGlyph mark="key" size={52} /><div><span class="lede">Claude Code wants a key</span><h2 class="display md">npm run dev</h2></div></div>
+              <div class="facts">
+                <div class="fact"><SquareTerminal size={17} strokeWidth={1.75} /><span class="mono">npm run dev</span></div>
+                <div class="fact"><FolderOpen size={17} strokeWidth={1.75} /><span class="mono">~/code/shop</span></div>
+                <div class="fact on"><KeyRound size={17} strokeWidth={1.75} /><span>OPENAI_API_KEY</span></div>
+              </div>
+              <p class="help">Nothing runs with your key until you answer.</p>
+              <span class="grow-space"></span>
+              <div class="btn-row"><button class="btn secondary" tabindex="-1">Deny</button><button class="btn secondary" tabindex="-1">Allow once</button><button class="btn primary grow" tabindex="-1" data-hv-session>Allow for 30 minutes</button></div>
+            </div>
           </div>
         </div>
+        <svg class="hv-cursor" viewBox="0 0 16 22" width="26" height="36"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
 
       <ul class="trust">
@@ -377,6 +423,7 @@ const INCIDENTS = [
       import "../scripts/site.ts";
       import "../scripts/keypath.ts";
       import "../scripts/pager.ts";
+      import "../scripts/hero.ts";
     </script>
   </body>
 </html>

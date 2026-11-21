@@ -84,7 +84,29 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .hero-app { position: relative; justify-self: end; width: min(100%, 420px); }
 .kh.hero-win { max-width: none; height: 580px; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
 .hero-win .search input { pointer-events: none; }
-.hero-win .fresh { background: rgba(216, 209, 255, .06); }
+/* hero.ts: the screens a cursor opens over the vault, one at a time. */
+.hero-win .hv { opacity: 0; visibility: hidden; transform: translateY(10px); transition: opacity .3s var(--ease), transform .4s var(--ease), visibility 0s .4s; }
+.hero-app[data-hv="copy"] .hv-copy, .hero-app[data-hv="caught"] .hv-caught, .hero-app[data-hv="sealed"] .hv-sealed,
+.hero-app[data-hv="program"] .hv-program, .hero-app[data-hv="agent"] .hv-agent { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.hero-win .safe-stage .pages { width: 130px; height: 130px; }
+.hero-win .ledger-row { transition: height .45s var(--ease), opacity .35s var(--ease), background .4s; }
+.hero-win .fresh.hv-hide { height: 0; opacity: 0; overflow: hidden; }
+.hero-win .fresh:not(.hv-hide) { animation: row-flash 1.6s var(--ease); }
+@keyframes row-flash { 0%, 30% { background: rgba(216, 209, 255, .2); } }
+/* The vault's shield lights up as the key goes in: locked safely. */
+.hero-win .vault-mark { transition: filter .3s; }
+.hero-win .vault-mark.hv-glow { animation: shield-glow 2s var(--ease); }
+@keyframes shield-glow { 0% { transform: scale(1); } 20% { transform: scale(1.35); filter: drop-shadow(0 0 10px rgba(216, 209, 255, .9)) drop-shadow(0 0 24px rgba(196, 236, 230, .6)); } 60% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(216, 209, 255, .6)); } }
+.hero-win .hv-press { animation: hv-press .26s var(--ease); }
+@keyframes hv-press { 50% { transform: scale(.94); box-shadow: 0 0 0 4px rgba(216, 209, 255, .2); } }
+.hv-cursor { position: absolute; left: 0; top: 0; z-index: 5; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; transition: transform .6s cubic-bezier(.45, 0, .2, 1), opacity .3s; }
+.hv-cursor.show { opacity: 1; }
+.hv-cursor.press path { transform: scale(.85); transform-origin: 2px 2px; }
+html:not(.js) .hv-cursor { display: none; }
+/* The bullet being shown lights up; the others stay readable. */
+.points li { transition: color .35s, opacity .35s; }
+.points:has(li.on) li:not(.on) { color: var(--text-2); }
+.points li.on .icon { color: var(--accent-ink); }
 .hero-win .fresh .ledger-key { color: #1a1625; background: var(--pearl); border-color: transparent; }
 
 /* The key's birth, under the 29 million: the provider's page on the left, the key
