@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon, Pages, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, type KeyView, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
+import { IdCard, KeyRound } from "lucide-react";
 
 /**
  * Safe Copy, shown in place of the home screen while it is on; Rust keeps the
@@ -50,7 +51,7 @@ export function SafeCopy({ view }: { view: View }) {
       </div>
       <div className="safe-body">
         <div className="safe-stage">
-          <Pages mark={mark} />
+          {state === "sealed" ? <KeyCard safe={safe} run={run} /> : <Pages mark={mark} />}
           <h2 className="display">{title}</h2>
           <p className="sub">{sub}</p>
         </div>
@@ -204,20 +205,27 @@ function freeName(label: string, keys: KeyView[]): string {
   return `${base} ${n}`;
 }
 
-function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
-  const [copied, setCopied] = useState(false);
+/**
+ * The sealed key as a card, like your own card on the home screen, carrying the
+ * key: the one thing you hand someone. Drag it into a chat, an email or a folder.
+ */
+function KeyCard({ safe, run }: { safe: SafeView; run: Run }) {
   const drag = useDragOut(() => void run(api.dragOut("sealed")));
   return (
+    <div className="card-file key-card" {...drag} title="Drag this key into a chat, an email or a folder">
+      <span className="key-card-mark"><IdCard size={30} strokeWidth={1.5} aria-hidden /><KeyRound size={15} strokeWidth={2.2} aria-hidden /></span>
+      <span><strong>{safe.for_name ? `Key for ${safe.for_name}` : "Sealed key"}</strong><small>{safe.file_name}</small></span>
+    </div>
+  );
+}
+
+function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
+  const [copied, setCopied] = useState(false);
+  return (
     <>
-      <div className="file-row">
-        <div className="chip grab" {...drag}>
-          <Icon name="file" />
-          <span className="mono">{safe.file_name}</span>
-        </div>
-        <button className={`btn ${safe.nearby ? "secondary" : "primary"}`} onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+      <button className={`btn ${safe.nearby ? "secondary" : "primary"}`} onClick={() => void run(api.copySealed().then(() => setCopied(true)))}>
+        {copied ? "Copied" : "Copy as text"}
+      </button>
       {safe.nearby && (
         <button className="btn primary" onClick={() => void run(api.sendNearby())}>
           Send to {safe.for_name}'s computer
@@ -228,7 +236,7 @@ function Sealed({ safe, run }: { safe: SafeView; run: Run }) {
           ? "Now paste it into your chat."
           : safe.for_team
             ? `Your key is filed under ${safe.for_name} too.`
-            : "The file is deleted when you close this."}
+            : "Drag the card into a chat, an email or a folder. The file is deleted when you close this."}
       </p>
       {safe.message && <p className="help center low">{safe.message}</p>}
     </>

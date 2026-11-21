@@ -444,6 +444,12 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .about-version span { color: var(--text-2); }
 .card-file { display: grid; justify-items: start; align-content: space-between; gap: 10px; width: min(320px, 100%); aspect-ratio: 1.586; border-radius: 14px; padding: 20px; cursor: grab; overflow-wrap: anywhere; }
 .card-file small { color: var(--text-2); }
+/* The sealed key, as a card that carries it: the ID mark with a key on it. */
+.key-card { width: min(250px, 100%); padding: 16px 18px; border-radius: 12px; text-align: left; margin-bottom: 6px; }
+.key-card-mark { position: relative; display: inline-grid; color: rgba(247, 246, 252, .9); }
+.key-card-mark svg:last-child { position: absolute; right: -9px; bottom: -6px; padding: 3px; box-sizing: content-box; border-radius: 50%; background: var(--pearl); color: var(--on-pearl); }
+.key-card strong { display: block; font-size: 17px; letter-spacing: -.02em; }
+.key-card small { display: block; margin-top: 3px; font: 11px var(--mono); color: rgba(247, 246, 252, .62); }
 .vault-dialog { width: min(360px, 92vw); background: #0e0e10; color: var(--text); border: 1px solid var(--hair-strong); border-radius: 12px; padding: 20px; box-shadow: 0 24px 60px #000d; }
 .vault-dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(2px); }
 .vault-dialog label { display: grid; gap: 7px; }

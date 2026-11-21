@@ -45,6 +45,8 @@ if (app && !reduced) {
     return [r.left - a.left + r.width * fx, r.top - a.top + r.height * fy];
   };
   const put = (el: Element, [x, y]: number[]) => ((el as HTMLElement).style.transform = `translate(${x}px, ${y}px)`);
+  // The card hangs from the cursor by its middle-left, as if held.
+  const held = ([x, y]: number[]) => [x - 40, y - 34];
   /** The sealed file goes somewhere: dragged to a chat, an email or a folder, or copied as text. */
   const drop = () => {
     const to = targets[loop++ % targets.length];
@@ -53,15 +55,15 @@ if (app && !reduced) {
       setTimeout(() => to.classList.add("hit"), 700);
     } else {
       const file = app.querySelector("[data-hv-file]")!;
-      put(cursor, at(file, 0.3, 0.5));
+      put(cursor, at(file, 0.55, 0.55));
       setTimeout(() => {
         cursor.classList.add("press");
         ghost.style.transition = "none";
-        put(ghost, at(file, 0.08, 0.2));
+        put(ghost, held(at(file, 0.55, 0.55)));
         void ghost.offsetWidth;
         ghost.style.transition = "";
         ghost.classList.add("show");
-        setTimeout(() => { put(cursor, at(to, 0.5, 0.5)); put(ghost, at(to, 0.22, 0.25)); }, 120);
+        setTimeout(() => { put(cursor, at(to, 0.5, 0.5)); put(ghost, held(at(to, 0.5, 0.5))); }, 120);
         setTimeout(() => { cursor.classList.remove("press"); ghost.classList.remove("show"); to.classList.add("hit"); }, 1000);
       }, 650);
     }
