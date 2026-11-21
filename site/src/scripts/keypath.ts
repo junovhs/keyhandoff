@@ -101,7 +101,7 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
     `<svg class="kp-svg"><defs><linearGradient id="kp-pearl" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="600" spreadMethod="reflect"><stop offset="0" stop-color="#ddd5ff"/><stop offset=".33" stop-color="#c4ece6"/><stop offset=".66" stop-color="#f4d4e8"/><stop offset="1" stop-color="#d3cdff"/></linearGradient></defs>` +
     `<path class="kp-route" fill="none" stroke="none"/>${TAILS.map(([c]) => `<path class="kp-tail ${c}"/>`).join("")}</svg>` +
     `<div class="kp-burst"><i class="kp-flash"></i><i class="kp-ring"></i><i class="kp-ring r2"></i>${sparks}</div>` +
-    `<div class="kp-key"><div class="kp-spin"><span class="kp-capsule"></span><div class="kp-body"><i class="kp-shape"></i><i class="kp-plain"></i><i class="kp-glint"></i></div></div></div>`;
+    `<div class="kp-key"><div class="kp-spin"><i class="kp-aura"></i><span class="kp-capsule"></span><div class="kp-body"><i class="kp-shape"></i><i class="kp-plain"></i><i class="kp-glint"></i></div></div></div>`;
   document.body.prepend(root);
   const svg = root.querySelector("svg")!;
   const route = root.querySelector<SVGPathElement>(".kp-route")!;
@@ -343,10 +343,14 @@ function init(bornEl: HTMLElement, homeEl: HTMLElement) {
   addEventListener("load", layout);
   lastScroll = performance.now();
   layout();
-  // Birth: the plain key's characters collapse (CSS on .birth), then a flash,
-  // rings and sparks, and the key spins into being.
+  // Birth: the hero's Create secret key button is pressed (CSS on .birth),
+  // then a flash, rings and sparks, and the key spins into being.
+  // The button stays in view a moment first, so the reader sees what gets pressed.
   setTimeout(() => {
-    root.classList.add("born");
-    key.classList.add("alive");
-  }, reduced ? 0 : 1550);
+    bornEl.classList.add("go");
+    setTimeout(() => {
+      root.classList.add("born");
+      key.classList.add("alive");
+    }, reduced ? 0 : 450);
+  }, reduced ? 0 : 700);
 }

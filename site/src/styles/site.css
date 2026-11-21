@@ -80,28 +80,26 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .trust li:last-child { border-right: 0; }
 .trust .icon { color: var(--accent-ink); }
 
-/* The key's birthplace. keypath.ts draws the key at its centre; this holds
-   the halo, the plain key it's born from, and the characters left over. */
+/* The key's birthplace. A provider-style "Create secret key" button is
+   pressed, and keypath.ts brings the key to life where it was. */
 .birth { position: relative; justify-self: center; width: min(100%, 460px); aspect-ratio: 1; display: grid; place-items: center; }
-.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .26), rgba(196, 236, 230, .1) 55%, transparent 78%); }
-.halo::after { content: ""; position: absolute; inset: 15%; border-radius: 50%; border: 1px solid rgba(216, 209, 255, .22); box-shadow: 0 0 40px rgba(216, 209, 255, .1) inset; }
-.plain-string { position: relative; display: flex; font: 500 24px/1 var(--mono); color: #e6e6ea; white-space: nowrap; }
-.plain-string i { font-style: normal; display: block; width: 1ch; text-align: center; }
-.mote { position: absolute; left: var(--x); top: var(--y); font: 500 15px/1 var(--mono); font-style: normal; color: #d8d1ff; opacity: 0; }
-/* With script: the string types in, collapses into the key, the halo wakes, and the leftovers twinkle. */
-html.js .plain-string i { opacity: 0; animation: birth-type .25s calc(.2s + var(--i) * .045s) forwards, birth-in .5s cubic-bezier(.6, 0, .9, .4) calc(1.25s + (8 - var(--i)) * .012s) forwards; }
-html.js .halo { opacity: 0; transform: scale(.7); animation: birth-halo 1.2s var(--ease) 1.65s forwards, halo-breathe 6s ease-in-out 2.9s infinite; }
-html.js .mote { animation: mote 5.5s ease-in-out calc(2.4s + var(--d)) infinite; }
-html:not(.js) .plain-string { display: none; }
-@keyframes birth-type { to { opacity: 1; } }
-@keyframes birth-in { from { opacity: 1; } to { opacity: 0; transform: translateX(calc((7.5 - var(--i)) * 1ch)) scale(.2); filter: blur(2px); } }
-@keyframes birth-halo { to { opacity: 1; transform: none; } }
-@keyframes halo-breathe { 50% { transform: scale(1.04); opacity: .8; } }
-@keyframes mote { 0%, 100% { opacity: 0; transform: translateY(4px); } 45% { opacity: .55; } 70% { opacity: .2; transform: translateY(-6px); } }
+.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .2), rgba(196, 236, 230, .06) 55%, transparent 75%); }
+.gen-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--text); font-size: 16px; font-weight: 600; box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
+html:not(.js) .gen-btn { display: none; }
+/* keypath.ts adds .go: the button is pressed, lights up, and gives way to the key. */
+html.js .halo { opacity: 0; }
+.birth.go .halo { animation: birth-halo 1s var(--ease) .45s forwards; }
+.birth.go .gen-btn { animation: gen-press .9s var(--ease) forwards; }
+@keyframes gen-press {
+  0% { transform: none; }
+  20% { transform: scale(.94); background: #2a2a30; border-color: rgba(216, 209, 255, .8); box-shadow: 0 0 0 4px rgba(216, 209, 255, .15), 0 0 40px rgba(216, 209, 255, .35); }
+  45% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(.6); opacity: 0; }
+}
+@keyframes birth-halo { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  html.js .plain-string { display: none; }
-  html.js .halo { animation: none; opacity: 1; transform: none; }
-  html.js .mote { animation: none; opacity: .35; }
+  html.js .gen-btn { display: none; }
+  html.js .halo { animation: none; opacity: 1; }
 }
 
 /* A pointer cursor some scenes move around. */
@@ -544,8 +542,6 @@ html.js .rv.in { opacity: 1; transform: none; }
   .downloads { grid-template-columns: 1fr; }
   .points li { font-size: 17px; }
   .birth { width: min(100%, 320px); }
-  .plain-string { font-size: 17px; }
-  .mote { font-size: 13px; }
   .readers { grid-template-columns: minmax(0, 1fr); }
   section { padding: 72px 0; }
   .count { font-size: 12px; }
@@ -666,7 +662,12 @@ html.js .rv.in { opacity: 1; transform: none; }
 .kp-tail.t3 { stroke: url(#kp-pearl); stroke-width: 3; opacity: .75; filter: drop-shadow(0 0 6px rgba(216, 209, 255, .6)); }
 .kp-key { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform, opacity; }
 .kp-spin { position: absolute; left: 0; top: 0; width: 0; height: 0; }
-.kp-body { position: absolute; left: -26px; top: -42px; width: 52px; height: 84px; transition: filter .5s; filter: drop-shadow(0 0 6px rgba(255, 255, 255, .55)) drop-shadow(0 0 22px rgba(216, 209, 255, .7)) drop-shadow(0 0 60px rgba(196, 236, 230, .35)); }
+.kp-body { position: absolute; left: -26px; top: -42px; width: 52px; height: 84px; transition: filter .5s; filter: drop-shadow(0 0 5px rgba(255, 255, 255, .45)); }
+/* The glow is a plain gradient behind the key, not stacked blur filters, so it costs nothing to redraw at hero size. */
+.kp-aura { position: absolute; left: -80px; top: -80px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .55), rgba(196, 236, 230, .18) 45%, transparent); transition: opacity .5s; }
+.kp-key:not(.alive) .kp-aura { opacity: 0; }
+.kp-key.plain .kp-aura { opacity: .25; }
+.kp-key.standin .kp-aura { opacity: 0; }
 .kp-shape, .kp-glint { position: absolute; inset: 0; -webkit-mask: var(--key-mask) center / contain no-repeat; mask: var(--key-mask) center / contain no-repeat; transition: opacity .5s; }
 .kp-shape { background: linear-gradient(125deg, #ddd5ff, #c4ece6 20%, #f4d4e8 40%, #d3cdff 60%, #9df6e0 80%, #ddd5ff) 0 0 / 300% 300%; animation: kp-holo 9s ease-in-out infinite alternate; }
 .kp-glint { background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .95) 48%, transparent 60%) -120% 0 / 220% 100% no-repeat; animation: kp-glint 2.8s var(--ease) infinite; mix-blend-mode: screen; }
