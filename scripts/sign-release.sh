@@ -18,6 +18,10 @@ key="${TAURI_SIGNING_PRIVATE_KEY_PATH:-}"
 [ -n "$key" ] || die "set TAURI_SIGNING_PRIVATE_KEY_PATH to the updater key file on the signing drive"
 [ -s "$key" ] || die "no key file at $key (is the signing drive plugged in and unlocked?)"
 [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || die "TAURI_SIGNING_PRIVATE_KEY is set; unset it and use the key file only"
+# A shell that hasn't loaded nvm has no node; load it if it's there.
+if ! command -v node >/dev/null && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+  set +u; . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"; nvm use -s 24 >/dev/null 2>&1 || nvm use -s default >/dev/null 2>&1 || true; set -u
+fi
 for tool in gh git jq node npx sha256sum; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done

@@ -5,24 +5,8 @@
    --tempo is the motion speed knob. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "./tokens.css";
 
-:root {
-  --ground: #000; --surface: #0a0a0b; --raised: #131315;
-  --line: rgba(255, 255, 255, .08); --line-strong: rgba(255, 255, 255, .14);
-  --text: #fff; --text-2: #a1a1a1; --text-3: #8a8a8a;
-  /* --accent is a focus/selection edge, --accent-ink the pearl tint for small
-     icons and text on black, --accent-grad the pearl fill. */
-  --ok: #2fd567;
-  --warn: #ffb020;
-  --accent: rgba(255, 255, 255, .34); --accent-ink: #d8d1ff; --on-pearl: #0d0b14;
-  --handoff-finish: linear-gradient(135deg, #9df6e0 4%, #858afc 42%, #e3b5eb 74%, #b0e8df);
-  --accent-grad: var(--pearl);
-  --font: "Geist Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --mono: "Geist Mono Variable", ui-monospace, monospace;
-  --tempo: 1;
-  --ease: cubic-bezier(.22, 1, .36, 1);
-  color-scheme: dark;
-}
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--ground); color: var(--text); font: 14px/1.45 var(--font); overflow: hidden; user-select: none; -webkit-font-smoothing: antialiased; }
@@ -330,12 +314,6 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 /* Registered so the pointer-driven gradients glide instead of jumping. */
 @property --gx { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
 @property --gy { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-:root {
-  --pearl: linear-gradient(115deg, #ddd5ff 0%, #c4ece6 24%, #f4d4e8 48%, #d3cdff 72%, #cbeeee 100%);
-  --pearl-line: linear-gradient(115deg, rgba(221, 213, 255, .75), rgba(196, 236, 230, .45) 30%, rgba(244, 212, 232, .65) 60%, rgba(211, 205, 255, .5));
-  --hair: rgba(255, 255, 255, .08);
-  --hair-strong: rgba(255, 255, 255, .14);
-}
 .app:has(.vault-heading)::before {
   content: ""; position: absolute; inset: -140px -80px auto auto; width: 420px; height: 300px; pointer-events: none;
   background: radial-gradient(closest-side, rgba(214, 205, 255, .22), rgba(196, 238, 232, .09) 55%, transparent);
