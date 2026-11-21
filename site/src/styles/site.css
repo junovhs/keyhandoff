@@ -129,7 +129,7 @@ html:not(.js) .hv-cursor { display: none; }
 /* The key's birth, under the 29 million: the provider's page on the left, the key
    in the middle, Safe Copy on the right. All there at once; keypath.ts adds .go
    when it comes into view and the cursor clicks Copy over the finished picture. */
-.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 300px; align-items: center; width: 100%; max-width: 1000px; height: 400px; margin: 48px auto 0; }
+.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 320px; align-items: center; width: 100%; max-width: 1000px; height: 390px; margin: 28px auto 0; }
 .bp-provider { position: relative; gap: 12px; }
 .bp-made { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--accent-ink); }
 .bp-val code { display: block; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font: 500 13.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; }
@@ -139,9 +139,11 @@ html:not(.js) .hv-cursor { display: none; }
 @keyframes bp-flow { to { background-position: -200% 0; } }
 .born-at { grid-column: 2; grid-row: 1; justify-self: center; width: 220px; height: 220px; position: relative; pointer-events: none; }
 .halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
-.kh.bp-safe { grid-column: 3; max-width: none; width: 300px; height: 290px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04); }
+.kh.bp-safe { grid-column: 3; max-width: none; width: 320px; height: 372px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04); }
 .bp-safe .safe { inset: 0; }
-.bp-safe .pages { width: 120px; height: 120px; }
+.bp-safe .pages { width: 88px; height: 88px; }
+.bp-safe .safe-body { gap: 14px; }
+.bp-safe .safe-stage .sub { font-size: 16px; }
 .birthplace.go .bp-copy { animation: add-press .6s var(--ease) .6s; }
 @keyframes add-press { 30% { transform: scale(.93); box-shadow: 0 0 0 4px rgba(216, 209, 255, .18), 0 0 36px rgba(216, 209, 255, .4); } }
 /* A full-size pointer glides in from below right, its tip lands on Copy, and it clicks. */

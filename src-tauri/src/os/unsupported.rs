@@ -153,3 +153,7 @@ pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
 
 #[cfg(test)]
 pub const OLD_KEY_BACKEND: Option<&str> = None;
+
+/// Safe Copy can tell when something reads the clipboard while it listens.
+/// No Safe Copy here.
+pub const CLIPBOARD_BAIT: bool = false;

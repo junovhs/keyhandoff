@@ -171,6 +171,15 @@ kbd { font: 500 11px var(--mono); color: #d4d4d4; border: 1px solid var(--line-s
 .safe-stage .sub { margin: 0; font-size: 18px; color: var(--text-2); }
 .below { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .help.center { align-self: center; text-align: center; }
+/* Safe Copy's checks before you copy: the protected moment, made visible. */
+.checks { display: grid; gap: 2px; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--line); border-radius: 12px; }
+.checks li { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; font-size: 13px; color: var(--text-2); }
+.checks li svg { flex-shrink: 0; }
+.checks li.ok svg { color: var(--accent-ink); }
+.checks li.warn { color: var(--text); }
+.checks li.live svg { color: var(--accent-ink); animation: listening 1.6s var(--ease) infinite; }
+@keyframes listening { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .checks li.live svg { animation: none; } }
 .file-row { display: flex; gap: 8px; }
 .file-row .chip { flex: 1; min-width: 0; }
 .file-row .btn { flex-shrink: 0; min-width: 96px; }

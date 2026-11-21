@@ -143,3 +143,7 @@ pub fn never_take_focus(_panel: &tauri::WebviewWindow) -> tauri::Result<()> {
 /// key in: DPAPI, made fresh when asked for none.
 #[cfg(test)]
 pub const OLD_KEY_BACKEND: Option<&str> = None;
+
+/// Safe Copy can tell when something reads the clipboard while it listens.
+/// Not yet: Windows bait needs delayed rendering (HAND-66).
+pub const CLIPBOARD_BAIT: bool = false;

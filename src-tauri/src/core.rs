@@ -268,6 +268,9 @@ pub struct SafeView {
     pub apps: Vec<String>,
     /// Something read the clipboard bait while Safe Copy listened.
     pub read: bool,
+    /// Safe Copy is watching for clipboard reads (bait on the clipboard), so a
+    /// quiet clipboard is a checked fact, not just an absence of news.
+    pub bait: bool,
     /// The key a new value is being caught for, when replacing one.
     pub replacing: Option<String>,
     /// Sealed for someone whose computer is nearby: it can go straight there.
@@ -2197,13 +2200,14 @@ impl Core {
             message: None,
             apps: Vec::new(),
             read: false,
+            bait: false,
             replacing: replacing.clone(),
             nearby: false,
         };
         match &self.safe {
             Safe::Off => base("off"),
             Safe::Listening { ends_at, apps, read, .. } => {
-                SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), ..base("listening") }
+                SafeView { ends_at: *ends_at, apps: apps.clone(), read: read.load(Ordering::SeqCst), bait: os::CLIPBOARD_BAIT, ..base("listening") }
             }
             Safe::TimedOut => base("timeout"),
             Safe::Failed { message } => SafeView { message: Some(message.clone()), ..base("failed") },

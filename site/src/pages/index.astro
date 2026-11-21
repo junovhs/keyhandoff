@@ -8,7 +8,7 @@ import Tile from "../components/Tile.astro";
 import AppIcon from "../components/AppIcon.astro";
 import AppPages from "../components/AppPages.astro";
 import AppGlyph from "../components/AppGlyph.astro";
-import { ArrowUpRight, Clipboard, Crown, Folder, Mail, MessageSquare, FileInput, FolderOpen, IdCard, KeyRound, Plus, Search, Send, Settings, SquareTerminal, UserRound, Vault } from "@lucide/astro";
+import { ArrowUpRight, Check, Clipboard, Crown, Radio, Folder, Mail, MessageSquare, FileInput, FolderOpen, IdCard, KeyRound, Plus, Search, Send, Settings, SquareTerminal, UserRound, Vault } from "@lucide/astro";
 import appCss from "../../../src/styles.css?raw";
 import { scopeAppCss } from "../lib/app-css.mjs";
 import { getLatestRelease, formatSize, ALL_RELEASES } from "../lib/releases.mjs";
@@ -143,7 +143,7 @@ const INCIDENTS = [
             </main>
             <div class="safe hv hv-copy">
               <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
-              <div class="safe-body"><div class="safe-stage"><AppPages mark="none" /><h2 class="display">Copy your key</h2><p class="sub">From anywhere · 42s</p></div></div>
+              <div class="safe-body"><div class="safe-stage"><AppPages mark="none" /><h2 class="display">Copy your key</h2><p class="sub">From anywhere · 42s</p></div><div class="below"><ul class="checks"><li class="ok"><Check size={15} />No clipboard apps running</li><li class="ok"><Check size={15} />Nothing has read your clipboard</li><li class="live"><Radio size={15} />Listening for one copy, then it wipes</li></ul></div></div>
             </div>
             <div class="safe hv hv-caught">
               <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
@@ -231,6 +231,7 @@ const INCIDENTS = [
               <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
               <div class="safe-body">
                 <div class="safe-stage"><AppPages mark="check" /><h2 class="display">Caught</h2><p class="sub">Clipboard wiped.</p></div>
+                <div class="below"><ul class="checks"><li class="ok"><Check size={15} />No clipboard apps running</li><li class="ok"><Check size={15} />Nothing else read it</li><li class="ok"><Check size={15} />Wiped, and gone from history</li></ul></div>
               </div>
             </div>
           </div>

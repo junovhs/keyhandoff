@@ -35,6 +35,8 @@ export interface SafeView {
   apps: string[];
   /** Something read the clipboard bait while Safe Copy listened. */
   read: boolean;
+  /** Safe Copy watches for clipboard reads on this system (Linux today). */
+  bait: boolean;
   /** The key a new value is being caught for, when replacing one. */
   replacing: string | null;
   /** Sealed for someone whose computer is nearby: it can go straight there. */

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon, Pages, useDragOut } from "./art";
 import { api, attempt, KEEP_CHOICES, type KeyView, type SafeView, type View } from "./ipc";
 import { enter } from "./motion";
-import { IdCard, KeyRound } from "lucide-react";
+import { Check, CircleAlert, IdCard, KeyRound, Radio } from "lucide-react";
 
 /**
  * Safe Copy, shown in place of the home screen while it is on; Rust keeps the
@@ -98,7 +98,7 @@ function Countdown({ endsAt }: { endsAt: number }) {
 function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
   return (
     <>
-      <ClipboardWarning safe={safe} />
+      {safe.read ? <ClipboardWarning safe={safe} /> : <Checks safe={safe} />}
       {/* Always rendered, so opening and closing can ease (rows 0fr <-> 1fr). */}
       <div className="info-wrap" data-open={info} aria-hidden={!info}>
         <div>
@@ -110,6 +110,24 @@ function Listening({ safe, info }: { safe: SafeView; info: boolean }) {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * The protected moment, made visible: what Safe Copy checked before you copy,
+ * each a real check, so a quiet clipboard reads as checked, not unknown.
+ */
+function Checks({ safe }: { safe: SafeView }) {
+  const apps = safe.apps.length > 0;
+  return (
+    <ul className="checks" aria-label="What Safe Copy checked">
+      <li className={apps ? "warn" : "ok"}>
+        {apps ? <CircleAlert size={15} aria-hidden /> : <Check size={15} aria-hidden />}
+        {apps ? `${andList(safe.apps)} ${safe.apps.length === 1 ? "is" : "are"} running and can read the key as you copy` : "No clipboard apps running"}
+      </li>
+      {safe.bait && <li className="ok"><Check size={15} aria-hidden />Nothing has read your clipboard</li>}
+      <li className="live"><Radio size={15} aria-hidden />Listening for one copy, then it wipes</li>
+    </ul>
   );
 }
 
