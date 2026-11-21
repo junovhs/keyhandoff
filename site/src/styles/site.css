@@ -131,7 +131,7 @@ html:not(.js) .hv-cursor { display: none; }
    classes this is the finished picture. scripts/birth.ts replays it: .bt-run
    resets it, then k1..k5 (cumulative) bring each beat back while .bt-key flies. */
 .pivot { margin: 0 0 40px; text-align: center; font-size: clamp(22px, 2.3vw, 30px); font-weight: 600; letter-spacing: -.03em; color: var(--text); }
-.birth { position: relative; display: grid; grid-template-columns: 360px 420px; justify-content: space-between; align-items: center; width: 100%; max-width: 1000px; margin: 0 auto; }
+.birth { position: relative; display: grid; grid-template-columns: 360px minmax(120px, 1fr) 420px; align-items: center; width: 100%; max-width: 1000px; margin: 0 auto; }
 .bt-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; justify-items: center; align-content: start; }
 .bt-stripe { position: relative; width: 100%; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--raised); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); }
 .bt-stripe-top { display: flex; align-items: center; gap: 8px; font-size: 16px; }
@@ -145,13 +145,14 @@ html:not(.js) .hv-cursor { display: none; }
 /* The real app window: Safe Copy listening, then Caught, then the vault. */
 .kh.bt-win { position: relative; max-width: none; width: 420px; height: 540px; overflow: visible; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
 .bt-win .app { overflow: hidden; border-radius: 12px; }
+.bt-win .bw-caught { z-index: 3; }
 .bt-win .bw { opacity: 0; visibility: hidden; transform: translateY(10px); transition: opacity .3s var(--ease), transform .4s var(--ease), visibility 0s .4s; }
-.birth[data-bw="listen"] .bw-listen, .birth[data-bw="caught"] .bw-caught { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.birth[data-bw="listen"] .bw-listen, .birth[data-bw="caught"] .bw-listen, .birth[data-bw="caught"] .bw-caught { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .bt-win .safe-stage .pages { width: 120px; height: 120px; }
 .bt-win .ledger-row { transition: height .45s var(--ease), opacity .35s var(--ease), background .4s; }
 .bt-win .fresh { background: rgba(216, 209, 255, .08); }
 .bt-win .fresh .ledger-key { color: #1a1625; background: var(--pearl); border-color: transparent; }
-.born-at { position: absolute; right: -110px; top: 50%; width: 120px; height: 120px; margin-top: -60px; pointer-events: none; }
+.born-at { justify-self: center; width: 120px; height: 120px; pointer-events: none; }
 /* The replay. */
 .birth.bt-run:not(.k2) [data-bt-val] { opacity: 0; }
 .birth.bt-run:not(.k5) .bt-new { height: 0; opacity: 0; overflow: hidden; }
@@ -165,6 +166,7 @@ html:not(.js) .hv-cursor { display: none; }
   background: linear-gradient(125deg, #ddd5ff, #c4ece6 20%, #f4d4e8 40%, #d3cdff 60%, #9df6e0 80%, #ddd5ff) 0 0 / 300% 300%;
   filter: drop-shadow(0 0 10px rgba(216, 209, 255, .7)); transition: transform .7s cubic-bezier(.45, 0, .2, 1), opacity .3s; }
 .bt-key.show { opacity: 1; }
+.bt-key.show.in { opacity: 0; }
 .bt-key.pop { animation: bt-pop .6s var(--ease); }
 @keyframes bt-pop { 0% { scale: .2; filter: drop-shadow(0 0 30px #fff) brightness(2); } 60% { scale: 1.2; } }
 .bt-cursor { position: absolute; left: 0; top: 0; right: auto; bottom: auto; z-index: 5; transition: transform .6s cubic-bezier(.45, 0, .2, 1), opacity .3s; }
@@ -176,7 +178,7 @@ html.birth-hold .kp-key { visibility: hidden; }
 html:not(.js) .gen-cursor { display: none; }
 @media (max-width: 1000px) {
   .birth { grid-template-columns: minmax(0, 360px); justify-content: center; gap: 44px; }
-  .kh.bt-win { width: 100%; height: 460px; }
+  .kh.bt-win { width: 100%; height: 520px; }
   .bt-stripe-top { font-size: 15px; }
   .bt-create { font-size: 12px; padding: 0 8px; }
   .bt-field code { font-size: 13px; }

@@ -35,22 +35,25 @@ if (birth && !reduced) {
     step(0);
     key.className = "bt-key";
     key.style.transition = "none";
-    key.style.transform = at(q("[data-bt-val]"), 0.3, 0.5);
     cursor.style.transition = "none";
     cursor.style.transform = at(q("[data-bt-create]"), 0.6, 2.6);
     void key.offsetWidth;
     key.style.transition = cursor.style.transition = "";
-    // Create secret key: the value appears and the key is born out of it.
+    // The key lives in the space between the page and the window, and barely moves.
+    const home = q("[data-born-at]");
+    key.style.transform = at(home);
+    // Create secret key: the value appears and the key is born beside it.
     later(200, () => click(q("[data-bt-create]")));
     later(900, () => { step(2); key.classList.add("show", "pop"); });
-    // Copy: the key flies into Safe Copy, which catches it and wipes the clipboard.
+    // Copy: the key slips into the window, Safe Copy catches it and wipes the clipboard.
     later(1500, () => click(q("[data-bt-copy]")));
-    later(2150, () => { key.style.transform = at(q(".bw-listen .pages"), 0.5, 0.5); cursor.classList.remove("show"); });
-    later(2800, () => { birth.dataset.bw = "caught"; step(3); });
+    later(2150, () => { key.style.transform = at(q(".bt-win"), 0.02, 0.5); key.classList.add("in"); cursor.classList.remove("show"); });
+    later(2600, () => { birth.dataset.bw = "caught"; step(3); });
     // Into the vault: the new row slides in, sealed, and the shield lights.
-    later(4300, () => { birth.dataset.bw = ""; key.style.transform = at(q(".bt-new"), 0.1, 0.5); });
-    later(4800, () => step(5));
-    later(5400, () => { key.style.transform = at(q("[data-born-at]")); });
+    later(4000, () => { birth.dataset.bw = ""; });
+    later(4300, () => step(5));
+    // The key steps back out beside the window, at rest.
+    later(5200, () => { key.classList.remove("in"); key.style.transform = at(home); });
     // Rest on the finished picture, the key beside the vault, then play again.
     later(6200, () => { birth.classList.remove("bt-run"); step(0); });
     later(9600, () => { key.classList.remove("show"); later(300, play); });
