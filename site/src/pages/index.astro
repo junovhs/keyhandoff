@@ -97,7 +97,7 @@ const INCIDENTS = [
     <header class="wrap hero">
       <div class="hero-copy">
         <span class="hero-pill">Free for everyone · No servers, no accounts</span>
-        <h1 data-stop="born" data-label="New key">The open source <br /><span class="pearl-text">secrets manager.</span></h1>
+        <h1>The open source <br /><span class="pearl-text">secrets manager.</span></h1>
         <p class="lede">Save, use and share API keys without anyone ever seeing them. KeyHandoff keeps each key safe for its whole life.</p>
         <ul class="points">
           <li><Icon name="key" size={20} /><span><b>Save, use and share keys safely.</b> From the provider&rsquo;s page to your code to your teammate, a key is never left out in plain sight.</span></li>
@@ -153,281 +153,135 @@ const INCIDENTS = [
     <section class="wrap" id="blind-spot">
       <h2 class="big-q rv">29 million new secrets turned up in public code in 2025. <br /><em>Every one was handled by a person or a tool.</em></h2>
       <p class="stat-source rv">Source: <a href="https://www.gitguardian.com/state-of-secrets-sprawl-report-2026">GitGuardian, The State of Secrets Sprawl 2026</a></p>
-
-      <div class="readers rv" id="readers" data-state="exposed">
-        <svg class="reader-lines" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
-          <path class="line" d="M335 70 C 385 70, 375 150, 422 165" /><path class="leak" d="M422 165 C 375 150, 385 70, 335 70" />
-          <path class="line" d="M335 210 H422" /><path class="leak" d="M422 210 H335" />
-          <path class="line" d="M335 350 C 385 350, 375 270, 422 255" /><path class="leak" d="M422 255 C 375 270, 385 350, 335 350" />
-          <path class="line" d="M578 165 C 625 150, 615 70, 665 70" /><path class="leak" d="M578 165 C 625 150, 615 70, 665 70" />
-          <path class="line" d="M578 210 H665" /><path class="leak" d="M578 210 H665" />
-          <path class="line" d="M578 255 C 625 270, 615 350, 665 350" /><path class="leak" d="M578 255 C 625 270, 615 350, 665 350" />
+      <div class="scene sc-threats" data-scene="threats" data-step="0">
+        <svg class="sc-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {[[24, 20], [24, 50], [24, 80], [76, 20], [76, 50], [76, 80]].map(([x, y]) => <line x1={x} y1={y} x2={x < 50 ? 41 : 59} y2={50 + (y - 50) * 0.35} />)}
         </svg>
-        {READERS.map((_, i) => <i class:list={["reader-dot", `d${i}`]} aria-hidden="true"></i>)}
         {READERS.map((r, i) => (
-          <div class:list={["reader", `r${i}`]}>
-            <span class="reader-ico"><Icon name={r.icon} size={44} /></span>
-            <span class="reader-txt"><b>{r.name}</b><span>{r.how}</span><span class="gets"><span class="bad">{r.gets}</span><span class="ok">{r.safe}</span></span></span>
+          <div class:list={["sc-threat", i < 3 ? "l" : "r"]} style={`--x:${i < 3 ? 14 : 86}%;--y:${[20, 50, 80][i % 3]}%`}>
+            <Icon name={r.icon} size={26} /><b>{r.name}</b>
           </div>
         ))}
-        <div class="envfile">
-          <span class="ring"></span><span class="ring two"></span>
-          <Tile name="file" scale={5} size="lg" plain />
-          <code>.env</code>
-          <span class="env-val" id="env-val" data-key="sk_live_51Nq8vTz" data-pointer="handoff:Stripe">sk_live_51Nq8vTz</span>
-          <span class="env-kind"><span class="bad">plain text</span><span class="ok">pointer only</span></span>
-        </div>
-      </div>
-      <div class="readers-switch rv">
-        <div class="segmented" role="group" aria-label="Compare">
-          <button type="button" data-to="exposed" aria-pressed="true">Plain .env</button>
-          <button type="button" data-to="safe" aria-pressed="false">With KeyHandoff</button>
-        </div>
+        <div class="sc-file"><Icon name="file" size={18} /><code>.env</code><span class="sc-val"><span class="plain">sk_live_51Nq8vTz</span><span class="ptr">handoff:Stripe</span></span></div>
+        <span class="sc-shield" aria-hidden="true"></span>
+        <p class="sc-say"><span class="a">In a plain <code>.env</code>, anything can take it.</span><span class="b">With KeyHandoff, there&rsquo;s nothing there to take.</span></p>
       </div>
       <p class="proof-line rv">This keeps happening. Look up {INCIDENTS.map((n, i) => <>{i ? (i === INCIDENTS.length - 1 ? " and " : ", ") : ""}<a href={n.href}>{n.name}</a></>)}.</p>
-      <p class="punch rv" id="punch" data-state="exposed">
-        <span data-bad="Right now your keys sit in a plain text file." data-ok="Your keys live in an encrypted vault.">Right now your keys sit in a plain text file.</span><br />
-        <strong data-bad="Anything that can read it can take them." data-ok="Your .env only holds a pointer.">Anything that can read it can take them.</strong>
-      </p>
     </section>
 
-    <section class="wrap panel" id="solo">
+    <section class="wrap" id="solo">
       <div class="head rv">
-        <span class="eyebrow" data-stop="sealed" data-label="Sealed"><Icon name="key" />1 · Save it</span>
-        <h2>Copy a new key once, and it goes straight into your vault.</h2>
-        <p class="sub">When you need it somewhere, KeyHandoff types it in for you.</p>
+        <span class="eyebrow"><Icon name="key" />1 · Save it</span>
+        <h2>Copy it once. It&rsquo;s caught, sealed, and gone from your clipboard.</h2>
       </div>
-      <div class="solo-stage rv" id="solo-stage" data-step="0">
-        <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>Copy your key once.</span>
-          <span class="s1"><b>2</b>KeyHandoff catches it and wipes your clipboard.</span>
-          <span class="s2"><b>3</b>Now it&rsquo;s sealed in your vault.</span>
-          <span class="s3"><b>4</b>Click a field, then pick the key to type it in.</span>
-        </p>
-        <div class="kh" aria-hidden="true">
-          <div class="app">
-            <header class="titlebar"><Logo height={22} /><span class="name">KeyHandoff</span><button><AppIcon name="lock" /></button><button><AppIcon name="minimize" /></button><button><AppIcon name="close" /></button></header>
-            <!-- One Safe Copy screen for listening and caught, so the check lands the instant Ctrl C is pressed. -->
-            <div class="safe view s0 s1 catch">
-              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
-              <div class="safe-body">
-                <div class="safe-stage">
-                  <AppPages mark="none" />
-                  <h2 class="display flip"><span class="before">Copy your key</span><span class="after">Caught</span></h2>
-                  <p class="sub flip"><span class="before">From anywhere · 42s</span><span class="after">Clipboard wiped.</span></p>
-                </div>
-                <div class="below after">
-                  <span class="name-in">Stripe (billing)</span>
-                  <div class="keep-buttons"><button><AppIcon name="once" />Use once</button><button><AppIcon name="calendar" />Keep 30 days</button><button class="choose"><AppIcon name="forever" />Keep forever</button></div>
-                </div>
-              </div>
-            </div>
-            <div class="stage view s2 s3">
-              <div class="hero"><h1 class="display sm">Your keys</h1><p class="lede">3 keys · all sealed on this computer</p></div>
-              <div class="btn-row"><button class="btn primary grow">Add a key</button><button class="btn secondary grow">Send a key</button></div>
-              <div class="vault"><div class="keys"><div class="key-row fresh"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Stripe (billing)</span><span class="meta">Yours · Kept</span></span><button class="use always type-btn" id="solo-type">Type</button></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Dialpad</span><span class="meta">From Ben · Kept</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">OpenAI</span><span class="meta">Yours · Kept</span></span></div></div></div>
-            </div>
-          </div>
+      <div class="scene sc-save" data-scene="save" data-step="0">
+        <div class="sc-card sc-provider">
+          <span class="sc-card-top">Stripe · API keys</span>
+          <span class="sc-label">Secret key</span>
+          <span class="sc-slot"></span>
+          <span class="btn primary small sc-copy">Copy</span>
         </div>
-        <div class="source s0 s1" aria-hidden="true">
-          <span class="source-title">API keys</span>
-          <span class="source-label">Secret key</span>
-          <span class="source-key"><code>sk_live_51Nq8vTz</code></span>
-          <span class="caps"><kbd>Ctrl</kbd><kbd>C</kbd></span>
-        </div>
-        <div class="source field-card s3" aria-hidden="true">
-          <span class="source-title">Deploy settings</span>
-          <span class="source-label">Stripe secret key</span>
-          <span class="field-box" id="solo-field"><span class="dots"></span><i class="caret"></i></span>
-          <span class="typing-chip"><Logo height={14} />KeyHandoff is typing</span>
-        </div>
-        <svg class="cursor" id="solo-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
+        <div class="sc-clip"><Icon name="clip" size={18} /><span class="full">Clipboard</span><span class="wiped"><Icon name="check" size={14} />Wiped</span></div>
+        <div class="sc-vault"><span class="lid"></span><span class="box"><Logo height={26} /></span><span class="sc-vault-name">Your vault</span></div>
+        <svg class="cursor sc-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
     </section>
 
-    <section class="wrap split" id="code">
-      <div class="split-copy rv">
-        <span class="eyebrow" data-stop="used" data-label="In use"><Icon name="terminal" />2 · Use it</span>
-        <h2>Your code uses the key, and you decide which programs get it.</h2>
-        <p class="sub">Your <code>.env</code> holds a pointer like <code>handoff:OpenAI</code> where the key used to be. When your program starts, it asks KeyHandoff over a private pipe on your machine, and the first time, you say whether that program in that folder is allowed.</p>
+    <section class="wrap" id="code">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="terminal" />2 · Use it</span>
+        <h2>Your code gets the key only when you say so.</h2>
       </div>
-      <div class="prompt rv">
-        <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>A program is asking</span></div>
-        <p class="prompt-q"><code>report.py</code> wants the <b>Dialpad</b> key</p>
-        <p class="prompt-where"><Icon name="file" size={14} />~/work/report-bot</p>
-        <div class="prompt-btns"><span class="btn secondary small">Just once</span><span class="btn primary small">Always allow</span></div>
+      <div class="scene sc-use" data-scene="use" data-step="0">
+        <div class="sc-card sc-prog">
+          <span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span>
+          <code class="sc-env">STRIPE_KEY=</code>
+          <span class="sc-slot"></span>
+          <span class="sc-run"><i></i>running</span>
+        </div>
+        <div class="sc-mini-vault"><Logo height={20} /></div>
+        <div class="prompt sc-prompt">
+          <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>A program is asking</span></div>
+          <p class="prompt-q"><code>report.py</code> wants the <b>Stripe</b> key</p>
+          <p class="prompt-where"><Icon name="file" size={14} />~/work/report-bot</p>
+          <div class="prompt-btns"><span class="btn secondary small">Just once</span><span class="btn primary small sc-allow">Always allow</span></div>
+        </div>
+        <svg class="cursor sc-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
     </section>
 
     <section class="wrap" id="standin">
       <div class="head rv">
-        <span class="eyebrow" data-stop="standin" data-label="Stand-in"><Icon name="shield" />Stand-ins and tripwires</span>
-        <h2>Your program only holds a stand-in. The real key exists only inside encryption.</h2>
-        <p class="sub">On Linux, start a program with <code>keyhandoff run</code> and it gets a stand-in shaped exactly like your key. The real key goes in only on an encrypted connection to the key&rsquo;s own server, after KeyHandoff checks that server&rsquo;s certificate itself.</p>
+        <span class="eyebrow"><Icon name="shield" />Stand-ins</span>
+        <h2>Your program holds a stand-in. The real key only travels encrypted.</h2>
       </div>
-      <div class="sw-stage rv" id="sw-stage" data-step="0">
-        <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>Your program gets a stand-in, not the key.</span>
-          <span class="s1"><b>2</b>The real key goes in only inside the encryption.</span>
-          <span class="s2"><b>3</b>A poisoned package tries to send the stand-in out.</span>
-          <span class="s3"><b>4</b>It&rsquo;s stopped on the spot, and your team is warned.</span>
-        </p>
-        <div class="sw" aria-hidden="true">
-          <svg class="sw-forks" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <path class="f-good" d="M33 50 C 37 50, 37 27, 41 27" />
-            <path class="f-bad" d="M33 50 C 37 50, 37 73, 41 73" />
-          </svg>
-          <span class="sw-tunnel"></span>
-          <span class="sw-tunnel-lock"><Icon name="lock" size={18} /></span>
-          <span class="sw-tunnel-label">Encrypted to api.stripe.com</span>
-          <span class="sw-path"></span>
-          <span class="sw-wire"></span>
-          <span class="sw-wire-label">tripwire</span>
-          <div class="sw-prog">
-            <span class="sw-title"><Icon name="terminal" size={16} />report.py</span>
-            <code class="sw-cmd">keyhandoff run -- python report.py</code>
-            <span class="sw-env"><span class="k">STRIPE_SECRET_KEY=</span><span class="v">sk_live_Q7xaR2mE</span></span>
-            <span class="sw-tag">stand-in</span>
-          </div>
-          <div class="sw-node good"><span class="sw-ico"><Icon name="check" size={20} /></span><b>api.stripe.com</b><span class="sw-note">Got the real key</span></div>
-          <div class="sw-node bad"><span class="sw-ico"><Icon name="out" size={20} /></span><b>collect.example</b><span class="sw-note">Refused from now on</span></div>
-          <span class="sw-pkt to-good"><span class="pkt-standin">sk_live_Q7xaR2mE</span><span class="pkt-sealed"><Icon name="lock" size={14} />real key</span></span>
-          <span class="sw-pkt to-bad"><span class="pkt-standin">sk_live_Q7xaR2mE</span></span>
-          <span class="sw-stop"><Icon name="shield" size={18} />Stopped</span>
-          <span class="sw-alert"><Icon name="users" size={15} />Ann and Priya are warned</span>
+      <div class="scene sc-standin" data-scene="standin" data-step="0">
+        <div class="sc-card sc-prog">
+          <span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span>
+          <code class="sc-env">STRIPE_KEY=</code>
+          <span class="sc-slot"><span class="sc-ghost"></span></span>
+          <span class="sc-tag">stand-in</span>
         </div>
+        <span class="sc-tunnel"><Icon name="lock" size={16} /></span>
+        <div class="sc-card sc-server"><span class="sc-card-top"><Icon name="check" size={15} />api.stripe.com</span><span class="sc-got">Got the real key</span></div>
       </div>
-      <p class="limits rv"><a href="/docs/keyhandoff-run/">How stand-ins and tripwires work</a></p>
-    </section>
-    <section class="wrap split" id="agents">
-      <div class="split-copy rv">
-        <span class="eyebrow" data-stop="agent" data-label="Asked you"><Icon name="bot" />3 · AI agents</span>
-        <h2>When an AI agent asks for a key, KeyHandoff asks you.</h2>
-        <p class="sub">KeyHandoff recognises Claude Code and Codex. Approvals you saved for yourself never count for an agent. You can let one agent session use a key, see every command it ran with it, and take it back whenever you like.</p>
-      </div>
-      <div class="prompt rv">
-        <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>An AI agent is asking</span></div>
-        <p class="prompt-q"><b>Claude Code</b> wants the <b>Stripe</b> key</p>
-        <p class="prompt-where"><Icon name="terminal" size={14} />npm test &nbsp;·&nbsp; ~/work/billing-api</p>
-        <div class="prompt-btns"><span class="btn secondary small">Not now</span><span class="btn primary small">Allow this session</span></div>
-        <div class="agent-recent"><span>This session ran</span><code>npm test</code><code>node scripts/refund.js</code><span class="agent-revoke">Revoke</span></div>
-      </div>
+      <p class="limits rv"><a href="/docs/keyhandoff-run/">How stand-ins work</a></p>
     </section>
 
-
-    <section class="wrap panel" id="team">
+    <section class="wrap" id="agents">
       <div class="head rv">
-        <span class="eyebrow" data-stop="shared" data-label="Shared"><Icon name="users" />4 · Share it</span>
-        <h2>Need to share a key? We solved that too.</h2>
+        <span class="eyebrow"><Icon name="bot" />3 · AI agents</span>
+        <h2>An AI agent asks for the key. KeyHandoff asks you.</h2>
       </div>
-      <div class="team-stage rv" id="duo" data-step="intro">
-        <div class="frame-card f-intro" aria-hidden="true">
-          <div class="pair">
-            <span class="person"><i>B</i>Ben</span>
-            <span class="line"><span class="file-chip"><Icon name="file" size={14} />Key for Ann.handoff</span></span>
-            <span class="person"><i>A</i>Ann</span>
-          </div>
-          <p class="frame-text">{INTRO.split(" ").map((w, i) => <span style={`--i:${i}`}>{w} </span>)}</p>
+      <div class="scene sc-agent" data-scene="agent" data-step="0">
+        <div class="sc-card sc-bot"><Icon name="bot" size={30} /><b>Claude Code</b><span class="sc-session">This session</span></div>
+        <span class="sc-reach"></span>
+        <span class="sc-gate"></span>
+        <div class="prompt sc-prompt">
+          <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>An AI agent is asking</span></div>
+          <p class="prompt-q"><b>Claude Code</b> wants the <b>Stripe</b> key</p>
+          <div class="prompt-btns"><span class="btn secondary small">Not now</span><span class="btn primary small sc-allow">Allow this session</span></div>
         </div>
-        <div class="frame-card f-outro" aria-hidden="true">
-          <div class="chat">
-            <span class="chat-av">B</span>
-            <div class="chat-body">
-              <span class="chat-head"><b>Ben</b>10:42</span>
-              <span class="chat-msg">Here&rsquo;s the Dialpad key.</span>
-              <span class="file-chip"><Icon name="file" size={14} />Key for Ann.handoff</span>
-            </div>
-          </div>
-          <p class="frame-text">{OUTRO.split(" ").map((w, i) => <span style={`--i:${i}`}>{w} </span>)}</p>
-        </div>
-        <p class="duo-cap" aria-live="polite">
-          <span class="s0"><b>1</b>Ben picks Ann.</span>
-          <span class="s1"><b>2</b>Then he picks the key.</span>
-          <span class="s2"><b>3</b>KeyHandoff seals it for Ann.</span>
-          <span class="s3"><b>4</b>Ann opens it and keeps it.</span>
-          <span class="s4"><b>5</b>The copy in the chat is now useless.</span>
-        </p>
-      <div class="duo">
-        <div class="mock ben">
-          <span class="mock-who">Ben&rsquo;s computer</span>
-          <div class="kh" aria-hidden="true">
-            <div class="app">
-              <header class="titlebar"><Logo height={22} /><span class="name">KeyHandoff</span><button><AppIcon name="lock" /></button><button><AppIcon name="minimize" /></button><button><AppIcon name="close" /></button></header>
-              <div class="sheet view s0">
-                <div class="hero"><h2 class="display md">Send a key</h2><p class="lede">Who&rsquo;s it for?</p></div>
-                <div class="keys"><span class="label">Teams</span><div class="key-row"><span class="key-ico"><AppIcon name="users" /></span><span class="who"><span class="nm">Platform</span><span class="meta">Ann, Priya</span></span></div></div>
-                <div class="keys"><span class="label">People</span><div class="key-row pick"><span class="key-ico"><AppIcon name="user" /></span><span class="who"><span class="nm">Ann</span><span class="meta">9 sends left · <span class="mono">ann-thinkpad</span></span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="user" /></span><span class="who"><span class="nm">Priya</span><span class="meta">14 sends left · <span class="mono">priya-desk</span></span></span></div></div>
-              </div>
-              <div class="sheet view s1">
-                <div class="hero"><h2 class="display md">Send to Ann</h2><p class="lede">Which key?</p></div>
-                <div class="keys"><div class="key-row pick"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Dialpad</span><span class="meta">Yours</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Stripe (billing)</span><span class="meta">From Priya · Platform</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">OpenAI</span><span class="meta">Yours</span></span></div></div>
-                <span class="grow-space"></span>
-                <div class="btn-row"><button class="btn secondary grow">Back</button></div>
-              </div>
-              <div class="safe sealed view s2 s3 s4">
-                <div class="top"><AppIcon name="shield" /><b>Send a key</b><span>for Ann</span></div>
-                <div class="safe-body">
-                  <div class="safe-stage"><AppPages mark="lock" /><h2 class="display">Sealed</h2><p class="sub">Only Ann&rsquo;s computer can open it.</p></div>
-                  <div class="below">
-                    <div class="file-row"><div class="chip"><AppIcon name="file" /><span class="mono">Key for Ann.handoff</span></div><button class="btn primary">Copy</button></div>
-                    <p class="help center">The file is deleted when you close this.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="hop" aria-hidden="true"><span class="file-chip"><Icon name="file" size={14} />Key for Ann.handoff</span></div>
-        <div class="mock ann">
-          <span class="mock-who">Ann&rsquo;s computer</span>
-          <div class="kh" aria-hidden="true">
-            <div class="app">
-              <header class="titlebar"><Logo height={22} /><span class="name">KeyHandoff</span><button><AppIcon name="lock" /></button><button><AppIcon name="minimize" /></button><button><AppIcon name="close" /></button></header>
-              <div class="stage view s0 s1 s2">
-                <div class="hero"><h1 class="display sm">Your keys</h1><p class="lede">2 keys · all sealed on this computer</p></div>
-                <div class="btn-row"><button class="btn primary grow">Add a key</button><button class="btn secondary grow">Send a key</button></div>
-                <div class="vault"><div class="keys"><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Stripe (billing)</span><span class="meta">From Priya · Platform · 27 days left</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">OpenAI</span><span class="meta">Yours · Kept</span></span></div></div></div>
-                <div class="foot"><span class="me"><button>You are <b>Ann</b></button> · <button><b>Your card</b></button> · <button><b>Security</b></button></span><span class="paste">Paste a file <kbd>Ctrl V</kbd></span></div>
-              </div>
-              <div class="sheet view s3">
-                <div class="head"><AppGlyph mark="check" /><div><span class="lede">Ben sent you a key</span><h2 class="display md">Dialpad</h2></div></div>
-                <div class="keep-block">
-                  <div class="keep-buttons"><button><AppIcon name="once" />Use once</button><button><AppIcon name="calendar" />Keep 30 days</button><button class="choose"><AppIcon name="forever" />Keep forever</button></div>
-                  <p class="help">Kept until you remove it.</p>
-                </div>
-              </div>
-              <div class="stage view s4">
-                <div class="hero"><h1 class="display sm">Your keys</h1><p class="lede">3 keys · all sealed on this computer</p></div>
-                <div class="btn-row"><button class="btn primary grow">Add a key</button><button class="btn secondary grow">Send a key</button></div>
-                <div class="vault"><div class="keys"><div class="key-row fresh"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Dialpad</span><span class="meta">From Ben · Kept</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">Stripe (billing)</span><span class="meta">From Priya · Platform · 27 days left</span></span></div><div class="key-row"><span class="key-ico"><AppIcon name="key" /></span><span class="who"><span class="nm">OpenAI</span><span class="meta">Yours · Kept</span></span></div></div></div>
-                <div class="foot"><span class="me"><button>You are <b>Ann</b></button> · <button><b>Your card</b></button> · <button><b>Security</b></button></span><span class="paste">Paste a file <kbd>Ctrl V</kbd></span></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <span class="sc-revoke">Revoke</span>
+        <svg class="cursor sc-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
+    </section>
+
+    <section class="wrap" id="team">
+      <div class="head rv">
+        <span class="eyebrow"><Icon name="users" />4 · Share it</span>
+        <h2>Sealed for one person. Unreadable to everyone else.</h2>
+      </div>
+      <div class="scene sc-share" data-scene="share" data-step="0">
+        <div class="sc-person ben"><span class="sc-face">B</span><b>Ben</b></div>
+        <div class="sc-person ann"><span class="sc-face">A</span><b>Ann</b><span class="sc-ok"><Icon name="check" size={14} /></span></div>
+        <span class="sc-lane"><Icon name="chat" size={16} /><span>Slack, email, anything</span></span>
+        <div class="sc-peek"><Icon name="eyeoff" size={20} /><code>Kx9#vQ2…</code></div>
       </div>
     </section>
 
     <section class="wrap" id="leak">
       <div class="head rv">
-        <span class="eyebrow" data-stop="guarded" data-label="Guarded"><Icon name="alert" />5 · If it leaks</span>
-        <h2>Even if a stand-in gets out, it&rsquo;s worthless, and it leads straight back to the leak.</h2>
+        <span class="eyebrow"><Icon name="alert" />5 · If it leaks</span>
+        <h2>A leaked stand-in is stopped, and your whole team is covered.</h2>
       </div>
-      <div class="leak-steps rv">
-        <div class="leak-step"><Icon name="shield" size={22} /><b>Stopped before it leaves</b><p>A stand-in headed anywhere but its own key&rsquo;s server is refused before a byte goes out, and you get an alert naming the program.</p></div>
-        <div class="leak-step"><Icon name="users" size={22} /><b>Your whole team is covered</b><p>That destination is refused on every teammate&rsquo;s computer too, through the team folder you already share.</p></div>
-        <div class="leak-step"><Icon name="search" size={22} /><b>Traced to the run</b><p>Paste a leaked stand-in into KeyHandoff, even base64-encoded, and it tells you which key, which command and when.</p></div>
+      <div class="scene sc-leak" data-scene="leak" data-step="0">
+        <div class="sc-card sc-prog"><span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span><span class="sc-slot"></span></div>
+        <div class="sc-pkg"><Icon name="package" size={24} /><b>evil-package</b></div>
+        <span class="sc-wire"><span>tripwire</span></span>
+        <div class="sc-card sc-server bad"><span class="sc-card-top"><Icon name="out" size={15} />collect.example</span><span class="sc-got">Refused</span></div>
+        <span class="sc-stop"><Icon name="shield" size={16} />Stopped</span>
+        <div class="sc-team">{["A", "P", "M"].map((f) => <span class="sc-face sm">{f}<i><Icon name="shield" size={11} /></i></span>)}<span class="sc-team-say">Team covered</span></div>
       </div>
+      <p class="limits rv"><a href="/docs/keyhandoff-run/">How tripwires work</a></p>
     </section>
-
 
     <section class="wrap" id="built-in">
       <div class="head center rv">
-        <span class="eyebrow" data-stop="locked" data-label="Locked"><Icon name="shield" />6 · Built in, everywhere</span>
+        <span class="eyebrow"><Icon name="shield" />6 · Built in, everywhere</span>
         <h2>It feels simple to use, but there&rsquo;s serious security underneath.</h2>
       </div>
-      <div class="cutaway rv">
+      <div class="cutaway rv scene sc-locked" data-scene="locked" data-step="0">
         <div class="stack" aria-hidden="true">
           <div class="layer l-lock"><div class="plate"><Icon name="lock" size={64} /><span>Vault lock</span></div></div>
           <div class="layer l-core"><div class="plate">
@@ -449,7 +303,7 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap end rv" id="download" data-release-tag={release?.tag}>
-      <span class="tile lg" data-stop="free" data-label="Free"><Logo height={42} /></span>
+      <span class="tile lg" data-home><Logo height={42} /></span>
       <h2>Safe secrets should be free. <br /><span class="pearl-text">So we made them free.</span></h2>
       <p class="sub">KeyHandoff is free and open source, for you, your team and everyone else. Fewer leaked keys makes the whole internet safer.</p>
       {release ? (

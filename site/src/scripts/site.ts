@@ -16,8 +16,6 @@ document.querySelectorAll(".rv").forEach((el) => (reduced ? el.classList.add("in
 
 const scan = document.getElementById("scan");
 if (scan) runScan(scan);
-const readers = document.getElementById("readers");
-if (readers) runReaders(readers);
 const solo = document.getElementById("solo-stage");
 // Safe Copy listening, caught, the vault, then KeyHandoff typing the key in.
 if (solo) runFrames(solo, [["0", 2200], ["1", 3000], ["2", 2400], ["3", 6400]], "3", soloTyping(solo));
