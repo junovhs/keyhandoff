@@ -103,10 +103,8 @@ const INCIDENTS = [
         </div>
       </div>
 
-      <!-- The real vault window, drawn with the app's own stylesheet (.kh). A cursor
-           presses Add a key, the new key's row slides in, and scripts/keypath.ts
-           brings the key to life at [data-born-at], in front of the window. -->
-      <div class="hero-app" data-born aria-hidden="true">
+      <!-- The real vault window, drawn with the app's own stylesheet (.kh). -->
+      <div class="hero-app" aria-hidden="true">
         <div class="kh hero-win">
           <div class="app">
             <header class="titlebar">
@@ -121,7 +119,6 @@ const INCIDENTS = [
               <div class="btn-row vault-actions">
                 <button class="btn primary grow add" tabindex="-1"><Plus size={17} />Add a key</button>
                 <button class="btn secondary grow" tabindex="-1"><Send size={16} />Send a key</button>
-                <svg class="gen-cursor" viewBox="0 0 16 22" width="30" height="40"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
               </div>
               <div class="tools-row">
                 <button class="quiet" tabindex="-1"><FolderOpen size={15} />Open file</button>
@@ -145,7 +142,6 @@ const INCIDENTS = [
             </main>
           </div>
         </div>
-        <span class="born-at" data-born-at><span class="halo"></span></span>
       </div>
 
       <ul class="trust">
@@ -159,18 +155,29 @@ const INCIDENTS = [
     <section class="wrap" id="blind-spot">
       <h2 class="big-q rv">29 million new secrets turned up in public code in 2025. <br /><em>Every one was handled by a person or a tool.</em></h2>
       <p class="stat-source rv">Source: <a href="https://www.gitguardian.com/state-of-secrets-sprawl-report-2026">GitGuardian, The State of Secrets Sprawl 2026</a></p>
-      <div class="scene sc-threats" data-scene="threats" data-step="0">
-        <svg class="sc-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {[[24, 20], [24, 50], [24, 80], [76, 20], [76, 50], [76, 80]].map(([x, y]) => <line x1={x} y1={y} x2={x < 50 ? 41 : 59} y2={50 + (y - 50) * 0.35} />)}
-        </svg>
-        {READERS.map((r, i) => (
-          <div class:list={["sc-threat", i < 3 ? "l" : "r"]} style={`--x:${i < 3 ? 14 : 86}%;--y:${[20, 50, 80][i % 3]}%`}>
-            <Icon name={r.icon} size={26} /><b>{r.name}</b>
+      <!-- The key's birth: made on the provider's page, caught by Safe Copy the moment
+           it's copied. The whole picture is there at once; keypath.ts brings the key
+           to life at [data-born-at] and the cursor's click only plays over it. -->
+      <div class="birthplace" data-born aria-hidden="true">
+        <div class="sc-card bp-provider">
+          <span class="sc-card-top">Stripe · API keys</span>
+          <span class="bp-made"><Icon name="check" size={14} />New secret key created</span>
+          <span class="bp-val"><code>sk_live_51Nq8vTz<span>••••••••••••</span></code></span>
+          <span class="btn primary small bp-copy">Copy</span>
+          <svg class="gen-cursor" viewBox="0 0 16 22" width="30" height="40"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
+        </div>
+        <span class="bp-flow"></span>
+        <span class="born-at" data-born-at><span class="halo"></span></span>
+        <div class="kh bp-safe">
+          <div class="app">
+            <div class="safe caught">
+              <div class="top"><AppIcon name="shield" /><b>Safe Copy</b></div>
+              <div class="safe-body">
+                <div class="safe-stage"><AppPages mark="check" /><h2 class="display">Caught</h2><p class="sub">Clipboard wiped.</p></div>
+              </div>
+            </div>
           </div>
-        ))}
-        <div class="sc-file"><Icon name="file" size={18} /><code>.env</code><span class="sc-val"><span class="plain">sk_live_51Nq8vTz</span><span class="ptr">handoff:Stripe</span></span></div>
-        <span class="sc-shield" aria-hidden="true"></span>
-        <p class="sc-say"><span class="a">In a plain <code>.env</code>, anything can take it.</span><span class="b">With KeyHandoff, there&rsquo;s nothing there to take.</span></p>
+        </div>
       </div>
       <p class="proof-line rv">This keeps happening. Look up {INCIDENTS.map((n, i) => <>{i ? (i === INCIDENTS.length - 1 ? " and " : ", ") : ""}<a href={n.href}>{n.name}</a></>)}.</p>
     </section>

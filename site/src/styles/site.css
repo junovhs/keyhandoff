@@ -80,34 +80,53 @@ h1 code { font-family: var(--font); font-size: 1em; font-weight: 600; letter-spa
 .trust li:last-child { border-right: 0; }
 .trust .icon { color: var(--accent-ink); }
 
-/* The key's birthplace: the real vault window. keypath.ts adds .go, a cursor
-   presses Add a key, the new row slides in, and the key comes to life in front of it. */
+/* The hero's real vault window, drawn with the app's own stylesheet. */
 .hero-app { position: relative; justify-self: end; width: min(100%, 420px); }
 .kh.hero-win { max-width: none; height: 580px; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
-.hero-win .vault-actions { position: relative; }
 .hero-win .search input { pointer-events: none; }
-.born-at { position: absolute; left: -200px; top: 190px; width: 220px; height: 220px; pointer-events: none; }
-.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
 .hero-win .fresh { background: rgba(216, 209, 255, .06); }
 .hero-win .fresh .ledger-key { color: #1a1625; background: var(--pearl); border-color: transparent; }
-.hero-app.go .hero-win .fresh { animation: row-flash 1.2s var(--ease) .75s; }
-.hero-app.go .add { animation: add-press .6s var(--ease) .6s; }
-@keyframes row-flash { 20% { background: rgba(216, 209, 255, .22); } }
-@keyframes add-press { 30% { transform: scale(.95); box-shadow: 0 0 0 4px rgba(216, 209, 255, .18), 0 0 36px rgba(216, 209, 255, .4); } }
-/* A full-size pointer glides in from below right, its tip lands on Add a key, and it clicks. */
-.gen-cursor { position: absolute; left: 22%; top: 50%; z-index: 3; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; }
+
+/* The key's birth, under the 29 million: the provider's page on the left, the key
+   in the middle, Safe Copy on the right. All there at once; keypath.ts adds .go
+   when it comes into view and the cursor clicks Copy over the finished picture. */
+.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 300px; align-items: center; width: 100%; max-width: 1000px; height: 400px; margin: 48px auto 0; }
+.bp-provider { position: relative; gap: 12px; }
+.bp-made { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--accent-ink); }
+.bp-val code { display: block; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font: 500 13.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; }
+.bp-val code span { color: var(--text-3); }
+.bp-copy { align-self: flex-end; }
+.bp-flow { grid-column: 2; grid-row: 1; height: 2px; margin: 0 -8px; background: linear-gradient(90deg, rgba(216, 209, 255, 0), rgba(216, 209, 255, .5) 30%, rgba(196, 236, 230, .5) 70%, rgba(196, 236, 230, 0)); background-size: 200% 100%; animation: bp-flow 2.4s linear infinite; }
+@keyframes bp-flow { to { background-position: -200% 0; } }
+.born-at { grid-column: 2; grid-row: 1; justify-self: center; width: 220px; height: 220px; position: relative; pointer-events: none; }
+.halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
+.kh.bp-safe { grid-column: 3; max-width: none; width: 300px; height: 290px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04); }
+.bp-safe .safe { inset: 0; }
+.bp-safe .pages { width: 120px; height: 120px; }
+.birthplace.go .bp-copy { animation: add-press .6s var(--ease) .6s; }
+@keyframes add-press { 30% { transform: scale(.93); box-shadow: 0 0 0 4px rgba(216, 209, 255, .18), 0 0 36px rgba(216, 209, 255, .4); } }
+/* A full-size pointer glides in from below right, its tip lands on Copy, and it clicks. */
+.gen-cursor { position: absolute; right: 22px; bottom: 6px; z-index: 3; fill: #fff; stroke: #0a0a0b; stroke-width: 1.2; stroke-linejoin: round; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); opacity: 0; pointer-events: none; }
 html:not(.js) .gen-cursor { display: none; }
-.hero-app.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
+.birthplace.go .gen-cursor { animation: gen-cursor 1.5s var(--ease) forwards; }
 @keyframes gen-cursor {
-  0% { opacity: 0; transform: translate(110px, 150px); }
+  0% { opacity: 0; transform: translate(110px, 120px); }
   15% { opacity: 1; }
   40% { transform: translate(0, 0); }
   46% { transform: translate(0, 0) scale(.85); }
   52% { transform: translate(0, 0); opacity: 1; }
   100% { transform: translate(40px, 70px); opacity: 0; }
 }
+@media (max-width: 1000px) {
+  .birthplace { grid-template-columns: 1fr; height: auto; gap: 24px; justify-items: center; }
+  .bp-provider { width: min(100%, 320px); }
+  .bp-flow { display: none; }
+  .born-at, .kh.bp-safe { grid-column: 1; grid-row: auto; }
+  .born-at { height: 140px; }
+}
 @media (prefers-reduced-motion: reduce) {
   html.js .gen-cursor { display: none; }
+  .bp-flow { animation: none; }
 }
 
 /* Each section fills the screen; scripts/pager.ts turns them like pages. */
@@ -559,7 +578,6 @@ html.js .rv.in { opacity: 1; transform: none; }
   .downloads { grid-template-columns: 1fr; }
   .points li { font-size: 17px; }
   .hero-app { width: min(100%, 380px); }
-  .born-at { display: none; }
   .readers { grid-template-columns: minmax(0, 1fr); }
   section { padding: 72px 0; }
   .count { font-size: 12px; }

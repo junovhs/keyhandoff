@@ -1,5 +1,5 @@
 // The key is the homepage's character. A solid holographic KeyHandoff logo
-// key starts large in front of the hero's vault window ([data-born-at]) and follows the reader
+// key is born under the Why headline, between the provider's page and Safe Copy ([data-born-at]) and follows the reader
 // down on long swooping curves. When the reader pauses at a section, the key
 // docks into that section's scene ([data-scene]) and acts it out: each step
 // sets data-step and cumulative classes (s1, s2...) on the scene for its
@@ -21,13 +21,6 @@ type Pose = [x: number, y: number, r: number, s: number, look?: string];
 type Step = { d: number; k: Pose };
 const SCENES: Record<string, Step[]> = {
   // Threats close in on a bare key in a .env; a shield turns them away.
-  threats: [
-    { d: 900, k: [50, 53, 0, 0.7, "plain"] },
-    { d: 1900, k: [50, 53, 0, 0.7, "plain shiver"] },
-    { d: 400, k: [50, 53, 0, 0.75, "plain"] },
-    { d: 0, k: [50, 53, 0, 0.8] },
-  ],
-  // Copied on the provider's page, caught off the clipboard, sealed in the vault.
   save: [
     { d: 1000, k: [20, 53, -90, 0.42, "plain"] },
     { d: 1300, k: [50, 24, -90, 0.42, "plain"] },
@@ -88,7 +81,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (bornAt && home && scenes.length) init(bornAt, home);
 
 function init(stageEl: HTMLElement, homeEl: HTMLElement) {
-  // The hero plays its press on [data-born]; the key itself appears at [data-born-at].
+  // The birthplace plays its click on [data-born]; the key itself appears at [data-born-at].
   const bornEl = stageEl.querySelector<HTMLElement>("[data-born-at]") ?? stageEl;
   const root = document.createElement("div");
   root.className = "keypath";
@@ -352,9 +345,9 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
   addEventListener("load", layout);
   lastScroll = performance.now();
   layout();
-  // The key is there from the first frame, in front of the vault window, so the
-  // hero reads at once. The cursor pressing Add a key only plays on top of it.
+  // The key is there whenever its birthplace is on screen, so the picture reads
+  // at once. The cursor clicking Copy only plays over it, each time it comes into view.
   root.classList.add("born");
   key.classList.add("alive");
-  if (!reduced) setTimeout(() => stageEl.classList.add("go"), 300);
+  if (!reduced) new IntersectionObserver(([e]) => stageEl.classList.toggle("go", e.isIntersecting), { threshold: 0.6 }).observe(stageEl);
 }
