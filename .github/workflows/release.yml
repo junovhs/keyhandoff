@@ -4,7 +4,7 @@ name: release
 # with CHANGELOG.md's section for that version as its notes. CI holds no signing
 # key (ADR 0005): the owner signs the packages offline and publishes the draft
 # with scripts/sign-release.sh (docs/releasing.md). Publishing makes the tag, and
-# refresh-site.yml then rebuilds the website. CI never writes to main or CHANGELOG.md.
+# scripts/sign-release.sh then deploys the website from the owner's computer. CI never writes to main or CHANGELOG.md.
 on:
   push:
     branches: [main]

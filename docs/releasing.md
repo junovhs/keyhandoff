@@ -20,7 +20,7 @@ Installed copies install any update signed with the updater key, so that key dec
    - signs each package;
    - checks every signature against the public key in `src-tauri/tauri.conf.json`, so a wrong key file is caught before anything is uploaded;
    - uploads the signatures and `latest.json`.
-4. **Publish.** The script asks `Publish v0.2.0 to everyone now?`. Answering `y` publishes the release. That creates the tag, the website's download links follow (`refresh-site.yml`), and installed copies take it **48 hours after you signed it** (SR-14). That window is for noticing a release you didn't make: GitHub emails you about every release, so pull any you don't recognise. There's no way to skip the wait yet, so even an urgent fix takes two days to reach installed copies; new downloads from the website get it at once. Any other answer leaves a signed draft; publish it later with `gh release edit v0.2.0 --draft=false --latest`.
+4. **Publish.** The script asks `Publish v0.2.0 to everyone now?`. Answering `y` publishes the release. That creates the tag, the script deploys the website from your computer so its download links follow (`scripts/deploy-site.sh`), and installed copies take it **48 hours after you signed it** (SR-14). That window is for noticing a release you didn't make: GitHub emails you about every release, so pull any you don't recognise. There's no way to skip the wait yet, so even an urgent fix takes two days to reach installed copies; new downloads from the website get it at once. Any other answer leaves a signed draft; publish it later with `gh release edit v0.2.0 --draft=false --latest`.
 5. **Unplug the signing drive.**
 
 The script needs `gh` (signed in), `git`, `jq`, `node`, `npx` and `sha256sum`. Git Bash on Windows has all of them once `gh` and Node are installed.
@@ -60,3 +60,7 @@ Either way, delete the secrets. While they exist, anyone who controls the accoun
 - **A build CI itself was made to produce wrongly** (a changed workflow, say) has matching hashes everywhere. Read the commits since the last release before signing. Reproducible builds (SR-16) will let anyone check a package against the source.
 - **A stolen signing drive** is still protected by the key's passphrase.
 - **Your own computer, if compromised while the drive is plugged in,** could sign something else. Keep the drive in only for the minute it takes.
+
+## The website
+
+keyhandoff.dev is deployed from the owner's computer with `scripts/deploy-site.sh`, never from GitHub Actions, so the repository holds no Cloudflare credential and taking over the GitHub account can't change the site's download links. The `site` workflow only checks the site builds. Run the script from an up-to-date `main` after site changes land; `sign-release.sh` runs it after publishing. It uses your own `npx wrangler login` and waits until the live site serves the commit it built.
