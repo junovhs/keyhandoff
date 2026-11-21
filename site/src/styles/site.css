@@ -129,14 +129,22 @@ html:not(.js) .hv-cursor { display: none; }
 /* The key's birth, under the 29 million: the provider's page on the left, the key
    in the middle, Safe Copy on the right. All there at once; keypath.ts adds .go
    when it comes into view and the cursor clicks Copy over the finished picture. */
-.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 320px; align-items: center; width: 100%; max-width: 1000px; height: 390px; margin: 28px auto 0; }
+.birthplace { position: relative; display: grid; grid-template-columns: 300px 1fr 320px; align-items: center; width: 100%; max-width: 1000px; height: 390px; margin: 0 auto; }
 .bp-provider { position: relative; gap: 12px; }
 .bp-made { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--accent-ink); }
 .bp-val code { display: block; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font: 500 13.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; }
 .bp-val code span { color: var(--text-3); }
 .bp-copy { align-self: flex-end; }
-.bp-flow { grid-column: 2; grid-row: 1; height: 2px; margin: 0 -8px; background: linear-gradient(90deg, rgba(216, 209, 255, 0), rgba(216, 209, 255, .5) 30%, rgba(196, 236, 230, .5) 70%, rgba(196, 236, 230, 0)); background-size: 200% 100%; animation: bp-flow 2.4s linear infinite; }
-@keyframes bp-flow { to { background-position: -200% 0; } }
+/* The protected moment: a sheltered passage from the provider's page to Safe
+   Copy, still air around the key while it crosses. A sheen drifts through it. */
+.bp-flow { grid-column: 2; grid-row: 1; position: relative; height: 230px; margin: 0 -26px; border-radius: 999px; border: 1px solid transparent; overflow: hidden;
+  background: radial-gradient(60% 80% at 50% 50%, rgba(216, 209, 255, .1), transparent 70%) padding-box, linear-gradient(#060608, #060608) padding-box,
+    linear-gradient(90deg, rgba(216, 209, 255, .15), rgba(216, 209, 255, .55) 30%, rgba(196, 236, 230, .55) 70%, rgba(196, 236, 230, .15)) border-box;
+  box-shadow: 0 0 60px rgba(216, 209, 255, .08), inset 0 0 40px rgba(216, 209, 255, .05); }
+.bp-flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: linear-gradient(90deg, transparent, rgba(216, 209, 255, .35) 20%, rgba(196, 236, 230, .35) 80%, transparent); }
+.bp-flow::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .06) 48%, rgba(216, 209, 255, .1) 52%, transparent 65%); background-size: 250% 100%; animation: bp-sheen 4s var(--ease) infinite; }
+@keyframes bp-sheen { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+.bp-provider, .kh.bp-safe { position: relative; z-index: 1; }
 .born-at { grid-column: 2; grid-row: 1; justify-self: center; width: 220px; height: 220px; position: relative; pointer-events: none; }
 .halo { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), rgba(196, 236, 230, .07) 55%, transparent 75%); }
 .kh.bp-safe { grid-column: 3; max-width: none; width: 320px; height: 372px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04); }
@@ -167,7 +175,7 @@ html:not(.js) .gen-cursor { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   html.js .gen-cursor { display: none; }
-  .bp-flow { animation: none; }
+  .bp-flow::after { animation: none; }
 }
 
 /* Each section fills the screen; scripts/pager.ts turns them like pages. */
@@ -699,7 +707,7 @@ html.js .rv.in { opacity: 1; transform: none; }
 
 /* The pearl as text: the one accent, as in the app. */
 .pearl-text { background: var(--pearl); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.stat-source { margin: 0 0 80px; text-align: center; font-size: 14px; color: var(--text-3); }
+.stat-source { margin: 0 0 24px; text-align: center; font-size: 14px; color: var(--text-3); }
 .stat-source a { color: var(--text-2); }
 @media (max-width: 720px) { .stat-source { margin-bottom: 20px; } }
 .download.primary .dl-meta { color: rgba(13, 11, 20, .62); }
