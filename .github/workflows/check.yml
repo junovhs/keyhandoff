@@ -4,7 +4,8 @@
 # (eval/results/replays.md): no real key leaves, and every send is stopped. Windows runs the same
 # suites (coverage-windows.md, replays-windows.md). Only Node.js is hooked there so far (PAR-08), so
 # Node.js must be protected and stopped there, and every other cell is written up as exposed.
-# macOS runs the seal crate and app tests (one universal build serves Intel and Apple silicon).
+# macOS runs the same suites (coverage-macos.md, replays-macos.md); as on Windows, only Node.js is
+# hooked there so far (ISS-13), so it must be protected and stopped and the rest show as exposed.
 name: check
 
 on:
@@ -107,3 +108,14 @@ jobs:
       - name: app
         run: cargo test
         working-directory: src-tauri
+      - name: coverage matrix
+        run: cargo test --lib coverage_matrix -- --ignored --nocapture
+        working-directory: src-tauri
+      - name: attack replays
+        run: cargo test --lib attack_replays -- --ignored --nocapture
+        working-directory: src-tauri
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-macos
+          path: eval/results/

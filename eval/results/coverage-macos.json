@@ -1,0 +1,191 @@
+{
+  "cells": [
+    {
+      "added_ms": -0.44200000000000017,
+      "claimed": false,
+      "client": "Python http.client",
+      "direct_ms": 10.264,
+      "hooked_ms": 9.822,
+      "protocol": "HTTP/1.1, header",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "claimed": false,
+      "client": "Python requests",
+      "protocol": "HTTP/1.1, header",
+      "result": "not run: not installed here",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "claimed": false,
+      "client": "Python httpx",
+      "protocol": "HTTP/1.1, header",
+      "result": "not run: not installed here",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 0.5619999999999994,
+      "claimed": false,
+      "client": "Python",
+      "direct_ms": 8.339,
+      "hooked_ms": 8.901,
+      "protocol": "HTTP/1.1, chunked body",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 0.3229999999999986,
+      "claimed": false,
+      "client": "Python",
+      "direct_ms": 8.861,
+      "hooked_ms": 9.184,
+      "protocol": "HTTP/1.1, gzip body",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 0.32099999999999973,
+      "claimed": false,
+      "client": "Python",
+      "direct_ms": 9.193,
+      "hooked_ms": 9.514,
+      "protocol": "WebSocket upgrade, header",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 1.3650000000000002,
+      "claimed": false,
+      "client": "Python",
+      "direct_ms": 8.516,
+      "hooked_ms": 9.881,
+      "protocol": "WebSocket message (masked)",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 0.37099999999999955,
+      "claimed": false,
+      "client": "curl",
+      "direct_ms": 4.926,
+      "hooked_ms": 5.297,
+      "protocol": "HTTP/1.1, header",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 1.678,
+      "claimed": false,
+      "client": "curl",
+      "direct_ms": 5.917,
+      "hooked_ms": 7.595,
+      "protocol": "HTTP/1.1, Basic auth (base64)",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 0.7210000000000001,
+      "claimed": false,
+      "client": "curl",
+      "direct_ms": 5.467,
+      "hooked_ms": 6.188,
+      "protocol": "HTTP/2, header (HPACK)",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system), nghttp2"
+    },
+    {
+      "added_ms": 0.33000000000000007,
+      "claimed": false,
+      "client": "curl",
+      "direct_ms": 5.204,
+      "hooked_ms": 5.534,
+      "protocol": "HTTP/2, body",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "key",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "OpenSSL (system), nghttp2"
+    },
+    {
+      "added_ms": null,
+      "claimed": false,
+      "client": "curl",
+      "direct_ms": null,
+      "hooked_ms": null,
+      "protocol": "plain HTTP to a stranger",
+      "result": "exposed: not hooked here (ISS-13)",
+      "server_got": "-",
+      "stranger_blocked": false,
+      "stranger_got": "key",
+      "tls": "none"
+    },
+    {
+      "added_ms": null,
+      "claimed": false,
+      "client": "Ruby Net::HTTP",
+      "direct_ms": null,
+      "hooked_ms": null,
+      "protocol": "HTTP/1.1, header",
+      "result": "not run: the client couldn't connect here",
+      "server_got": "nothing",
+      "stranger_blocked": false,
+      "stranger_got": "nothing",
+      "tls": "OpenSSL (system)"
+    },
+    {
+      "added_ms": 20.138999999999996,
+      "claimed": true,
+      "client": "Node.js https",
+      "direct_ms": 36.911,
+      "hooked_ms": 57.05,
+      "protocol": "HTTP/1.1, header",
+      "result": "protected",
+      "server_got": "key",
+      "stranger_blocked": true,
+      "stranger_got": "nothing",
+      "tls": "OpenSSL (built into Node)"
+    },
+    {
+      "claimed": false,
+      "client": "Go net/http",
+      "protocol": "HTTP/1.1, header",
+      "result": "not run: not installed here",
+      "tls": "Go crypto/tls"
+    }
+  ],
+  "environment": {
+    "curl": "curl 8.7.1 (x86_64-apple-darwin21.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.11 nghttp2/1.45.1",
+    "go": "",
+    "kernel": "21.6.0",
+    "node": "v22.23.5",
+    "openssl": "LibreSSL 2.8.3",
+    "os": "macOS 12.7.6",
+    "python": "Python 3.8.2",
+    "ruby": "ruby 2.6.10p210 (2022-04-12 revision 67958) [universal.x86_64-darwin21]"
+  }
+}

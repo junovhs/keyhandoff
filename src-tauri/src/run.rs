@@ -362,8 +362,28 @@ pub(crate) mod tests {
             let runner = format!("'{}' run::tests::runner_entry --exact -q >/dev/null 2>&1", me.display());
             // `; true` keeps the wrapper shell alive as the runner's parent.
             let shell = wrapper.map(Path::to_path_buf).unwrap_or_else(|| "/bin/sh".into());
-            std::process::Command::new("setsid")
-                .args(["-f", &shell.display().to_string(), "-c", &format!("{runner}; true")])
+            let script = format!("{runner}; true");
+            let mut detach = if has_setsid() {
+                let mut c = std::process::Command::new("setsid");
+                c.args(["-f", &shell.display().to_string(), "-c", &script]);
+                c
+            } else {
+                // No setsid command (macOS): the same tree from a shell in a
+                // new session that starts the wrapper in the background and
+                // exits, so the wrapper is left to launchd, as `setsid -f` does.
+                let mut c = std::process::Command::new("/bin/sh");
+                c.args(["-c", "\"$0\" -c \"$1\" </dev/null &", &shell.display().to_string(), &script]);
+                use std::os::unix::process::CommandExt;
+                // SAFETY: setsid is async-signal-safe.
+                unsafe {
+                    c.pre_exec(|| {
+                        libc::setsid();
+                        Ok(())
+                    });
+                }
+                c
+            };
+            detach
                 .current_dir(folder)
                 .env("KEYHANDOFF_TEST_RUN", serde_json::to_string(&spec).unwrap())
                 .envs(env.iter().copied())
@@ -373,6 +393,12 @@ pub(crate) mod tests {
                 .unwrap();
             out
         }
+    }
+
+    /// Whether the `setsid` command is here (util-linux; macOS has none).
+    #[cfg(unix)]
+    fn has_setsid() -> bool {
+        std::process::Command::new("setsid").arg("--version").output().is_ok()
     }
 
     /// The output and exit code of a run [`start`]ed, once it's done.
