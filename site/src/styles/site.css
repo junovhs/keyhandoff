@@ -192,7 +192,7 @@ html:not(.js) .gen-cursor { display: none; }
    real key goes on to Stripe, which lights. s3: back, and it loops. */
 /* AI agents: Claude Code waits on the left, KeyHandoff's real approval sheet on the right,
    the page's key docked between them (scene "agent"). */
-.scene.sc-ag { display: grid; grid-template-columns: 420px minmax(120px, 1fr) 420px; align-items: center; height: 480px; }
+.scene.sc-ag { overflow-x: clip; overflow-y: visible; display: grid; grid-template-columns: 420px minmax(120px, 1fr) 420px; align-items: center; height: 480px; }
 .scene.sc-ag > * { position: relative; left: auto; top: auto; transform: none; }
 .ag-term { height: 440px; border: 1px solid var(--line-strong); border-radius: 12px; background: #0c0c0e; box-shadow: 0 40px 120px rgba(0, 0, 0, .7); overflow: hidden; }
 .ag-bar { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--line); }
@@ -612,28 +612,37 @@ html.js .cutaway:not(.in) .layer { transform: none; }
 .l-core { transform: translateY(10px); z-index: 2; }
 .l-lock { transform: translateY(180px); z-index: 1; }
 .l-screen .plate { border: 1px solid var(--line-strong); background: #000; box-shadow: -30px 40px 60px rgba(0, 0, 0, .7); }
-.l-screen img { width: 100%; height: 100%; object-fit: cover; animation: screen-lock 9s infinite; }
-.locked-chip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--accent-ink); font-weight: 600; opacity: 0; animation: locked-chip 9s infinite; }
-@keyframes screen-lock { 0%, 62% { opacity: 1; filter: none; } 68%, 90% { opacity: .25; filter: blur(2px); } 96%, 100% { opacity: 1; filter: none; } }
-@keyframes locked-chip { 0%, 64% { opacity: 0; } 70%, 88% { opacity: 1; } 94%, 100% { opacity: 0; } }
+.l-screen img { width: 100%; height: 100%; object-fit: cover; }
+.locked-chip { display: none; }
 .l-core .plate { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 28px; border: 1px solid rgba(107, 149, 255, .55); background: linear-gradient(160deg, #0c0c0e, #060607); box-shadow: 0 0 60px rgba(216, 209, 255, .15), -30px 40px 60px rgba(0, 0, 0, .6); }
 .plate-name { margin-bottom: 6px; font-weight: 600; color: #fff; font-size: 20px; }
 .l-core code { font-size: 12px; color: var(--accent-ink); white-space: nowrap; }
-.l-lock .plate { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--accent-ink); font-weight: 600; animation: lock-glow 9s infinite; }
+.l-lock .plate { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--accent-ink); font-weight: 600; }
 .l-lock .plate span { color: var(--text-2); }
-@keyframes lock-glow { 0%, 62%, 96%, 100% { box-shadow: -30px 40px 60px rgba(0, 0, 0, .6); border-color: var(--line-strong); } 68%, 90% { box-shadow: 0 0 70px rgba(216, 209, 255, .27); border-color: var(--accent-ink); } }
+.l-lock .plate svg { transition: opacity .6s var(--ease); }
+.sc-locked.s3 .l-lock .plate svg { opacity: 0; }
 /* Only names travel from the core up to the window. */
 .beam { position: absolute; left: 50%; top: 50%; width: 1px; height: 150px; margin-top: -150px; border-left: 1px dashed var(--accent-ink); z-index: 2; opacity: 0; transition: opacity .6s var(--ease) 1s; }
 .cutaway.in .beam, html:not(.js) .beam { opacity: 1; }
-.beam span { position: absolute; left: 0; bottom: 0; transform: translateX(-50%); padding: 2px 8px; border-radius: 6px; background: var(--raised); border: 1px solid rgba(216, 209, 255, .3); color: #fff; font: 500 12px var(--font); white-space: nowrap; opacity: 0; animation: name-up 9s linear infinite; }
-.beam span:nth-child(2) { animation-delay: 1.2s; }
-.beam span:nth-child(3) { animation-delay: 2.4s; }
+.beam span { position: absolute; left: 0; bottom: 0; transform: translateX(-50%); padding: 2px 8px; border-radius: 6px; background: var(--raised); border: 1px solid rgba(216, 209, 255, .3); color: #fff; font: 500 12px var(--font); white-space: nowrap; opacity: 0; animation: name-up 12s linear infinite; }
+.beam span:nth-child(2) { animation-delay: 4s; }
+.beam span:nth-child(3) { animation-delay: 8s; }
 @keyframes name-up { 0% { opacity: 0; bottom: 0; } 5% { opacity: 1; } 22% { opacity: 1; } 28%, 100% { opacity: 0; bottom: 100%; } }
 .callouts { display: flex; flex-direction: column; gap: 56px; }
 .callout { position: relative; padding-left: 28px; border-left: 2px solid var(--line-strong); }
+.callout { animation: callout-lit 6s var(--ease) infinite; }
+.c-core { animation-delay: 1.4s; }
+.c-lock { animation-delay: 2.8s; }
+@keyframes callout-lit { 0%, 30%, 100% { opacity: .78; border-color: var(--line-strong); } 8%, 20% { opacity: 1; border-color: var(--accent-ink); } }
+/* A slow band of light passes down through the layers; each plate brightens as it passes. */
+.sweep { position: absolute; left: 50%; top: 0; width: 420px; height: 90px; margin-left: -210px; z-index: 4; pointer-events: none; background: radial-gradient(closest-side, rgba(216, 209, 255, .22), transparent); opacity: 0; animation: sweep 6s var(--ease) infinite; }
+@keyframes sweep { 0% { top: 4%; opacity: 0; } 6% { opacity: 1; } 50% { top: 84%; opacity: 1; } 60%, 100% { top: 90%; opacity: 0; } }
+.l-screen .plate, .l-core .plate, .l-lock .plate { animation: plate-lit 6s var(--ease) infinite; }
+.l-core .plate { animation-delay: 1.4s; }
+.l-lock .plate { animation-delay: 2.8s; }
+@keyframes plate-lit { 0%, 30%, 100% { filter: none; } 10%, 18% { filter: brightness(1.35) drop-shadow(0 0 24px rgba(216, 209, 255, .35)); } }
 .callout b { display: block; margin-bottom: 6px; font-size: 21px; letter-spacing: -.02em; }
 .callout p { margin: 0; color: var(--text-2); font-size: 16.5px; max-width: 42ch; }
-.c-core { border-color: var(--accent-ink); }
 .limits { max-width: 720px; margin: 28px auto 0; text-align: center; font-size: 15px; color: var(--text-2); }
 .limits a { color: var(--accent-ink); white-space: nowrap; }
 
@@ -807,12 +816,12 @@ html.js .rv.in { opacity: 1; transform: none; }
   .frame-card { gap: 24px; }
   .frame-text { font-size: 24px; }
   #built-in .head { margin-bottom: 8px; }
-  .cutaway { gap: 8px; }
-  .stack { height: 620px; margin-bottom: -390px; transform: scale(.37); transform-origin: top center; }
+  .cutaway { gap: 8px; overflow-x: clip; }
+  .sc-locked > .stack { height: 620px; margin-bottom: -390px; transform: scale(.37); transform-origin: top center; }
   .callouts { gap: 14px; }
   .callout { padding-left: 14px; }
   .callout b { margin-bottom: 2px; font-size: 16px; }
-  .callout p { font-size: 13px; line-height: 1.4; }
+  .callout p { font-size: 14px; line-height: 1.4; }
   .limits { margin-top: 12px; }
   #circle { padding: 36px 0; }
   #circle h2 { font-size: 28px; }
@@ -1030,10 +1039,6 @@ html.js .rv.in { opacity: 1; transform: none; }
 /* Locked: the security cutaway; callouts light as the key sinks through. */
 .sc-locked { height: auto; max-width: none; }
 .sc-locked > * { position: relative; left: auto; top: auto; transform: none; }
-.sc-locked .callout { transition: opacity .5s; }
-.sc-locked.s1 .callout { opacity: .35; }
-.sc-locked.s1 .c-screen, .sc-locked.s2 .c-core, .sc-locked.s3 .c-lock { opacity: 1; }
-.sc-locked.s2 .c-screen, .sc-locked.s3 .c-core { opacity: .35; }
 
 @media (prefers-reduced-motion: reduce) {
   .kp-shape, .kp-glint { animation: none; }

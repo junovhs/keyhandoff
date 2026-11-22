@@ -48,11 +48,13 @@ const SCENES: Record<string, Step[]> = {
     { d: 2600, k: [50, 17, 0, 0.36], m: [50, 50, 0, 0.3] },
   ],
   // Down through what you see, the Rust core, and the lock.
+  // Built in: the key sinks once through the window and the core, into the
+  // lock, and stays there (the lock's icon gives way to it).
   locked: [
-    { d: 900, k: [22, 6, 0, 0.55] },
-    { d: 1400, k: [22, 26, 0, 0.55] },
-    { d: 1400, k: [22, 52, 0, 0.5] },
-    { d: 0, k: [22, 78, 0, 0.45] },
+    { d: 1400, k: [25.3, 6, 0, 0.5], m: [50, 2, 0, 0.3] },
+    { d: 1800, k: [25.3, 22.6, 0, 0.5], m: [50, 12.8, 0, 0.3] },
+    { d: 1800, k: [23, 48.5, 0, 0.45], m: [47, 27.5, 0, 0.28] },
+    { d: 0, k: [24.2, 77.8, 0, 0.4], m: [48.7, 44.1, 0, 0.25] },
   ],
 };
 const LOOKS = ["plain", "standin", "sealed", "shiver", "tucked"];

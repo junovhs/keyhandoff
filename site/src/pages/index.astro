@@ -372,10 +372,7 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap" id="built-in">
-      <div class="head center rv">
-        <span class="eyebrow"><Icon name="shield" />Built in, everywhere</span>
-        <h2>It feels simple to use, but there&rsquo;s serious security underneath.</h2>
-      </div>
+      <h2 class="big-q rv">Simple to use. <br /><span class="pearl-text">Serious security underneath.</span></h2>
       <div class="cutaway rv scene sc-locked" data-scene="locked" data-step="0">
         <div class="stack" aria-hidden="true">
           <div class="layer l-lock"><div class="plate"><Icon name="lock" size={64} /><span>Vault lock</span></div></div>
@@ -386,12 +383,13 @@ const INCIDENTS = [
             <code>OpenAI &nbsp;&nbsp;&nbsp;5be0 a3f9 12c7 8e4d</code>
           </div></div>
           <div class="beam"><span>Dialpad</span><span>Stripe</span><span>OpenAI</span></div>
+          <span class="sweep"></span>
           <div class="layer l-screen"><div class="plate"><img src="/shots/home.png" width="800" height="1200" loading="lazy" alt="" /><span class="locked-chip"><Icon name="lock" size={16} />Locked</span></div></div>
         </div>
         <div class="callouts">
-          <div class="callout c-screen"><b>What you see</b><p>The window only ever gets a key&rsquo;s name, so there&rsquo;s nothing on screen for anyone to read over your shoulder.</p></div>
-          <div class="callout c-core"><b>The Rust core</b><p>The real values stay down here, encrypted, and they never travel up to the screen.</p></div>
-          <div class="callout c-lock"><b>The lock</b><p>It locks itself when your computer sleeps or your screen locks, and opens again with your passphrase or a short PIN.</p></div>
+          <div class="callout c-screen"><b>What you see</b><p>Only a key&rsquo;s name.</p></div>
+          <div class="callout c-core"><b>The Rust core</b><p>Keeps every value encrypted.</p></div>
+          <div class="callout c-lock"><b>The lock</b><p>Closes when you step away.</p></div>
         </div>
       </div>
       <p class="limits rv"><a href="/docs/limits/">Read exactly what KeyHandoff protects</a></p>
