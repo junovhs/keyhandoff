@@ -81,10 +81,12 @@ jobs:
         # takes the crate's other binary (the Windows console command), so it's
         # built for both architectures, with the features tauri build uses so
         # the library compiles once, and joined first.
+        # The app crate embeds the built screens (dist/), so they're built first.
         if: runner.os == 'macOS'
         working-directory: src-tauri
         run: |
           set -euo pipefail
+          (cd .. && npm run build)
           for t in aarch64-apple-darwin x86_64-apple-darwin; do
             cargo build --release --bin keyhandoff-cli --target "$t" --features tauri/custom-protocol
           done
