@@ -7,6 +7,17 @@ export type Release = { date: string; title: string; notes: string[] };
 
 export const HISTORY: Release[] = [
   {
+    date: "2026-11-22",
+    title: "On the Mac",
+    notes: [
+      "KeyHandoff runs on Macs, Intel and Apple silicon, with the same vault, cards, teams and Safe Copy.",
+      "Programs and AI agents asking for a key are named from macOS itself; cron jobs and launchd agents always ask.",
+      "On a Mac, Type works once you allow KeyHandoff under Privacy & Security, Accessibility.",
+      "Safe Copy lists what it checked while it listens.",
+      "A sealed key shows as a card you can drag into a chat, an email or a folder.",
+    ],
+  },
+  {
     date: "2026-11-19",
     title: "Moves with you",
     notes: [

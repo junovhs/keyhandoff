@@ -4,6 +4,37 @@ Each version's notes become its GitHub Release. To release, set `version` in
 `src-tauri/Cargo.toml` and add its section here; the release workflow builds and
 publishes it once both are on `main`.
 
+## [0.3.0] - 2026-11-22
+
+KeyHandoff is still pre-release and has not had a security audit: use it with
+test keys.
+
+- **KeyHandoff for macOS:** one app for Intel and Apple silicon Macs, macOS
+  10.15 or later. The vault, cards and sealed keys, teams and team folders,
+  Nearby, Safe Copy, `keyhandoff run` and the loaders all work as on Windows
+  and Linux. Double-click a `.handoff` file in Finder to open it.
+- **Safe Copy on the Mac:** it checks the clipboard only while it listens,
+  takes your one copy, clears it, and names clipboard managers such as Maccy,
+  Paste, Alfred or Raycast if they're running.
+- **Programs and AI agents on the Mac:** KeyHandoff names the program asking
+  for a key from macOS itself, recognises Claude Code and the other agents,
+  and always asks when a cron job or a launchd agent is the one asking.
+  Node.js programs get stand-in keys; other programs get the key itself for
+  now, with every printed copy hidden.
+- **Type a key into a field on the Mac:** allow KeyHandoff under Privacy &
+  Security, Accessibility once, and Type works as on Linux.
+- **Remember on this computer** keeps its copy in the Mac's login Keychain.
+- **The `keyhandoff` command** is linked into `/usr/local/bin` when KeyHandoff
+  can write there; the install guide has the one-line command otherwise.
+- **Safe Copy shows what it checked** while it listens, instead of staying
+  quiet when all is well.
+- **Sealed keys show as a card** in Send a key: drag it into a chat, an email
+  or a folder, or copy it as text.
+
+The Mac app isn't notarized yet: the first time, right-click it in
+Applications and choose Open (on macOS 15, System Settings, Privacy &
+Security, Open Anyway).
+
 ## [0.2.0] - 2026-11-20
 
 KeyHandoff is still pre-release and has not had a security audit: use it with
