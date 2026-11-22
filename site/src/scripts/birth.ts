@@ -64,7 +64,7 @@ if (birth && !reduced) {
   // once the section is gone the travelling key takes over from the vault.
   let played = false;
   new IntersectionObserver(([e]) => {
-    if (e.intersectionRatio === 0) {
+    if (e.intersectionRatio < 0.15) {
       clear(); played = false;
       birth.classList.remove("bt-run"); birth.dataset.bw = ""; step(0); key.className = "bt-key"; cursor.classList.remove("show");
       document.documentElement.classList.remove("birth-hold");
@@ -72,5 +72,5 @@ if (birth && !reduced) {
     }
     if (!played) document.documentElement.classList.add("birth-hold");
     if (!played && e.intersectionRatio >= 0.5) { played = true; play(); }
-  }, { threshold: [0, 0.5] }).observe(birth);
+  }, { threshold: [0, 0.15, 0.5], rootMargin: "-96px 0px 0px 0px" }).observe(birth);
 }

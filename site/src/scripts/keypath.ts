@@ -20,6 +20,14 @@ const TAILS = [["t1", 560, 120], ["t2", 440, 200], ["t3", 320, 290]] as const;
 type Pose = [x: number, y: number, r: number, s: number, look?: string];
 type Step = { d: number; k: Pose };
 const SCENES: Record<string, Step[]> = {
+  // Use it: the key waits at KeyHandoff; the program's stand-in comes to it, and
+  // the real key goes on to Stripe inside the encrypted connection; then again.
+  use: [
+    { d: 1200, k: [50, 50, 0, 0.42] },
+    { d: 1500, k: [50, 50, 0, 0.42] },
+    { d: 1500, k: [86, 50, 0, 0.42] },
+    { d: 900, k: [50, 50, 0, 0.42] },
+  ],
   // An agent reaches; a gate holds; you allow one session; then revoke it.
   agent: [
     { d: 800, k: [62, 50, 0, 0.7] },
@@ -259,6 +267,13 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
         p.at += p.steps[p.i].d;
         p.i++;
         setStep(p.el, p.i);
+      }
+      // A scene whose last step has a length loops.
+      const last = p.steps[p.steps.length - 1];
+      if (p.i === p.steps.length - 1 && last.d && now - p.at > last.d) {
+        p.at = now;
+        p.i = 0;
+        setStep(p.el, 0);
       }
       const k = p.steps[p.i].k;
       const pt = posePt(p.el, k);
