@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use mdns_sd::{IfKind, ServiceDaemon, ServiceEvent, ServiceInfo};
 use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};
 
@@ -114,6 +114,11 @@ impl Nearby {
         self.seen.lock().unwrap_or_else(|p| p.into_inner()).get(fingerprint).map(|s| s.at)
     }
 
+    /// Every computer seen nearby, by fingerprint.
+    pub fn seen(&self) -> Vec<String> {
+        self.seen.lock().unwrap_or_else(|p| p.into_inner()).keys().cloned().collect()
+    }
+
     /// Computers nearby that are adding people right now: fingerprint and name.
     pub fn pairing(&self) -> Vec<(String, String)> {
         let seen = self.seen.lock().unwrap_or_else(|p| p.into_inner());
@@ -170,6 +175,10 @@ fn announce_and_find(
     changed: Arc<dyn Fn() + Send + Sync>,
 ) -> Result<ServiceDaemon, String> {
     let mdns = ServiceDaemon::new().map_err(|e| format!("Nearby can't use this network: {e}"))?;
+    // IPv4 only: the listener is IPv4, and answers that arrive over IPv6 carry
+    // only IPv6 addresses. With both, a computer showed only if its IPv4
+    // answer happened to arrive, which on some networks it didn't for seconds.
+    mdns.disable_interface(IfKind::IPv6).map_err(|e| format!("Nearby can't use this network: {e}"))?;
     mdns.register(service(fingerprint, instance, port, None)?).map_err(|e| format!("Nearby can't announce on this network: {e}"))?;
     let events = mdns.browse(SERVICE).map_err(|e| e.to_string())?;
 
@@ -356,3 +365,4 @@ mod tests {
         assert_eq!(b.find("aaaaaaaaaaaaaaaa").map(|s| s.port()), Some(a.port()));
     }
 }
+

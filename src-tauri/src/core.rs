@@ -397,6 +397,8 @@ pub struct View {
     pub invited: Option<InviteView>,
     /// Nearby is on.
     pub nearby: bool,
+    /// Computers on this network with Nearby on that aren't on your list.
+    pub nearby_others: usize,
     pub pairing: Option<PairingView>,
     /// The latest attempt to send a placeholder somewhere else, until dismissed.
     pub alert: Option<AlertView>,
@@ -1665,6 +1667,13 @@ impl Core {
         self.nearby.as_ref()?.find(&fingerprint)
     }
 
+    /// Computers Nearby has seen that belong to no one on your list.
+    fn nearby_others(&self) -> usize {
+        let Some(n) = &self.nearby else { return 0 };
+        let known: Vec<String> = self.contacts.iter().filter_map(|c| PublicIdentity::from_bytes(c.identity).ok()).map(|p| p.fingerprint()).collect();
+        n.seen().iter().filter(|fp| !known.contains(fp)).count()
+    }
+
     /// A new card for one person, its locks kept in the keyring. Returns its bytes.
     fn fresh_card(&mut self) -> Result<Vec<u8>, String> {
         let (card, pending) = keyhandoff_seal::create_card(&self.identity, &self.settings.name, now(), DEFAULT_CARD_TTL, CARD_LOCKS)
@@ -2123,6 +2132,7 @@ impl Core {
             teams: self.teams.iter().map(|t| self.team_view(t)).collect(),
             folder_teams: self.folder_teams.iter().map(|t| self.folder_team_view(t)).collect(),
             nearby: self.nearby.is_some(),
+            nearby_others: self.nearby_others(),
             pairing: self.pairing.as_ref().map(|p| self.pairing_view(p)),
             import_receipt: self.import_receipt.clone(),
             import: self.import.as_ref().map(|i| self.import_view(i)),
@@ -2805,6 +2815,27 @@ mod tests {
             let _ = fs::remove_dir_all(a.data);
         }
         let _ = fs::remove_dir_all(shared);
+    }
+
+    /// With Nearby on, a computer that isn't anyone on your list still shows
+    /// up as a count, so turning Nearby on visibly finds someone.
+    #[test]
+    fn nearby_counts_computers_that_arent_on_your_list() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let (ann, ben) = (app("Ann"), app("Ben"));
+        ben.handoff.start_nearby(false).unwrap();
+        assert_eq!(ben.handoff.view().nearby_others, 0);
+        let ann_fp = ann.handoff.view().computer;
+        let at = std::net::SocketAddr::from(([127, 0, 0, 1], 9));
+        ben.handoff.lock().nearby.as_ref().unwrap().note(&ann_fp, at, None);
+        assert_eq!(ben.handoff.view().nearby_others, 1, "Ann's computer is seen but she isn't on Ben's list");
+        give_card(&ann, &ben);
+        let view = ben.handoff.view();
+        assert_eq!(view.nearby_others, 0, "once she's on the list she shows as a person instead");
+        assert!(view.contacts.iter().any(|c| c.nearby));
+        for a in [ann, ben] {
+            let _ = fs::remove_dir_all(a.data);
+        }
     }
 
     #[test]

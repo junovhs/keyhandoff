@@ -132,7 +132,7 @@ export function MainWindow() {
       <Presence show={Boolean(view?.added)}>{view?.added && (
         <ContactSheet contact={view.added} onSend={(c) => void api.dismiss().then(() => setSending({ team: false, id: c.id, name: c.name }))} />
       )}</Presence>
-      <Presence show={Boolean(view && sending && !safeOn && !editing)}>{view && sending && !safeOn && !editing && (
+      <Presence show={Boolean(view && sending && !safeOn && !editing && !view.pairing && !view.added)}>{view && sending && !safeOn && !editing && !view.pairing && !view.added && (
         <SendSheet view={view} run={run} start={sending === "pick" ? null : sending} onEdit={setEditing} onClose={() => setSending(null)} />
       )}</Presence>
       <Presence show={Boolean(view && editing && !safeOn)}>{view && editing && !safeOn && (
@@ -847,6 +847,7 @@ function SendSheet({ view, run, start, onEdit, onClose }: { view: View; run: Run
         <Icon name={view.nearby ? "check" : "users"} />
         <span>{view.nearby ? "Nearby is on: people on this network can find you" : "Find people on this network"}</span>
       </button>
+      {view.nearby && <p className="help nearby-status">{nearbyStatus(contacts, view.nearby_others)}</p>}
       <button className="chip nearby-toggle" onClick={() => void run(api.startPairing())} title="Meet someone in person: both of you choose this, then compare a code.">
         <Icon name="user" />
         <span>Add someone nearby</span>
@@ -997,6 +998,19 @@ function FolderTeamRows({ team, run, onPick }: { team: FolderTeamView; run: Run;
       ))}
     </>
   );
+}
+
+/** What Nearby can see right now, and what to do about it. */
+export function nearbyStatus(contacts: ContactView[], others: number): string {
+  const near = contacts.filter((c) => c.nearby).map((c) => c.name);
+  if (!near.length && !others) return "No one else on this network has Nearby on yet. Ask them to open KeyHandoff and turn it on.";
+  const parts: string[] = [];
+  if (near.length) parts.push(`${near.join(", ")} ${near.length === 1 ? "is" : "are"} nearby: pick them below to send straight to their computer.`);
+  if (others) {
+    const n = others === 1 ? "1 other computer here has" : `${others} other computers here have`;
+    parts.push(`${n} Nearby on. To add them, both of you choose Add someone nearby.`);
+  }
+  return parts.join(" ");
 }
 
 /** Adding someone nearby: pick them, then compare the code on both screens. */

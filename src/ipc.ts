@@ -159,6 +159,8 @@ export interface View {
   invited: InviteView | null;
   /** Nearby is on. */
   nearby: boolean;
+  /** Computers on this network with Nearby on that aren't on your list. */
+  nearby_others: number;
   pairing: PairingView | null;
   /** The latest attempt to send a key's stand-in somewhere else, until dismissed. */
   alert: AlertView | null;

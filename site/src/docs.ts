@@ -97,7 +97,7 @@ export const docs = defineDocs({
                   kind: "steps",
                   items: [
                     { title: "Windows 10 or 11", text: "Run `keyhandoff-…-windows-x64-setup.exe`. It installs for you only, without asking for admin rights. It isn't code-signed yet, so SmartScreen may ask: choose **More info**, then **Run anyway**." },
-                    { title: "macOS 10.15 or later", text: "Open `keyhandoff-…-macos-universal.dmg` and drag KeyHandoff to Applications. One app runs on Intel and Apple silicon Macs. It isn't notarized yet, so the first time, right-click it in Applications and choose **Open** (on macOS 15, **System Settings → Privacy & Security → Open Anyway**)." },
+                    { title: "macOS 10.15 or later", text: "Open `keyhandoff-…-macos-universal.dmg` and drag KeyHandoff to Applications. One app runs on Intel and Apple silicon Macs. The Mac app is new (beta) and isn't notarized yet, so macOS stops it the first time: open it once, then choose **System Settings → Privacy & Security → Open Anyway** (on macOS 14 or earlier, right-click it in Applications and choose **Open** instead)." },
                     { title: "Ubuntu, Debian and friends", text: "Run `sudo apt install ./keyhandoff-…-linux-amd64.deb`. It needs WebKitGTK 4.1, which apt installs with it." },
                     { title: "Other Linux", text: "Make `keyhandoff-…-linux-x86_64.AppImage` executable (`chmod +x`) and run it. KeyHandoff needs X11; Wayland isn't supported yet." },
                   ],

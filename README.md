@@ -209,7 +209,7 @@ The passphrase and recovery code always work. If you lose both, the keys can't b
 
 Download it from **[keyhandoff.dev](https://keyhandoff.dev/#download)** or [GitHub releases](https://github.com/junovhs/keyhandoff/releases): a Windows installer, a `.dmg` for macOS (Intel and Apple silicon, from 0.3.0), or a `.deb` or AppImage for Linux (X11). Installed copies check GitHub for a signed update at launch and every six hours. While KeyHandoff is locked, a Windows, macOS or AppImage update installs and restarts on its own; otherwise **Restart to update** shows in the title bar. A `.deb` update always waits for that click, because installing it asks for your password.
 
-Windows, macOS 10.15 or later, and Linux (X11). Wayland isn't supported. The Mac app isn't notarized yet, so the first time, right-click it in Applications and choose **Open** (on macOS 15, **System Settings → Privacy & Security → Open Anyway**). [What works on which system](docs/parity.md) lists the few things that work on one but not yet the other.
+Windows, macOS 10.15 or later, and Linux (X11). Wayland isn't supported. The Mac app is new (beta) and isn't notarized yet, so macOS stops it the first time: open it once, then choose **System Settings → Privacy & Security → Open Anyway** (on macOS 14 or earlier, right-click it in Applications and choose **Open** instead). [What works on which system](docs/parity.md) lists the few things that work on one but not yet the other.
 
 <br>
 

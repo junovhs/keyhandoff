@@ -28,12 +28,15 @@ test keys.
   can write there; the install guide has the one-line command otherwise.
 - **Safe Copy shows what it checked** while it listens, instead of staying
   quiet when all is well.
+- **Nearby says what it can see**: with Nearby on, Send a key says who is on
+  this network, so turning it on visibly finds someone. Add someone nearby
+  now opens straight away instead of hiding behind Send a key.
 - **Sealed keys show as a card** in Send a key: drag it into a chat, an email
   or a folder, or copy it as text.
 
-The Mac app isn't notarized yet: the first time, right-click it in
-Applications and choose Open (on macOS 15, System Settings, Privacy &
-Security, Open Anyway).
+The Mac app is new (beta) and isn't notarized yet: the first time, open it,
+then choose System Settings, Privacy & Security, Open Anyway (on macOS 14 or
+earlier, right-click it in Applications and choose Open).
 
 ## [0.2.0] - 2026-11-20
 
