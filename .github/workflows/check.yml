@@ -4,6 +4,7 @@
 # (eval/results/replays.md): no real key leaves, and every send is stopped. Windows runs the same
 # suites (coverage-windows.md, replays-windows.md). Only Node.js is hooked there so far (PAR-08), so
 # Node.js must be protected and stopped there, and every other cell is written up as exposed.
+# macOS runs the seal crate and app tests (one universal build serves Intel and Apple silicon).
 name: check
 
 on:
@@ -88,3 +89,21 @@ jobs:
         with:
           name: coverage-windows
           path: eval/results/
+
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm run build
+      - name: seal crate
+        run: cargo test
+        working-directory: crates/seal
+      - name: app
+        run: cargo test
+        working-directory: src-tauri
