@@ -53,34 +53,33 @@ fn args(pid: i32) -> Vec<String> {
     String::from_utf8_lossy(&cmdline).split('\0').filter(|a| !a.is_empty()).map(String::from).collect()
 }
 
-/// The AI coding agent among `pid` and the processes that started it: each
-/// one's name, executable and first two arguments are checked, and Claude
-/// Code's `CLAUDECODE` marker in the environment. A renamed agent isn't
-/// found, so this is a warning; binding approvals to the command is what holds.
+/// What `/proc` says about one process, for the shared rules in `os::tree`.
+struct Table;
+
+impl super::super::tree::ProcessTable for Table {
+    fn parent(&self, pid: u32) -> Option<u32> {
+        stat_field(pid as i32, 1).filter(|&p| p > 1 && p != pid as i64).map(|p| p as u32)
+    }
+    fn short_name(&self, pid: u32) -> Option<String> {
+        fs::read_to_string(format!("/proc/{pid}/comm")).ok().map(|c| c.trim_end().to_string())
+    }
+    fn image(&self, pid: u32) -> Option<PathBuf> {
+        fs::read_link(format!("/proc/{pid}/exe")).ok()
+    }
+    fn args(&self, pid: u32) -> Vec<String> {
+        args(pid as i32)
+    }
+    fn environ_has(&self, pid: u32, entry: &[u8]) -> bool {
+        fs::read(format!("/proc/{pid}/environ")).unwrap_or_default().split(|&b| b == 0).any(|v| v == entry)
+    }
+    fn started(&self, pid: u32) -> Option<u64> {
+        // `starttime` is field 22 of stat, 19 after the state: clock ticks since boot.
+        u64::try_from(stat_field(pid as i32, 19)?).ok()
+    }
+}
+
 pub fn agent(pid: u32) -> Option<String> {
-    let pid = pid as i32;
-    let environ = fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
-    if environ.split(|&b| b == 0).any(|v| v == b"CLAUDECODE=1") {
-        return Some("Claude Code".into());
-    }
-    let mut pid = pid;
-    for _ in 0..64 {
-        let proc = PathBuf::from(format!("/proc/{pid}"));
-        let comm = fs::read_to_string(proc.join("comm")).unwrap_or_default();
-        let exe = fs::read_link(proc.join("exe")).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-        let names = [comm.trim_end().to_string(), exe].into_iter().chain(args(pid).into_iter().take(2));
-        if let Some(agent) = names.filter(|n| !n.is_empty()).find_map(|n| super::super::agent_named(&n)) {
-            return Some(agent);
-        }
-        // `pid (comm) state ppid …`; comm can hold spaces and parentheses.
-        let stat = fs::read_to_string(proc.join("stat")).ok()?;
-        let ppid: i32 = stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok()?;
-        if ppid <= 1 {
-            return None;
-        }
-        pid = ppid;
-    }
-    None
+    super::super::tree::agent(&Table, pid)
 }
 
 impl Peer {
@@ -216,59 +215,12 @@ mod tests {
     }
 }
 
-/// The dedicated interactive agent CLI process (`claude`, or `codex` alone or
-/// as `codex exec`) among `pid` and the processes that started it, if it's
-/// the `expected` agent: the scope a session grant is bound to. Each process
-/// must be older than the one it started, and its start time (in clock ticks
-/// since boot) tells a reused pid apart. Hosts that can run several chats in
-/// one process, and any other mode, can't establish a session. As on
-/// Windows.
-pub fn agent_session(mut pid: u32, expected: &str) -> Option<AgentProcess> {
-    let mut child_birth = u64::MAX;
-    for _ in 0..64 {
-        let p = pid as i32;
-        // `starttime` is field 22 of stat, 19 after the state.
-        let birth = u64::try_from(stat_field(p, 19)?).ok()?;
-        if birth > child_birth {
-            return None;
-        }
-        let image = fs::read_link(format!("/proc/{p}/exe")).ok()?;
-        // The native installers start a version-named file through a
-        // `claude` link, so the command name is checked as well as the file.
-        let comm = fs::read_to_string(format!("/proc/{p}/comm")).unwrap_or_default().trim_end().to_string();
-        let file = image.file_name()?.to_str()?.to_string();
-        if let Some((agent, name)) = [comm, file].into_iter().find_map(|n| super::super::agent_named(&n).map(|a| (a, n))) {
-            if agent != expected || !(name == "claude" || name == "codex") {
-                return None;
-            }
-            let argv = args(p);
-            let dedicated = argv.len() == 1 || (name == "codex" && argv.get(1).is_some_and(|a| a == "exec"));
-            return dedicated.then_some(AgentProcess { pid, created: birth, image });
-        }
-        child_birth = birth;
-        match stat_field(p, 1) {
-            Some(ppid) if ppid > 1 => pid = ppid as u32,
-            _ => return None,
-        }
-    }
-    None
+pub fn agent_session(pid: u32, expected: &str) -> Option<AgentProcess> {
+    super::super::tree::agent_session(&Table, pid, expected)
 }
 
-/// Whether `pid` is `ancestor` or was started, directly or not, by it.
 pub fn descends_from(pid: u32, ancestor: u32) -> bool {
-    let mut pid = pid;
-    for _ in 0..64 {
-        if pid == ancestor {
-            return true;
-        }
-        let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) else { return false };
-        let Some(ppid) = stat.rsplit_once(')').and_then(|(_, rest)| rest.split_whitespace().nth(1)?.parse().ok()) else { return false };
-        if ppid <= 1 {
-            return false;
-        }
-        pid = ppid;
-    }
-    false
+    super::super::tree::descends_from(&Table, pid, ancestor)
 }
 
 /// Connect to a running KeyHandoff's key socket, as `keyhandoff run` does.

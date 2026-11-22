@@ -13,6 +13,10 @@ use std::path::PathBuf;
 use keyhandoff_seal::Secret;
 use zeroize::Zeroizing;
 
+// The process-tree rules, shared; each OS answers questions about one process.
+#[cfg_attr(not(any(target_os = "linux", windows, target_os = "macos")), allow(dead_code))]
+mod tree;
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]

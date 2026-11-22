@@ -60,8 +60,56 @@ fn peer(pipe: HANDLE) -> Option<(Peer, OwnedHandle)> {
 /// The AI coding agent among `pid` and the processes that started it, by
 /// executable name from one process snapshot. A renamed agent isn't found,
 /// so this is a warning; binding approvals to the command is what holds.
+/// One look at every process Windows is running: each one's parent and file
+/// name, for the shared rules in `os::tree`. Windows gives these in one
+/// snapshot rather than per process.
+struct Snapshot(std::collections::HashMap<u32, (u32, String)>);
+
+impl Snapshot {
+    fn take() -> Self {
+        use ::windows::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+        };
+        let mut processes = std::collections::HashMap::new();
+        // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
+        unsafe {
+            let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Self(processes) };
+            let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+            let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+            while more {
+                let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                processes.insert(entry.th32ProcessID, (entry.th32ParentProcessID, String::from_utf16_lossy(&entry.szExeFile[..end])));
+                more = Process32NextW(snapshot, &mut entry).is_ok();
+            }
+            let _ = CloseHandle(snapshot);
+        }
+        Self(processes)
+    }
+}
+
+impl super::super::tree::ProcessTable for Snapshot {
+    fn parent(&self, pid: u32) -> Option<u32> {
+        self.0.get(&pid).map(|p| p.0).filter(|&p| p != 0 && p != pid)
+    }
+    fn short_name(&self, pid: u32) -> Option<String> {
+        self.0.get(&pid).map(|p| p.1.clone())
+    }
+    fn image(&self, _: u32) -> Option<PathBuf> {
+        None
+    }
+    fn args(&self, _: u32) -> Vec<String> {
+        Vec::new()
+    }
+    fn environ_has(&self, _: u32, _: &[u8]) -> bool {
+        false
+    }
+    fn started(&self, _: u32) -> Option<u64> {
+        None
+    }
+}
+
 pub fn agent(pid: u32) -> Option<String> {
-    process_ancestry(pid).iter().find_map(|name| super::super::agent_named(name))
+    super::super::tree::agent(&Snapshot::take(), pid)
 }
 
 impl Peer {
@@ -96,31 +144,15 @@ fn unattended_origin<'a>(ancestry: impl IntoIterator<Item = &'a str>, service_se
     service_session.then_some("a Windows service or scheduled task")
 }
 
-fn process_ancestry(mut pid: u32) -> Vec<String> {
-    use ::windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
-    };
-    let mut parents = std::collections::HashMap::new();
-    // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Vec::new() };
-        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
-        while more {
-            let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-            parents.insert(entry.th32ProcessID, (entry.th32ParentProcessID, String::from_utf16_lossy(&entry.szExeFile[..end])));
-            more = Process32NextW(snapshot, &mut entry).is_ok();
-        }
-        let _ = CloseHandle(snapshot);
-    }
+fn process_ancestry(pid: u32) -> Vec<String> {
+    use super::super::tree::ProcessTable;
+    let snapshot = Snapshot::take();
     let mut ancestry = Vec::new();
-    for _ in 0..64 {
-        let Some((parent, name)) = parents.remove(&pid) else { break };
+    let mut at = Some(pid);
+    while let Some(pid) = at.filter(|_| ancestry.len() < 64) {
+        let Some(name) = snapshot.short_name(pid) else { break };
         ancestry.push(name);
-        if parent == 0 || parent == pid {
-            break;
-        }
-        pid = parent;
+        at = snapshot.parent(pid);
     }
     ancestry
 }
@@ -135,6 +167,10 @@ fn unattended_launches_are_distinguished_from_the_interactive_shell() {
     assert_eq!(unattended_origin(["cmd.exe", "explorer.exe", "svchost.exe"], false), None);
 }
 
+/// Kept here rather than in `os::tree`: on Windows each process stays open
+/// for the whole check (so its pid can't be reused mid-walk) and the image
+/// must be a console program, read from its PE header.
+///
 /// Identify a dedicated interactive CLI process. A desktop host or app-server
 /// can multiplex chats in one process and cannot establish this scope.
 pub fn agent_session(mut pid: u32, expected: &str) -> Option<AgentProcess> {
@@ -188,34 +224,8 @@ fn console_image(path: &std::path::Path) -> Option<bool> {
     Some(&header[..4] == b"PE\0\0" && u16::from_le_bytes([header[92], header[93]]) == 3)
 }
 
-/// Whether `pid` is `ancestor` or was started, directly or not, by it.
 pub fn descends_from(pid: u32, ancestor: u32) -> bool {
-    use ::windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
-    };
-    let mut parents = std::collections::HashMap::new();
-    // SAFETY: a process snapshot walk; `entry.dwSize` is set and the handle is closed.
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return false };
-        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
-        while more {
-            parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
-            more = Process32NextW(snapshot, &mut entry).is_ok();
-        }
-        let _ = CloseHandle(snapshot);
-    }
-    let mut pid = pid;
-    for _ in 0..64 {
-        if pid == ancestor {
-            return true;
-        }
-        match parents.get(&pid) {
-            Some(&parent) if parent != 0 && parent != pid => pid = parent,
-            _ => return false,
-        }
-    }
-    false
+    super::super::tree::descends_from(&Snapshot::take(), pid, ancestor)
 }
 
 /// Connect to a running KeyHandoff's key pipe, as `keyhandoff run` does.

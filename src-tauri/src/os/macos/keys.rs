@@ -164,25 +164,32 @@ fn parse_procargs(buf: &[u8]) -> (Vec<String>, Vec<Vec<u8>>) {
     (argv, env)
 }
 
-/// The AI coding agent among `pid` and the processes that started it: each
-/// one's name, executable and first two arguments are checked, and Claude
-/// Code's `CLAUDECODE` marker in the environment. A renamed agent isn't
-/// found, so this is a warning; binding approvals to the command is what holds.
+/// What macOS says about one process, for the shared rules in `os::tree`.
+struct Table;
+
+impl super::super::tree::ProcessTable for Table {
+    fn parent(&self, pid: u32) -> Option<u32> {
+        parent(pid as i32).map(|p| p as u32)
+    }
+    fn short_name(&self, pid: u32) -> Option<String> {
+        name(pid as i32)
+    }
+    fn image(&self, pid: u32) -> Option<PathBuf> {
+        path(pid as i32)
+    }
+    fn args(&self, pid: u32) -> Vec<String> {
+        procargs(pid as i32).0
+    }
+    fn environ_has(&self, pid: u32, entry: &[u8]) -> bool {
+        procargs(pid as i32).1.iter().any(|v| v == entry)
+    }
+    fn started(&self, pid: u32) -> Option<u64> {
+        started(pid as i32)
+    }
+}
+
 pub fn agent(pid: u32) -> Option<String> {
-    let mut pid = pid as i32;
-    let (_, environ) = procargs(pid);
-    if environ.iter().any(|v| v == b"CLAUDECODE=1") {
-        return Some("Claude Code".into());
-    }
-    for _ in 0..64 {
-        let exe = path(pid).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-        let names = [name(pid).unwrap_or_default(), exe].into_iter().chain(procargs(pid).0.into_iter().take(2));
-        if let Some(agent) = names.filter(|n| !n.is_empty()).find_map(|n| super::super::agent_named(&n)) {
-            return Some(agent);
-        }
-        pid = parent(pid)?;
-    }
-    None
+    super::super::tree::agent(&Table, pid)
 }
 
 impl Peer {
@@ -238,49 +245,12 @@ fn unattended_origin(chain: &[(String, PathBuf)], tty: bool) -> Option<&'static 
     Some("a launchd agent or daemon")
 }
 
-/// The dedicated interactive agent CLI process (`claude`, or `codex` alone or
-/// as `codex exec`) among `pid` and the processes that started it, if it's
-/// the `expected` agent: the scope a session grant is bound to. Each process
-/// must be older than the one it started, and its start time tells a reused
-/// pid apart. As on Linux and Windows.
 pub fn agent_session(pid: u32, expected: &str) -> Option<AgentProcess> {
-    let mut pid = pid as i32;
-    let mut child_birth = u64::MAX;
-    for _ in 0..64 {
-        let birth = started(pid)?;
-        if birth > child_birth {
-            return None;
-        }
-        let image = path(pid)?;
-        let file = image.file_name()?.to_str()?.to_string();
-        let comm = name(pid).unwrap_or_default();
-        if let Some((agent, name)) = [comm, file].into_iter().find_map(|n| super::super::agent_named(&n).map(|a| (a, n))) {
-            if agent != expected || !(name == "claude" || name == "codex") {
-                return None;
-            }
-            let argv = procargs(pid).0;
-            let dedicated = argv.len() == 1 || (name == "codex" && argv.get(1).is_some_and(|a| a == "exec"));
-            return dedicated.then_some(AgentProcess { pid: pid as u32, created: birth, image });
-        }
-        child_birth = birth;
-        pid = parent(pid)?;
-    }
-    None
+    super::super::tree::agent_session(&Table, pid, expected)
 }
 
-/// Whether `pid` is `ancestor` or was started, directly or not, by it.
 pub fn descends_from(pid: u32, ancestor: u32) -> bool {
-    let mut pid = pid as i32;
-    for _ in 0..64 {
-        if pid == ancestor as i32 {
-            return true;
-        }
-        match parent(pid) {
-            Some(p) => pid = p,
-            None => return false,
-        }
-    }
-    false
+    super::super::tree::descends_from(&Table, pid, ancestor)
 }
 
 /// Connect to a running KeyHandoff's key socket, as `keyhandoff run` does.
