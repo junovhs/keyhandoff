@@ -838,24 +838,6 @@ html.js .rv.in { opacity: 1; transform: none; }
 .sc-threats.s3 .sc-say .b { opacity: 1; }
 
 /* Save: provider page, clipboard, vault. */
-.sc-provider { --x: 20%; --y: 50%; width: 250px; }
-.sc-provider .sc-copy { align-self: flex-end; }
-.sc-clip { --x: 50%; --y: 24%; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); font-size: 14px; color: var(--text-2); }
-.sc-clip .wiped { display: none; align-items: center; gap: 5px; color: var(--accent-ink); }
-.sc-save.s3 .sc-clip .full { display: none; }
-.sc-save.s3 .sc-clip .wiped { display: inline-flex; }
-.sc-vault { --x: 80%; --y: 58%; width: 150px; height: 150px; }
-.sc-vault .box { position: absolute; inset: 30px 0 0; display: grid; place-items: center; border-radius: 18px; background: var(--raised); border: 1px solid var(--line-strong); color: var(--text-3); transition: border-color .5s, box-shadow .5s; }
-.sc-vault .lid { position: absolute; left: -4px; right: -4px; top: 18px; height: 18px; border-radius: 10px; background: var(--pearl); transform-origin: 0 100%; transition: transform .6s var(--ease); z-index: 2; }
-.sc-vault-name { position: absolute; left: 50%; bottom: -30px; transform: translateX(-50%); white-space: nowrap; font-size: 13px; color: var(--text-3); }
-.sc-save.s2 .sc-vault .lid { transform: rotate(-38deg) translateY(-8px); }
-.sc-save.s3 .sc-vault .lid { transform: none; }
-.sc-save.s3 .sc-vault .box { border-color: rgba(216, 209, 255, .6); box-shadow: 0 0 40px rgba(216, 209, 255, .25); }
-.sc-save { --cx: 260%; --cy: 130%; }
-.sc-save.s1 .sc-cursor { opacity: 1; }
-.sc-save.s1 { --cx: calc(min(1040px, 100vw) * .26); --cy: 280px; }
-.sc-save.s1 .sc-copy { animation: sc-click .3s .7s; }
-.sc-save.s2 .sc-cursor { opacity: 0; }
 @keyframes sc-click { 50% { transform: scale(.92); } }
 
 /* Use: the program asks, you allow, the key goes in. */

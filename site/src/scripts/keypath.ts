@@ -20,13 +20,6 @@ const TAILS = [["t1", 560, 120], ["t2", 440, 200], ["t3", 320, 290]] as const;
 type Pose = [x: number, y: number, r: number, s: number, look?: string];
 type Step = { d: number; k: Pose };
 const SCENES: Record<string, Step[]> = {
-  // Threats close in on a bare key in a .env; a shield turns them away.
-  save: [
-    { d: 1000, k: [20, 53, -90, 0.42, "plain"] },
-    { d: 1300, k: [50, 24, -90, 0.42, "plain"] },
-    { d: 1000, k: [80, 40, 0, 0.6] },
-    { d: 0, k: [80, 64, 0, 0.5] },
-  ],
   // A program asks, you allow it, the key goes into the program.
   use: [
     { d: 900, k: [88, 14, 0, 0.4] },
