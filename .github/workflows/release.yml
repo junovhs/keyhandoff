@@ -142,6 +142,8 @@ jobs:
           screencapture -x dist/macos-first-open.png || true
       - uses: actions/upload-artifact@v4
         if: runner.os == 'macOS'
+        # Only a picture for people to look at; a hiccup uploading it mustn't stop the release.
+        continue-on-error: true
         with:
           name: macos-first-open
           path: dist/macos-first-open.png
