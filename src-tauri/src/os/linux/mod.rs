@@ -12,7 +12,7 @@ pub mod typing;
 
 pub use clipboard::{arm_capture, offer_file, offer_text, read_clipboard};
 pub use drag::drag_file;
-pub use instance::{forward_to_running, listen_for_launches};
+pub use instance::{forward_to_running, launch_files, listen_for_launches};
 pub use keys::{agent, agent_session, connect_keys, descends_from, listen_for_keys, socket as key_socket};
 pub use process::{exit_code, hook_env, hooked, ignore_interrupts, is_program, open_url, program_suffixes, same_file};
 pub use protect::{forget_master_key, master_key, remember_master_key, remembered_master_key};

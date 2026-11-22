@@ -3182,8 +3182,11 @@ mod tests {
         let first = std::thread::scope(|s| {
             let script = s.spawn(run);
             let shown = answer_when_asked(&h, Answer::Always);
-            assert!(shown.name.starts_with(program.trim_end_matches('3')), "{shown:?}");
-            assert_eq!(shown.command, Some(format!("{program} {script_name}")), "the prompt names the script");
+            // Apple's /usr/bin/python3 starts the framework's `Python` in its place.
+            let family = program.trim_end_matches('3');
+            assert!(shown.name.to_lowercase().starts_with(family), "{shown:?}");
+            let command = shown.command.clone().unwrap_or_default();
+            assert!(command.to_lowercase().starts_with(family) && command.ends_with(&format!(" {script_name}")), "the prompt names the script: {command}");
             // Windows canonical paths carry a `\\?\` prefix the prompt never shows.
             let canonical = project.canonicalize().unwrap();
             let canonical = canonical.to_str().unwrap().trim_start_matches(r"\\?\");

@@ -3,8 +3,9 @@
 //! the OS protects for each profile, dragging a file out of a window, and the
 //! local socket or pipe programs ask for kept keys over.
 //!
-//! Linux (X11) was built first, then Windows (clipboard history, DPAPI); each
-//! is a folder with the same functions.
+//! Linux (X11) was built first, then Windows (clipboard history, DPAPI), then
+//! macOS (the general pasteboard, the Keychain); each is a folder with the
+//! same functions.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -22,12 +23,17 @@ mod windows;
 #[cfg(windows)]
 pub use self::windows::*;
 
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use macos::*;
+
 #[cfg(not(target_os = "linux"))]
 pub(crate) mod typing_unsupported;
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
 mod unsupported;
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
 pub use unsupported::*;
 
 /// How a Safe Copy capture ended.
@@ -37,8 +43,8 @@ pub enum Captured {
     Caught(Secret, Option<String>),
     TimedOut,
     Cancelled,
-    /// Linux only so far; Windows reports setup errors from `arm_capture`.
-    #[cfg_attr(windows, allow(dead_code))]
+    /// Linux only so far; Windows and macOS report setup errors from `arm_capture`.
+    #[cfg_attr(any(windows, target_os = "macos"), allow(dead_code))]
     Failed(String),
 }
 
@@ -51,7 +57,7 @@ pub enum Clip {
 
 /// The display names of known clipboard apps among running process names,
 /// sorted and without repeats. `table` maps a process name to a display name.
-#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", windows, target_os = "macos")), allow(dead_code))]
 fn known_apps(running: impl Iterator<Item = String>, table: &[(&str, &str)]) -> Vec<String> {
     let mut found: Vec<String> =
         running.filter_map(|n| table.iter().find(|(process, _)| *process == n).map(|(_, name)| name.to_string())).collect();
@@ -156,7 +162,7 @@ const AGENTS: &[(&str, &str, &str)] = &[
 
 /// The agent a process name or path names, if any: matched on the file
 /// name, so `claude-desktop` or a folder called `codex` doesn't count.
-#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", windows, target_os = "macos")), allow(dead_code))]
 fn agent_named(name: &str) -> Option<String> {
     let lower = name.to_lowercase();
     let file = lower.rsplit(['/', '\\']).next().unwrap_or(&lower);

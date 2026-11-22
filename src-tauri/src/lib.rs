@@ -775,6 +775,12 @@ pub fn run() {
             WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => open_files(window.app_handle(), paths, false),
             _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running KeyHandoff");
+        .build(tauri::generate_context!())
+        .expect("error while starting KeyHandoff")
+        // macOS hands files from Finder and the Dock to the running app.
+        .run(|app, event| {
+            if let Some(files) = os::launch_files(&event) {
+                open_files(app, &files, true);
+            }
+        });
 }

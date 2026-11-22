@@ -47,3 +47,9 @@ mod tests {
         assert!(!forward_to_running(&profile, &files), "no instance, no forward");
     }
 }
+
+/// Files the system asked the running app to open. Here the file manager
+/// starts a second launch instead, which `forward_to_running` hands over.
+pub fn launch_files(_event: &tauri::RunEvent) -> Option<Vec<std::path::PathBuf>> {
+    None
+}

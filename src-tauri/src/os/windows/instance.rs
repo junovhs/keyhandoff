@@ -39,3 +39,9 @@ pub fn listen_for_launches(profile: &str, on_launch: impl Fn(Vec<PathBuf>) + Sen
     }
     Ok(())
 }
+
+/// Files the system asked the running app to open. Here the file manager
+/// starts a second launch instead, which `forward_to_running` hands over.
+pub fn launch_files(_event: &tauri::RunEvent) -> Option<Vec<std::path::PathBuf>> {
+    None
+}

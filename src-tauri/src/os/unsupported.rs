@@ -1,5 +1,5 @@
 //! Placeholder for operating systems whose backends are not built yet
-//! (macOS). Everything refuses.
+//! (the BSDs, say). Everything refuses.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -142,7 +142,6 @@ pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
     matches!((a.metadata(), b.metadata()), (Ok(a), Ok(b)) if a.dev() == b.dev() && a.ino() == b.ino())
 }
 
-/// macOS's `open`; the only other system this builds for so far.
 pub fn open_url(url: &str) -> std::io::Result<()> {
     std::process::Command::new("open").arg(url).spawn().map(|_| ())
 }
@@ -157,3 +156,7 @@ pub const OLD_KEY_BACKEND: Option<&str> = None;
 /// Safe Copy can tell when something reads the clipboard while it listens.
 /// No Safe Copy here.
 pub const CLIPBOARD_BAIT: bool = false;
+
+pub fn launch_files(_event: &tauri::RunEvent) -> Option<Vec<PathBuf>> {
+    None
+}
