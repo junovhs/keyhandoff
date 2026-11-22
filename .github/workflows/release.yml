@@ -53,9 +53,9 @@ jobs:
             bundles: deb,appimage
           - os: windows-latest
             bundles: nsis
-          # One universal app for Intel and Apple silicon. Ad-hoc signed
+          # One universal app for Intel and Apple silicon (built on Apple silicon). Ad-hoc signed
           # (tauri.conf.json), not notarized: there's no Developer ID yet.
-          - os: macos-14
+          - os: macos-latest
             bundles: app,dmg
             target: universal-apple-darwin
     runs-on: ${{ matrix.os }}
