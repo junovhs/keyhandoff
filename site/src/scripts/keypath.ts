@@ -20,20 +20,6 @@ const TAILS = [["t1", 560, 120], ["t2", 440, 200], ["t3", 320, 290]] as const;
 type Pose = [x: number, y: number, r: number, s: number, look?: string];
 type Step = { d: number; k: Pose };
 const SCENES: Record<string, Step[]> = {
-  // A program asks, you allow it, the key goes into the program.
-  use: [
-    { d: 900, k: [88, 14, 0, 0.4] },
-    { d: 900, k: [84, 26, 0, 0.5] },
-    { d: 2100, k: [84, 26, 0, 0.5] },
-    { d: 0, k: [22, 63, -90, 0.42] },
-  ],
-  // A stand-in stays in the program; the real key rides the encrypted tunnel.
-  standin: [
-    { d: 900, k: [20, 61, -90, 0.42] },
-    { d: 1100, k: [32, 42, -78, 0.55] },
-    { d: 1500, k: [78, 27, -102, 0.5] },
-    { d: 0, k: [84, 44, 0, 0.4] },
-  ],
   // An agent reaches; a gate holds; you allow one session; then revoke it.
   agent: [
     { d: 800, k: [62, 50, 0, 0.7] },
@@ -48,14 +34,6 @@ const SCENES: Record<string, Step[]> = {
     { d: 900, k: [27, 50, 0, 0.6, "sealed"] },
     { d: 2100, k: [73, 50, 0, 0.6, "sealed"] },
     { d: 0, k: [79, 50, 0, 0.6] },
-  ],
-  // The stand-in is yanked by a package, stopped at the tripwire, team covered.
-  leak: [
-    { d: 900, k: [16, 63, -90, 0.4, "standin"] },
-    { d: 900, k: [34, 30, -60, 0.48, "standin"] },
-    { d: 650, k: [61, 46, -90, 0.48, "standin"] },
-    { d: 1500, k: [52, 54, 35, 0.48, "standin shiver"] },
-    { d: 0, k: [16, 63, -90, 0.4] },
   ],
   // Down through what you see, the Rust core, and the lock.
   locked: [

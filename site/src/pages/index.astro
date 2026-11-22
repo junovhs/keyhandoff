@@ -260,49 +260,43 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap" id="code">
-      <div class="head rv">
-        <span class="eyebrow"><Icon name="terminal" />1 · Use it</span>
-        <h2>Your code gets the key only when you say so.</h2>
-      </div>
-      <div class="scene sc-use" data-scene="use" data-step="0">
-        <div class="sc-card sc-prog">
-          <span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span>
-          <code class="sc-env">STRIPE_KEY=</code>
-          <span class="sc-slot"></span>
-          <span class="sc-run"><i></i>running</span>
+      <h2 class="big-q rv">Your program gets a stand-in. <br /><span class="pearl-text">The real key only goes to Stripe.</span></h2>
+      <!-- One fork. report.py, started with keyhandoff run, holds a stand-in (the
+           hollow key). The real key travels only inside the encrypted connection to
+           api.stripe.com; the stand-in headed anywhere else hits the tripwire and
+           KeyHandoff says so. All of it is on screen at rest; the keys glide on a loop. -->
+      <div class="use" data-hold-key aria-hidden="true">
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span>~/code/shop</span></div>
+          <div class="term-body">
+            <p class="t-cmd"><span>$</span> keyhandoff run -- python report.py</p>
+            <p class="t-env">STRIPE_SECRET_KEY=<span class="t-stand">sk_live_kh7Qp2Lm4x</span></p>
+            <p class="t-note"><svg class="hollow" viewBox="26 6 68 108" width="12" height="19"><path d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z" /></svg>A stand-in. Useless anywhere but Stripe.</p>
+            <p class="t-ok"><span>POST</span> api.stripe.com/v1/charges <b>200</b></p>
+            <p class="t-bad"><span>evil-package</span> → collect.example <b>Stopped</b></p>
+          </div>
         </div>
-        <div class="sc-mini-vault"><Logo height={20} /></div>
-        <div class="prompt sc-prompt">
-          <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>A program is asking</span></div>
-          <p class="prompt-q"><code>report.py</code> wants the <b>Stripe</b> key</p>
-          <p class="prompt-where"><Icon name="file" size={14} />~/work/report-bot</p>
-          <div class="prompt-btns"><span class="btn secondary small">Just once</span><span class="btn primary small sc-allow">Always allow</span></div>
+        <div class="lane lane-ok"><span class="lane-lock"><Lock size=14 />Encrypted</span><span class="u-key u-real"></span></div>
+        <div class="lane lane-bad"><span class="wire"></span><svg class="u-key u-stand hollow" viewBox="26 6 68 108"><path d="M28 8H92V60H72V78H90V90H72V98H90V112H48V60H28ZM50 24V44H70V24Z" /></svg></div>
+        <div class="dest dest-ok">
+          <div class="dest-top"><Lock size=15 /><b>api.stripe.com</b></div>
+          <p class="dest-big"><Check size=18 />Gets the real key</p>
+          <p class="dest-sub">Swapped in only inside the encrypted connection, after KeyHandoff checks it&rsquo;s really Stripe.</p>
         </div>
-        <svg class="cursor sc-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
-      </div>
-    </section>
-
-    <section class="wrap" id="standin">
-      <div class="head rv">
-        <span class="eyebrow"><Icon name="shield" />Stand-ins</span>
-        <h2>Your program holds a stand-in. The real key only travels encrypted.</h2>
-      </div>
-      <div class="scene sc-standin" data-scene="standin" data-step="0">
-        <div class="sc-card sc-prog">
-          <span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span>
-          <code class="sc-env">STRIPE_KEY=</code>
-          <span class="sc-slot"><span class="sc-ghost"></span></span>
-          <span class="sc-tag">stand-in</span>
+        <div class="kh dest-alert">
+          <div class="app">
+            <div class="sheet">
+              <div class="head"><AppGlyph mark="stop" size=46 /><div><span class="lede">KeyHandoff stopped a leak</span><h2 class="display md">collect.example</h2></div></div>
+              <p class="lede">The stand-in never left your computer. That address is blocked from now on.</p>
+            </div>
+          </div>
         </div>
-        <span class="sc-tunnel"><Icon name="lock" size={16} /></span>
-        <div class="sc-card sc-server"><span class="sc-card-top"><Icon name="check" size={15} />api.stripe.com</span><span class="sc-got">Got the real key</span></div>
       </div>
-      <p class="limits rv"><a href="/docs/keyhandoff-run/">How stand-ins work</a></p>
     </section>
 
     <section class="wrap" id="agents">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="bot" />2 · AI agents</span>
+        <span class="eyebrow"><Icon name="bot" />AI agents</span>
         <h2>An AI agent asks for the key. KeyHandoff asks you.</h2>
       </div>
       <div class="scene sc-agent" data-scene="agent" data-step="0">
@@ -321,7 +315,7 @@ const INCIDENTS = [
 
     <section class="wrap" id="team">
       <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />3 · Share it</span>
+        <span class="eyebrow"><Icon name="users" />Share it</span>
         <h2>Sealed for one person. Unreadable to everyone else.</h2>
       </div>
       <div class="scene sc-share" data-scene="share" data-step="0">
@@ -332,25 +326,9 @@ const INCIDENTS = [
       </div>
     </section>
 
-    <section class="wrap" id="leak">
-      <div class="head rv">
-        <span class="eyebrow"><Icon name="alert" />4 · If it leaks</span>
-        <h2>A leaked stand-in is stopped, and your whole team is covered.</h2>
-      </div>
-      <div class="scene sc-leak" data-scene="leak" data-step="0">
-        <div class="sc-card sc-prog"><span class="sc-card-top"><Icon name="terminal" size={15} />report.py</span><span class="sc-slot"></span></div>
-        <div class="sc-pkg"><Icon name="package" size={24} /><b>evil-package</b></div>
-        <span class="sc-wire"><span>tripwire</span></span>
-        <div class="sc-card sc-server bad"><span class="sc-card-top"><Icon name="out" size={15} />collect.example</span><span class="sc-got">Refused</span></div>
-        <span class="sc-stop"><Icon name="shield" size={16} />Stopped</span>
-        <div class="sc-team">{["A", "P", "M"].map((f) => <span class="sc-face sm">{f}<i><Icon name="shield" size={11} /></i></span>)}<span class="sc-team-say">Team covered</span></div>
-      </div>
-      <p class="limits rv"><a href="/docs/keyhandoff-run/">How tripwires work</a></p>
-    </section>
-
     <section class="wrap" id="built-in">
       <div class="head center rv">
-        <span class="eyebrow"><Icon name="shield" />5 · Built in, everywhere</span>
+        <span class="eyebrow"><Icon name="shield" />Built in, everywhere</span>
         <h2>It feels simple to use, but there&rsquo;s serious security underneath.</h2>
       </div>
       <div class="cutaway rv scene sc-locked" data-scene="locked" data-step="0">
@@ -438,6 +416,7 @@ const INCIDENTS = [
       import "../scripts/pager.ts";
       import "../scripts/hero.ts";
       import "../scripts/birth.ts";
+      import "../scripts/holds.ts";
     </script>
   </body>
 </html>
