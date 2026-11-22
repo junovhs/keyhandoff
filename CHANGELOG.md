@@ -4,7 +4,7 @@ Each version's notes become its GitHub Release. To release, set `version` in
 `src-tauri/Cargo.toml` and add its section here; the release workflow builds and
 publishes it once both are on `main`.
 
-## [0.3.0] - 2026-11-22
+## [0.3.1] - 2026-11-22
 
 KeyHandoff is still pre-release and has not had a security audit: use it with
 test keys.

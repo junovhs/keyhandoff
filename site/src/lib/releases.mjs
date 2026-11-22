@@ -6,7 +6,7 @@ export const REPOSITORY = "junovhs/keyhandoff";
 export const ALL_RELEASES = `https://github.com/${REPOSITORY}/releases`;
 
 /** What each release carries, in the order the page shows them. Releases
- * before 0.3.0 had no macOS build, so its download shows only once a release
+ * before 0.3.1 had no macOS build, so its download shows only once a release
  * carries one; every other package must be there. */
 const PACKAGES = [
   { id: "windows", os: "Windows", label: "Windows installer", suffix: "windows-x64-setup.exe" },

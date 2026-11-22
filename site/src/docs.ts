@@ -89,7 +89,7 @@ export const docs = defineDocs({
               id: "install",
               title: "Install",
               question: "How do I install KeyHandoff?",
-              answer: "Download KeyHandoff from keyhandoff.dev: a Windows installer, a .dmg for macOS (from 0.3.0), or a .deb or AppImage for Linux (X11). Installed copies update themselves with signed updates.",
+              answer: "Download KeyHandoff from keyhandoff.dev: a Windows installer, a .dmg for macOS (from 0.3.1), or a .deb or AppImage for Linux (X11). Installed copies update themselves with signed updates.",
               keywords: ["install", "build", "download", "update"],
               blocks: [
                 { kind: "p", text: "Get the latest version from the [download section](https://keyhandoff.dev/#download) on the home page or from [GitHub releases](" + GITHUB + "/releases). KeyHandoff runs on {fact:platforms}." },

@@ -119,6 +119,33 @@ jobs:
             take appimage/KeyHandoff_"$v"_amd64.AppImage "keyhandoff-$v-linux-x86_64.AppImage"
           fi
           ls -l dist
+      # Nobody on the team has a current Mac, so this runner is the check that
+      # the download installs and opens on Apple silicon with a recent macOS.
+      - name: the dmg installs and opens on this Mac
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ needs.plan.outputs.version }}"
+          sw_vers; uname -m
+          mnt=$(hdiutil attach -nobrowse -readonly "dist/keyhandoff-$v-macos-universal.dmg" | awk -F'\t' '/\/Volumes\//{print $NF}')
+          cp -R "$mnt/KeyHandoff.app" /Applications/
+          hdiutil detach "$mnt"
+          # A broken signature is "damaged" to macOS, which Open Anyway can't get past.
+          codesign --verify --deep --strict --verbose=2 /Applications/KeyHandoff.app
+          lipo -archs /Applications/KeyHandoff.app/Contents/MacOS/keyhandoff
+          # Not notarized, so Gatekeeper is expected to refuse; logged, not failed.
+          spctl --assess --type execute -vv /Applications/KeyHandoff.app || true
+          open /Applications/KeyHandoff.app
+          sleep 15
+          pgrep -fl "KeyHandoff.app/Contents/MacOS/keyhandoff" || { echo "KeyHandoff quit within 15 seconds"; exit 1; }
+          screencapture -x dist/macos-first-open.png || true
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: macos-first-open
+          path: dist/macos-first-open.png
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ runner.os }}
