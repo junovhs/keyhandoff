@@ -76,3 +76,62 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
 pub fn open_url(url: &str) -> std::io::Result<()> {
     std::process::Command::new("/usr/bin/open").arg(url).spawn().map(|_| ())
 }
+
+/// Put the `keyhandoff` command on `PATH`, as the Windows installer and the
+/// Linux packages do: a link to the app's own binary in `/usr/local/bin` (or
+/// Homebrew's `bin` on Apple silicon), when that folder exists and you can
+/// write to it without a password. Only runs from an app bundle, and only
+/// ever replaces a link into a KeyHandoff app (an older copy, moved), never
+/// a file of yours. Returns where it linked, if anywhere.
+pub fn install_command() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    if !exe.to_string_lossy().contains(".app/Contents/MacOS/") {
+        return None;
+    }
+    ["/usr/local/bin", "/opt/homebrew/bin"].into_iter().map(Path::new).find_map(|dir| link_into(dir, &exe))
+}
+
+fn link_into(dir: &Path, exe: &Path) -> Option<std::path::PathBuf> {
+    let link = dir.join("keyhandoff");
+    match std::fs::read_link(&link) {
+        Ok(target) if target == exe => return Some(link),
+        Ok(target) if target.to_string_lossy().contains(".app/Contents/MacOS/") => {
+            std::fs::remove_file(&link).ok()?;
+        }
+        Ok(_) => return None,
+        Err(_) if link.symlink_metadata().is_ok() => return None,
+        Err(_) => {}
+    }
+    if !dir.is_dir() {
+        return None;
+    }
+    std::os::unix::fs::symlink(exe, &link).ok()?;
+    Some(link)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_command_link_replaces_only_its_own() {
+        let dir = std::env::temp_dir().join(format!("kh-link-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = Path::new("/Applications/KeyHandoff.app/Contents/MacOS/keyhandoff");
+        let link = dir.join("keyhandoff");
+        // Fresh: linked.
+        assert_eq!(link_into(&dir, exe), Some(link.clone()));
+        assert_eq!(std::fs::read_link(&link).unwrap(), exe);
+        // An older copy elsewhere: moved to this one.
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/Users/a/Downloads/KeyHandoff.app/Contents/MacOS/keyhandoff", &link).unwrap();
+        assert_eq!(link_into(&dir, exe), Some(link.clone()));
+        assert_eq!(std::fs::read_link(&link).unwrap(), exe);
+        // Someone else's command of that name: left alone.
+        std::fs::remove_file(&link).unwrap();
+        std::fs::write(&link, "#!/bin/sh\n").unwrap();
+        assert_eq!(link_into(&dir, exe), None);
+        assert_eq!(std::fs::read_to_string(&link).unwrap(), "#!/bin/sh\n");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

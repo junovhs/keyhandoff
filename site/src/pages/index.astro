@@ -403,7 +403,7 @@ const INCIDENTS = [
       <p class="sub">KeyHandoff is free and open source, for you, your team and everyone else. Fewer leaked keys makes the whole internet safer.</p>
       {release ? (
         <>
-          <p class="release-meta">Version {release.version} · <time datetime={release.date}>{release.date}</time> · x86-64</p>
+          <p class="release-meta">Version {release.version} · <time datetime={release.date}>{release.date}</time> · x86-64{release.packages.some((p) => p.id === "mac") ? " · Apple silicon" : ""}</p>
           <div class="downloads">
             {release.packages.map((pkg) => (
               <a class={`download ${pkg.id === "windows" ? "primary" : ""}`} data-download={pkg.id} href={pkg.url}>
@@ -417,7 +417,10 @@ const INCIDENTS = [
             <summary>Install help</summary>
             <ul class="install-notes">
             <li><b>Windows 10 or 11:</b> run the installer. It isn't code-signed yet, so SmartScreen may ask: choose <b>More info</b>, then <b>Run anyway</b>.</li>
-            <li><b>Ubuntu, Debian and friends:</b> <code>sudo apt install ./{release.packages[1].name}</code></li>
+            {release.packages.some((p) => p.id === "mac") && (
+              <li><b>macOS 10.15 or later:</b> open the .dmg and drag KeyHandoff to Applications. It isn't notarized yet, so the first time, right-click it and choose <b>Open</b> (on macOS 15, <b>System Settings → Privacy &amp; Security → Open Anyway</b>).</li>
+            )}
+            <li><b>Ubuntu, Debian and friends:</b> <code>sudo apt install ./{release.packages.find((p) => p.id === "deb")?.name}</code></li>
             <li><b>Other Linux:</b> make the AppImage executable and run it. KeyHandoff needs X11; Wayland isn't supported yet.</li>
           </ul>
           </details>

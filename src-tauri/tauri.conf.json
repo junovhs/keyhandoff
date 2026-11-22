@@ -49,7 +49,9 @@
     "targets": [
       "nsis",
       "deb",
-      "appimage"
+      "appimage",
+      "app",
+      "dmg"
     ],
     "icon": [
       "icons/128x128@2x.png",
@@ -67,7 +69,14 @@
         "name": "KeyHandoff file",
         "description": "A KeyHandoff key request or sealed key",
         "role": "Viewer",
-        "mimeType": "application/x-handoff"
+        "mimeType": "application/x-handoff",
+        "exportedType": {
+          "identifier": "dev.junovhs.keyhandoff.handoff",
+          "conformsTo": [
+            "public.data",
+            "public.plain-text"
+          ]
+        }
       }
     ],
     "createUpdaterArtifacts": true,
@@ -84,6 +93,11 @@
         "installMode": "currentUser",
         "installerHooks": "windows/hooks.nsh"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-",
+      "infoPlist": "macos/Info.plist"
     }
   },
   "plugins": {

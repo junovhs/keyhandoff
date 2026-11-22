@@ -719,6 +719,11 @@ pub fn run() {
                 let _ = main.set_icon(icon.clone());
             }
 
+            // On macOS the app links the `keyhandoff` command onto PATH itself.
+            if let Some(link) = os::install_command() {
+                eprintln!("keyhandoff: the keyhandoff command is at {}", link.display());
+            }
+
             open_files(&handle, &args.files, false);
             let launches = handle.clone();
             os::listen_for_launches(&args.profile, move |files| open_files(&launches, &files, true))?;

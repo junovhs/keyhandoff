@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the bundle's Info.plist by tauri build. -->
+<plist version="1.0">
+<dict>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.developer-tools</string>
+	<!-- Nearby: macOS 15 asks before an app talks on the local network. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Nearby finds your contacts' KeyHandoff on this network, and sends sealed keys straight to them, only while you have it turned on.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_keyhandoff._tcp</string>
+	</array>
+	<!-- Typing a saved key into another app's field posts keystrokes. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>KeyHandoff types a saved key into the field you pick, only when you click Type.</string>
+</dict>
+</plist>

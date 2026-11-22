@@ -48,7 +48,8 @@ cat "$work/SHA256SUMS"
 
 # 3. Sign each package, then check every signature against the key installed
 #    copies trust, so a wrong key file is caught before anything is uploaded.
-packages=("keyhandoff-$v-windows-x64-setup.exe" "keyhandoff-$v-linux-x86_64.AppImage" "keyhandoff-$v-linux-amd64.deb")
+# The .dmg is only a download; installed Macs update from the .app.tar.gz.
+packages=("keyhandoff-$v-windows-x64-setup.exe" "keyhandoff-$v-linux-x86_64.AppImage" "keyhandoff-$v-linux-amd64.deb" "keyhandoff-$v-macos-universal.app.tar.gz")
 # tauri signer never prompts: without a password it assumes an empty one.
 password="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD-}"
 if [ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD+set}" ]; then

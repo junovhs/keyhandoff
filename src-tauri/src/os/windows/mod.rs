@@ -147,3 +147,8 @@ pub const OLD_KEY_BACKEND: Option<&str> = None;
 /// Safe Copy can tell when something reads the clipboard while it listens.
 /// Not yet: Windows bait needs delayed rendering (HAND-66).
 pub const CLIPBOARD_BAIT: bool = false;
+
+/// The `keyhandoff` command is put on `PATH` by the installer or package here.
+pub fn install_command() -> Option<PathBuf> {
+    None
+}

@@ -5,9 +5,12 @@ import { readFileSync } from "node:fs";
 export const REPOSITORY = "junovhs/keyhandoff";
 export const ALL_RELEASES = `https://github.com/${REPOSITORY}/releases`;
 
-/** What each release carries, in the order the page shows them. */
+/** What each release carries, in the order the page shows them. Releases
+ * before 0.3.0 had no macOS build, so its download shows only once a release
+ * carries one; every other package must be there. */
 const PACKAGES = [
   { id: "windows", os: "Windows", label: "Windows installer", suffix: "windows-x64-setup.exe" },
+  { id: "mac", os: "macOS", label: "macOS (Intel and Apple silicon)", suffix: "macos-universal.dmg", optional: true },
   { id: "deb", os: "Linux", label: "Linux .deb", suffix: "linux-amd64.deb" },
   { id: "appimage", os: "Linux", label: "Linux AppImage", suffix: "linux-x86_64.AppImage" },
 ];
@@ -66,13 +69,14 @@ async function loadRelease() {
   }
   const sums = parseChecksums(checksumText);
   const version = release.tag_name.slice(1);
-  const packages = PACKAGES.map((platform) => {
+  const packages = PACKAGES.flatMap((platform) => {
     const name = `keyhandoff-${version}-${platform.suffix}`;
     const asset = release.assets.find((a) => a.name === name && a.state === "uploaded");
+    if (platform.optional && !asset) return [];
     if (!asset || !Number.isSafeInteger(asset.size) || asset.size <= 0 || !sums.has(name)) {
       throw new Error(`Published release is missing a package or its checksum: ${name}`);
     }
-    return { ...platform, name, url: assetURL(asset), size: asset.size, sha256: sums.get(name) };
+    return [{ ...platform, name, url: assetURL(asset), size: asset.size, sha256: sums.get(name) }];
   });
   if (!Number.isFinite(Date.parse(release.published_at))) throw new Error("Release has no publication date");
   return {

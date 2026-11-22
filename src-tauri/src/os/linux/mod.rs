@@ -149,3 +149,8 @@ pub const OLD_KEY_BACKEND: Option<&str> = Some(protect::FILE);
 /// Safe Copy can tell when something reads the clipboard while it listens.
 /// Safe Copy owns the clipboard with bait while it listens and sees who reads it.
 pub const CLIPBOARD_BAIT: bool = true;
+
+/// The `keyhandoff` command is put on `PATH` by the installer or package here.
+pub fn install_command() -> Option<PathBuf> {
+    None
+}

@@ -14,12 +14,16 @@ entry() {
 win=$(entry "keyhandoff-$v-windows-x64-setup.exe")
 appimage=$(entry "keyhandoff-$v-linux-x86_64.AppImage")
 deb=$(entry "keyhandoff-$v-linux-amd64.deb")
+# One universal app serves Intel and Apple silicon Macs.
+mac=$(entry "keyhandoff-$v-macos-universal.app.tar.gz")
 jq -n --arg version "$v" --rawfile notes "$notes" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --argjson win "$win" --argjson appimage "$appimage" --argjson deb "$deb" '{
+  --argjson win "$win" --argjson appimage "$appimage" --argjson deb "$deb" --argjson mac "$mac" '{
     version: $version, notes: $notes, pub_date: $date,
     platforms: {
       "windows-x86_64-nsis": $win, "windows-x86_64": $win,
       "linux-x86_64-appimage": $appimage, "linux-x86_64": $appimage,
-      "linux-x86_64-deb": $deb
+      "linux-x86_64-deb": $deb,
+      "darwin-x86_64-app": $mac, "darwin-x86_64": $mac,
+      "darwin-aarch64-app": $mac, "darwin-aarch64": $mac
     }
   }'

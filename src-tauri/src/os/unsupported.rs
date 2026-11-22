@@ -160,3 +160,7 @@ pub const CLIPBOARD_BAIT: bool = false;
 pub fn launch_files(_event: &tauri::RunEvent) -> Option<Vec<PathBuf>> {
     None
 }
+
+pub fn install_command() -> Option<PathBuf> {
+    None
+}

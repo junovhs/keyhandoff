@@ -1,6 +1,7 @@
 name: release
 # A version in src-tauri/Cargo.toml with no vX.Y.Z release yet becomes a DRAFT
-# GitHub Release: a Windows installer, a Linux .deb and AppImage, and SHA256SUMS,
+# GitHub Release: a Windows installer, a Linux .deb and AppImage, a universal
+# macOS .dmg (and the .app.tar.gz installed Macs update from), and SHA256SUMS,
 # with CHANGELOG.md's section for that version as its notes. CI holds no signing
 # key (ADR 0005): the owner signs the packages offline and publishes the draft
 # with scripts/sign-release.sh (docs/releasing.md). Publishing makes the tag, and
@@ -52,11 +53,18 @@ jobs:
             bundles: deb,appimage
           - os: windows-latest
             bundles: nsis
+          # One universal app for Intel and Apple silicon. Ad-hoc signed
+          # (tauri.conf.json), not notarized: there's no Developer ID yet.
+          - os: macos-14
+            bundles: app,dmg
+            target: universal-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -68,12 +76,27 @@ jobs:
           sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev \
             libayatana-appindicator3-dev libxdo-dev libdbus-1-dev libssl-dev patchelf file
       - run: npm ci
+      - name: keyhandoff-cli for both Mac architectures
+        # A universal build lipos only the app's binary, but the bundle also
+        # takes the crate's other binary (the Windows console command), so it's
+        # built for both architectures, with the features tauri build uses so
+        # the library compiles once, and joined first.
+        if: runner.os == 'macOS'
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --bin keyhandoff-cli --target "$t" --features tauri/custom-protocol
+          done
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/keyhandoff-cli \
+            target/aarch64-apple-darwin/release/keyhandoff-cli target/x86_64-apple-darwin/release/keyhandoff-cli
       - name: build ${{ matrix.bundles }}, unsigned
         # No updater key here: installed copies accept only packages signed with
         # it, and only the owner's machine holds it (ADR 0005). The updater
         # artifacts are the packages themselves, signed later by sign-release.sh.
         shell: bash
-        run: npx tauri build --ci --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: npx tauri build --ci --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: name the packages
         shell: bash
         run: |
@@ -84,6 +107,11 @@ jobs:
           take() { cp "$b/$1" "dist/$2"; }
           if [ "$RUNNER_OS" = "Windows" ]; then
             take nsis/KeyHandoff_"$v"_x64-setup.exe "keyhandoff-$v-windows-x64-setup.exe"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            u=src-tauri/target/universal-apple-darwin/release/bundle
+            cp "$u/dmg/KeyHandoff_${v}_universal.dmg" "dist/keyhandoff-$v-macos-universal.dmg"
+            # What installed Macs update from; signed offline by sign-release.sh.
+            tar -C "$u/macos" -czf "dist/keyhandoff-$v-macos-universal.app.tar.gz" KeyHandoff.app
           else
             take deb/KeyHandoff_"$v"_amd64.deb "keyhandoff-$v-linux-amd64.deb"
             take appimage/KeyHandoff_"$v"_amd64.AppImage "keyhandoff-$v-linux-x86_64.AppImage"
