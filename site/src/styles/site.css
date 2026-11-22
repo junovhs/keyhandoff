@@ -190,6 +190,46 @@ html:not(.js) .gen-cursor { display: none; }
 /* Use it: Your program (holding a hollow stand-in) -> KeyHandoff -> Stripe. The
    page's key waits at KeyHandoff. s1: the stand-in travels to KeyHandoff. s2: the
    real key goes on to Stripe, which lights. s3: back, and it loops. */
+/* AI agents: Claude Code waits on the left, KeyHandoff's real approval sheet on the right,
+   the page's key docked between them (scene "agent"). */
+.scene.sc-ag { display: grid; grid-template-columns: 420px minmax(120px, 1fr) 420px; align-items: center; height: 480px; }
+.scene.sc-ag > * { position: relative; left: auto; top: auto; transform: none; }
+.ag-term { height: 440px; border: 1px solid var(--line-strong); border-radius: 12px; background: #0c0c0e; box-shadow: 0 40px 120px rgba(0, 0, 0, .7); overflow: hidden; }
+.ag-bar { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.ag-bar i { width: 11px; height: 11px; border-radius: 50%; background: #2a2a2e; }
+.ag-bar span { margin-left: 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.ag-body { display: grid; gap: 12px; padding: 22px 20px; font: 400 14.5px var(--mono); line-height: 1.6; color: var(--text); }
+.ag-body p { margin: 0; display: flex; align-items: center; }
+.ag-you { color: var(--text-3); }
+.ag-dot { width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; background: var(--accent-ink); }
+.ag-wait { color: var(--accent-ink); }
+.ag-dots i { font-style: normal; animation: ag-dot 1.4s infinite; }
+.ag-dots i:nth-child(2) { animation-delay: .2s; }
+.ag-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes ag-dot { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
+.ag-done { color: var(--accent-ink); opacity: 0; transition: opacity .4s var(--ease); }
+.sc-ag.s2:not(.s3) .ag-done { opacity: 1; }
+.sc-ag.s2:not(.s3) .ag-wait { opacity: .35; }
+.sc-ag.s2:not(.s3) .ag-dots i { animation: none; opacity: 1; }
+.ag-dock { justify-self: center; width: 120px; height: 120px; }
+.kh.ag-win { position: relative; max-width: none; width: 420px; height: 440px; overflow: hidden; border-radius: 12px; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
+.ag-win .app { height: 100%; }
+.ag-win .sheet { gap: 22px; }
+.ag-win .btn-row .btn { transition: transform .15s, box-shadow .4s; }
+.sc-ag.s2:not(.s3) .ag-allow { transform: scale(.96); box-shadow: 0 0 40px rgba(216, 209, 255, .4); }
+.scene.sc-ag > .ag-cursor { position: absolute; left: auto; top: auto; right: 22px; bottom: 6px; transform: translate(80px, 90px); transition: transform .9s var(--ease), opacity .3s; }
+.scene.sc-ag.s1 > .ag-cursor { opacity: 1; transform: none; }
+.scene.sc-ag.s3 > .ag-cursor { opacity: 0; transform: translate(80px, 90px); }
+@media (max-width: 1000px) {
+  .scene.sc-ag { grid-template-columns: minmax(0, 420px); justify-content: center; height: auto; gap: 28px; }
+  .scene.sc-ag { gap: 0; }
+  .ag-dock { height: 76px; }
+  .kh.ag-win, .ag-term { width: 100%; height: 252px; }
+  .ag-body { gap: 8px; padding: 16px; font-size: 12.5px; }
+  .ag-win .sheet { gap: 12px; padding-top: 6px; padding-bottom: 14px; }
+  .ag-win .fact:not(.on) { display: none; }
+  .ag-win .btn-row .btn { padding-inline: 10px; font-size: 13px; }
+}
 .sc-use2 { height: 340px; }
 .u2-lane { --x: 50%; --y: 50%; width: 72%; height: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, .25) 0 50%, rgba(216, 209, 255, .7) 50%); box-shadow: 0 0 12px rgba(216, 209, 255, .2); }
 .u2-lane::before { content: ""; position: absolute; left: 0; width: 50%; height: 100%; background: repeating-linear-gradient(90deg, var(--ground) 0 6px, transparent 6px 14px); }
@@ -876,13 +916,13 @@ html.js .rv.in { opacity: 1; transform: none; }
 .sc-use.s3 .sc-run { opacity: 1; }
 .sc-mini-vault { --x: 88%; --y: 14%; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 14px; background: var(--raised); border: 1px solid rgba(216, 209, 255, .5); color: var(--text-3); }
 .sc-prompt { --x: 66%; --y: 58%; width: 380px; opacity: 0; transform: translate(-50%, -40%) scale(.96) !important; }
-.sc-use.s2 .sc-prompt, .sc-agent.s2 .sc-prompt { opacity: 1; transform: translate(-50%, -50%) scale(1) !important; }
-.sc-use.s3 .sc-prompt, .sc-agent.s3 .sc-prompt { opacity: 0; }
-.sc-use.s2 .sc-cursor, .sc-agent.s2 .sc-cursor { opacity: 1; }
+.sc-use.s2 .sc-prompt { opacity: 1; transform: translate(-50%, -50%) scale(1) !important; }
+.sc-use.s3 .sc-prompt { opacity: 0; }
+.sc-use.s2 .sc-cursor { opacity: 1; }
 .sc-use { --cx: 110%; --cy: 110%; }
 .sc-use.s2 { --cx: calc(min(1040px, 100vw) * .74); --cy: 300px; }
-.sc-use.s2 .sc-allow, .sc-agent.s2 .sc-allow { animation: sc-click .3s 1.1s; }
-.sc-use.s3 .sc-cursor, .sc-agent.s3 .sc-cursor { opacity: 0; }
+.sc-use.s2 .sc-allow { animation: sc-click .3s 1.1s; }
+.sc-use.s3 .sc-cursor { opacity: 0; }
 
 /* Stand-in: a grey copy stays in the program; the real key rides the tunnel. */
 .sc-standin .sc-prog { --x: 20%; --y: 56%; width: 240px; }
@@ -899,24 +939,6 @@ html.js .rv.in { opacity: 1; transform: none; }
 .sc-standin.s3 .sc-server { border-color: rgba(216, 209, 255, .6); box-shadow: 0 0 40px rgba(216, 209, 255, .2); }
 
 /* Agents: the bot reaches, a gate holds, you allow one session, then revoke. */
-.sc-bot { --x: 16%; --y: 50%; align-items: center; width: 170px; text-align: center; }
-.sc-session { font-size: 12px; color: var(--accent-ink); opacity: 0; transition: opacity .4s; }
-.sc-agent.s3 .sc-session { opacity: 1; }
-.sc-agent.s3 .sc-bot { border-color: rgba(216, 209, 255, .6); box-shadow: 0 0 40px rgba(216, 209, 255, .25); }
-.sc-agent.s4 .sc-session { opacity: 0; }
-.sc-agent.s4 .sc-bot { border-color: var(--line-strong); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); }
-.sc-reach { --x: 34%; --y: 50%; width: 0; height: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, .6), transparent); transform: translate(0, -50%) !important; left: 26%; transition: width .8s var(--ease), opacity .4s; }
-.sc-agent.s1 .sc-reach { width: 22%; }
-.sc-agent.s2 .sc-reach { width: 14%; opacity: .4; }
-.sc-agent.s3 .sc-reach { opacity: 0; }
-.sc-gate { --x: 50%; --y: 50%; width: 6px; height: 0; border-radius: 6px; background: var(--pearl); box-shadow: 0 0 30px rgba(216, 209, 255, .6); transition: height .6s var(--ease); }
-.sc-agent.s1 .sc-gate, .sc-agent.s2 .sc-gate, .sc-agent.s4 .sc-gate { height: 220px; }
-.sc-agent.s3 .sc-gate { height: 0; }
-.sc-agent .sc-prompt { --x: 72%; --y: 26%; width: 360px; }
-.sc-agent { --cx: 110%; --cy: 110%; }
-.sc-agent.s2 { --cx: calc(min(1040px, 100vw) * .8); --cy: 150px; }
-.sc-revoke { --x: 16%; --y: 76%; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--on-pearl); background: var(--pearl); opacity: 0; }
-.sc-agent.s4 .sc-revoke { opacity: 1; animation: sc-click .3s .2s; }
 
 /* Share: sealed in a capsule, across the chat, opened only by Ann. */
 .sc-person { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 15px; }

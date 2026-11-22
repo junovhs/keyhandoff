@@ -275,21 +275,45 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap" id="agents">
-      <div class="head rv">
-        <span class="eyebrow"><Icon name="bot" />AI agents</span>
-        <h2>An AI agent asks for the key. KeyHandoff asks you.</h2>
-      </div>
-      <div class="scene sc-agent" data-scene="agent" data-step="0">
-        <div class="sc-card sc-bot"><Icon name="bot" size={30} /><b>Claude Code</b><span class="sc-session">This session</span></div>
-        <span class="sc-reach"></span>
-        <span class="sc-gate"></span>
-        <div class="prompt sc-prompt">
-          <div class="prompt-top"><span class="tile sm"><Logo height={21} /></span><b>KeyHandoff</b><span>An AI agent is asking</span></div>
-          <p class="prompt-q"><b>Claude Code</b> wants the <b>Stripe</b> key</p>
-          <div class="prompt-btns"><span class="btn secondary small">Not now</span><span class="btn primary small sc-allow">Allow this session</span></div>
+      <h2 class="big-q rv">An AI agent asks for the key. <br /><span class="pearl-text">KeyHandoff asks you.</span></h2>
+      <!-- Claude Code's command waits on the Stripe key; KeyHandoff shows its real
+           approval sheet. The page's key docks between them and stays put: the
+           cursor allows this session for 30 minutes and the command finishes
+           (keypath.ts scene "agent"). -->
+      <div class="scene sc-ag" data-scene="agent" data-step="0" aria-hidden="true">
+        <div class="ag-term">
+          <div class="ag-bar"><i></i><i></i><i></i><span>Claude Code</span></div>
+          <div class="ag-body mono">
+            <p class="ag-you">&gt; charge the test customer</p>
+            <p><span class="ag-dot"></span>Bash(node charge.js)</p>
+            <p class="ag-wait">&nbsp;&nbsp;Waiting for KeyHandoff<span class="ag-dots"><i>.</i><i>.</i><i>.</i></span></p>
+            <p class="ag-done"><Check size={15} />&nbsp;Charged $20.00</p>
+          </div>
         </div>
-        <span class="sc-revoke">Revoke</span>
-        <svg class="cursor sc-cursor" viewBox="0 0 16 22" width="22" height="30" aria-hidden="true"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
+        <span class="ag-dock" data-ag-dock></span>
+        <div class="kh ag-win">
+          <div class="app">
+            <header class="titlebar"><span class="brand"><Logo height={22} /></span><span class="name">KeyHandoff</span></header>
+            <div class="sheet">
+              <div class="head">
+                <AppGlyph base="window" mark="key" />
+                <div><span class="lede">Claude Code wants a key</span><h2 class="display md">charge.js</h2></div>
+              </div>
+              <div class="facts">
+                <div class="fact"><SquareTerminal size={17} strokeWidth={1.75} /><span class="mono">node charge.js</span></div>
+                <div class="fact"><Folder size={17} strokeWidth={1.75} /><span class="mono">~/shop</span></div>
+                <div class="fact on"><KeyRound size={17} strokeWidth={1.75} /><span>STRIPE_SECRET_KEY</span></div>
+              </div>
+              <span class="grow-space"></span>
+              <div class="btn-row">
+                <button class="btn secondary" tabindex="-1">Deny</button>
+                <button class="btn secondary" tabindex="-1">Allow once</button>
+                <button class="btn primary grow ag-allow" tabindex="-1">Allow for 30 minutes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg class="gen-cursor ag-cursor" viewBox="0 0 16 22" width="30" height="40"><path d="M1 1v17l4.5-4.2 3 6.7 3-1.4-3-6.6H14z" /></svg>
       </div>
     </section>
 

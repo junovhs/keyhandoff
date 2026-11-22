@@ -29,12 +29,13 @@ const SCENES: Record<string, Step[]> = {
     { d: 900, k: [50, 50, 0, 0.42] },
   ],
   // An agent reaches; a gate holds; you allow one session; then revoke it.
+  // Docked between Claude Code and KeyHandoff's approval sheet; it stays put
+  // while the cursor allows the session and the command finishes.
   agent: [
-    { d: 800, k: [62, 50, 0, 0.7] },
-    { d: 1400, k: [68, 52, 14, 0.7, "shiver"] },
-    { d: 2100, k: [68, 52, 0, 0.7] },
-    { d: 2000, k: [24, 36, -30, 0.42] },
-    { d: 0, k: [62, 50, 0, 0.7] },
+    { d: 1400, k: [50, 50, 0, 0.42] },
+    { d: 1300, k: [50, 50, 0, 0.42] },
+    { d: 2600, k: [50, 50, 0, 0.46] },
+    { d: 900, k: [50, 50, 0, 0.42] },
   ],
   // Sealed for Ann, across the chat unreadable, opened only by her.
   share: [
@@ -119,7 +120,7 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
   const shrink = new Map<HTMLElement, number>();
   function fitScenes() {
     for (const s of scenes) {
-      if (s.dataset.scene === "locked") continue;
+      if (s.dataset.scene === "locked" || s.dataset.scene === "agent") continue; // these lay themselves out
       const avail = s.parentElement!.clientWidth;
       const k = Math.min(1, avail / DESIGN_W);
       if (shrink.get(s) === k) continue;
