@@ -1,5 +1,5 @@
 //! Typing a key into another app's field, where no backend is built yet
-//! (Windows: HAND-14; macOS). Same interface as `linux/typing.rs`.
+//! (Windows: HAND-14). Same interface as `linux/typing.rs` and `macos/typing.rs`.
 
 #[derive(Clone, PartialEq)]
 pub struct Target {
@@ -13,7 +13,7 @@ pub struct Desktop;
 
 impl Desktop {
     pub fn open() -> Result<Self, String> {
-        Err("Typing is available on Linux X11. Windows support is still to come.".into())
+        Err("Typing is available on macOS and Linux X11. Windows support is still to come.".into())
     }
 
     pub fn capture(&self) -> Result<Option<Target>, String> {

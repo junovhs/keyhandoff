@@ -56,9 +56,9 @@ libc = "0.2"
 security-framework = "3"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString", "NSURL", "NSGeometry", "NSProcessInfo", "NSObject"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSEvent", "NSView", "NSWindow", "NSResponder", "NSWorkspace", "NSImage", "NSGraphicsContext", "NSRunningApplication", "objc2-uniform-type-identifiers"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "libc", "NSPasteboard", "NSPasteboardItem", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSEvent", "NSView", "NSWindow", "NSResponder", "NSWorkspace", "NSImage", "NSGraphicsContext", "NSRunningApplication", "objc2-uniform-type-identifiers"] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFDictionary", "CFString", "CFNumber"] }
-objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGSession", "CGEvent", "CGEventTypes", "CGRemoteOperation", "CGEventSource", "CGWindow"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "libc", "CGSession", "CGEvent", "CGEventTypes", "CGRemoteOperation", "CGEventSource", "CGWindow"] }
 
 # Same version Tauri already pulls in, so there is one copy of the crate.
 [target.'cfg(windows)'.dependencies]

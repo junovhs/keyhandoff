@@ -28,7 +28,7 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::*;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub(crate) mod typing_unsupported;
 
 #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
