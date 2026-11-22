@@ -18,7 +18,7 @@ const TAILS = [["t1", 560, 120], ["t2", 440, 200], ["t3", 320, 290]] as const;
 /** A pose in a scene: x and y in % of the scene, rotation (0 points the key
  *  down, -90 lays it pointing right), scale, and looks (plain, standin, sealed, shiver). */
 type Pose = [x: number, y: number, r: number, s: number, look?: string];
-type Step = { d: number; k: Pose };
+type Step = { d: number; k: Pose; m?: Pose }; // m: the pose where the scene stacks (phone)
 const SCENES: Record<string, Step[]> = {
   // Use it: the key waits at KeyHandoff; the program's stand-in comes to it, and
   // the real key goes on to Stripe inside the encrypted connection; then again.
@@ -38,11 +38,14 @@ const SCENES: Record<string, Step[]> = {
     { d: 900, k: [50, 50, 0, 0.42] },
   ],
   // Sealed for Ann, across the chat unreadable, opened only by her.
+  // Share it: the key rests between Ben and Ann, dives into Ann's card in Ben's
+  // window, rides the tossed card (tucked out of sight), and comes back out when
+  // Ann's KeyHandoff opens it; then again.
   share: [
-    { d: 900, k: [21, 50, 0, 0.6] },
-    { d: 900, k: [27, 50, 0, 0.6, "sealed"] },
-    { d: 2100, k: [73, 50, 0, 0.6, "sealed"] },
-    { d: 0, k: [79, 50, 0, 0.6] },
+    { d: 1300, k: [50, 17, 0, 0.36], m: [50, 50, 0, 0.3] },
+    { d: 700, k: [18.3, 46.8, 0, 0.1, "tucked"], m: [50, 32.6, 0, 0.1, "tucked"] },
+    { d: 1500, k: [81.7, 59.2, 0, 0.1, "tucked"], m: [50, 85.1, 0, 0.1, "tucked"] },
+    { d: 2600, k: [50, 17, 0, 0.36], m: [50, 50, 0, 0.3] },
   ],
   // Down through what you see, the Rust core, and the lock.
   locked: [
@@ -52,7 +55,7 @@ const SCENES: Record<string, Step[]> = {
     { d: 0, k: [22, 78, 0, 0.45] },
   ],
 };
-const LOOKS = ["plain", "standin", "sealed", "shiver"];
+const LOOKS = ["plain", "standin", "sealed", "shiver", "tucked"];
 
 const bornAt = document.querySelector<HTMLElement>("[data-born]");
 const home = document.querySelector<HTMLElement>("[data-home]");
@@ -120,7 +123,7 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
   const shrink = new Map<HTMLElement, number>();
   function fitScenes() {
     for (const s of scenes) {
-      if (s.dataset.scene === "locked" || s.dataset.scene === "agent") continue; // these lay themselves out
+      if (s.dataset.scene === "locked" || s.dataset.scene === "agent" || s.dataset.scene === "share") continue; // these lay themselves out
       const avail = s.parentElement!.clientWidth;
       const k = Math.min(1, avail / DESIGN_W);
       if (shrink.get(s) === k) continue;
@@ -276,7 +279,8 @@ function init(stageEl: HTMLElement, homeEl: HTMLElement) {
         p.i = 0;
         setStep(p.el, 0);
       }
-      const k = p.steps[p.i].k;
+      const st = p.steps[p.i];
+      const k = (innerWidth <= 1000 && st.m) || st.k;
       const pt = posePt(p.el, k);
       goal = { x: pt.x, y: pt.y, r: k[2], s: k[3] * 1.4 * (shrink.get(p.el) ?? 1) }; // the star of its scene
       wantLook = k[4] ?? "";

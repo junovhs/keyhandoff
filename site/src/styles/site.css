@@ -230,6 +230,74 @@ html:not(.js) .gen-cursor { display: none; }
   .ag-win .fact:not(.on) { display: none; }
   .ag-win .btn-row .btn { padding-inline: 10px; font-size: 13px; }
 }
+/* Share it: Ben's KeyHandoff packs the page's key into Ann's card, the card is tossed
+   across (chat, email, folder), and Ann's KeyHandoff opens it (scene "share"). */
+.scene.sc-sh { display: grid; grid-template-columns: 380px minmax(120px, 1fr) 380px; align-items: center; height: 500px; }
+.scene.sc-sh > * { position: relative; left: auto; top: auto; transform: none; }
+.sh-side { display: grid; gap: 14px; justify-items: center; }
+.sh-who { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; color: var(--text); }
+.sh-face { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-size: 14px; color: var(--text); background: var(--raised); border: 1px solid var(--line-strong); }
+.sh-face.ann { color: var(--on-pearl); background: var(--pearl); border-color: transparent; }
+.kh.sh-win { position: relative; max-width: none; width: 380px; height: 430px; overflow: hidden; border-radius: 12px; box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04); }
+.sh-win .app { height: 100%; }
+.sh-win .key-card { margin: 6px 0 14px; }
+.sh-win .sheet { gap: 22px; transition: opacity .5s var(--ease), filter .5s; }
+.sh-card { animation: sh-bob 3.2s ease-in-out infinite; }
+@keyframes sh-bob { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 0 -5px; rotate: -1.2deg; } }
+.sc-sh.s1:not(.s2) .sh-card { animation: sh-gulp .7s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes sh-gulp { 0% { scale: 1; } 40% { scale: 1.08; box-shadow: 0 0 50px rgba(216, 209, 255, .55); } 100% { scale: 1; } }
+.sh-mid { display: grid; justify-items: center; gap: 18px; align-self: start; margin-top: 150px; }
+.sh-arc { width: 100%; height: 70px; overflow: visible; }
+.sh-arc path { fill: none; stroke: rgba(216, 209, 255, .35); stroke-width: 1.5; stroke-dasharray: 4 8; vector-effect: non-scaling-stroke; }
+.sc-sh.s2:not(.s3) .sh-arc path { animation: sh-march .6s linear infinite; stroke: rgba(216, 209, 255, .7); }
+@keyframes sh-march { to { stroke-dashoffset: -24; } }
+.sh-ways { display: flex; gap: 14px; color: var(--text-3); }
+/* The tossed card: off Ben's card, up over the gap with a tumble, a little overshoot into Ann's window. */
+.scene.sc-sh > .sh-fly { position: absolute; left: 18.3%; top: 46.8%; width: 250px; max-width: none; margin: 0; background: none; translate: -50% -50%; opacity: 0; pointer-events: none; height: auto; overflow: visible; box-shadow: none; }
+.sc-sh.s2:not(.s3) > .sh-fly { animation: sh-toss 1.45s cubic-bezier(.5, 0, .25, 1) forwards; }
+@keyframes sh-toss {
+  0% { left: 18.3%; top: 46.8%; rotate: 0deg; scale: 1; opacity: 1; }
+  12% { left: 21%; top: 40%; rotate: -10deg; scale: 1.06; }
+  50% { left: 50%; top: 26%; rotate: 9deg; scale: .92; }
+  86% { left: 80.8%; top: 61.5%; rotate: -4deg; scale: 1.02; }
+  100% { left: 81.7%; top: 59.2%; rotate: 0deg; scale: 1; opacity: 1; }
+}
+.sh-land { position: absolute; inset: 48px 0 0; z-index: 3; display: grid; place-items: center; background: var(--ground); opacity: 0; pointer-events: none; }
+.sh-land .key-card, .sh-fly .key-card { width: 250px; margin: 0; box-shadow: 0 24px 50px rgba(0, 0, 0, .6); }
+.kh.sh-ann .display.md { font-size: 24px; overflow-wrap: anywhere; }
+.sc-sh.s2:not(.s3) .sh-ann .sheet { opacity: .15; filter: blur(2px); }
+.sc-sh.s3:not(.s4) .sh-land { animation: sh-open 1s var(--ease) forwards; }
+@keyframes sh-open { 0% { opacity: 1; } 35% { opacity: 1; } 100% { opacity: 0; } }
+.sc-sh.s3:not(.s4) .sh-land .key-card { animation: sh-pop 1s var(--ease) forwards; }
+@keyframes sh-pop { 0% { scale: 1; } 30% { scale: 1.06; box-shadow: 0 0 70px rgba(216, 209, 255, .6); } 100% { scale: 1.5; opacity: 0; } }
+.sc-sh.s3:not(.s4) .sh-ann { box-shadow: 0 40px 120px rgba(0, 0, 0, .7), 0 0 0 1px rgba(216, 209, 255, .5), 0 0 60px rgba(216, 209, 255, .15); transition: box-shadow .6s; }
+.kp-key.tucked .kp-spin { opacity: 0; transition: opacity .25s; }
+.kp-key .kp-spin { transition: opacity .35s .1s; }
+@media (max-width: 1000px) {
+  .scene.sc-sh { grid-template-columns: minmax(0, 380px); justify-content: center; height: auto; gap: 0; }
+  .sh-mid { margin: 0; align-content: center; }
+  .sh-arc { display: none; }
+  .kh.sh-win { width: 100%; height: 230px; }
+  .sh-ways { display: none; }
+  .sh-mid { height: 76px; }
+  .sh-win .key-card, .sh-land .key-card, .sh-fly .key-card { width: 200px; padding: 12px 14px; }
+  .sh-win .key-card strong { font-size: 15px; }
+  .kh.sh-ann .display.md { font-size: 19px; }
+  .sh-ann .keep-block { display: none; }
+  .sh-side { width: 100%; gap: 8px; }
+  .sh-who { font-size: 15px; }
+  .sh-ben .safe-stage .display, .sh-ben .safe-stage .sub, .sh-ben .below { display: none; }
+  .sh-win .sheet { gap: 14px; padding-top: 6px; }
+  .sh-win .keep-buttons button { font-size: 12px; gap: 4px; }
+  .scene.sc-sh > .sh-fly { left: 50%; top: 32.6%; }
+  .sc-sh.s2:not(.s3) > .sh-fly { animation-name: sh-drop; }
+  @keyframes sh-drop {
+    0% { top: 32.6%; left: 50%; rotate: 0deg; opacity: 1; }
+    45% { top: 58%; left: 57%; rotate: 8deg; scale: .94; }
+    85% { top: 87%; left: 49%; rotate: -3deg; }
+    100% { top: 85.1%; left: 50%; rotate: 0deg; opacity: 1; }
+  }
+}
 .sc-use2 { height: 340px; }
 .u2-lane { --x: 50%; --y: 50%; width: 72%; height: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, .25) 0 50%, rgba(216, 209, 255, .7) 50%); box-shadow: 0 0 12px rgba(216, 209, 255, .2); }
 .u2-lane::before { content: ""; position: absolute; left: 0; width: 50%; height: 100%; background: repeating-linear-gradient(90deg, var(--ground) 0 6px, transparent 6px 14px); }
@@ -712,7 +780,7 @@ html.js .rv.in { opacity: 1; transform: none; }
   .source { width: 300px; }
   /* Phones: the blind spot, Just you, Your team and the cutaway each fit one screen. */
   #blind-spot, #solo, #team, #built-in { padding: 36px 0; }
-  #solo h2, #team h2, #built-in h2 { font-size: 28px; }
+  #built-in h2 { font-size: 28px; }
   .big-q { margin-bottom: 20px; font-size: 26px; }
   .readers { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px 14px; }
   .envfile { flex-direction: row; flex-wrap: wrap; justify-content: center; column-gap: 12px; width: 100%; margin-bottom: 4px; padding: 12px 16px; }
@@ -941,20 +1009,6 @@ html.js .rv.in { opacity: 1; transform: none; }
 /* Agents: the bot reaches, a gate holds, you allow one session, then revoke. */
 
 /* Share: sealed in a capsule, across the chat, opened only by Ann. */
-.sc-person { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 15px; }
-.sc-person.ben { --x: 12%; --y: 50%; }
-.sc-person.ann { --x: 88%; --y: 50%; }
-.sc-face { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-strong); font-size: 22px; font-weight: 600; }
-.sc-face.sm { width: 34px; height: 34px; font-size: 13px; }
-.sc-face i { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: var(--on-pearl); background: var(--pearl); opacity: 0; transform: scale(.4); transition: opacity .4s, transform .5s cubic-bezier(.34, 1.56, .64, 1); }
-.sc-ok { position: absolute; right: -6px; top: 44px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--on-pearl); background: var(--pearl); opacity: 0; transform: scale(.4); transition: opacity .4s, transform .5s cubic-bezier(.34, 1.56, .64, 1); }
-.sc-share.s3 .sc-ok { opacity: 1; transform: none; }
-.sc-share.s3 .ann .sc-face { border-color: rgba(216, 209, 255, .6); }
-.sc-lane { --x: 50%; --y: 50%; display: flex; align-items: center; justify-content: center; gap: 8px; width: 58%; height: 2px; padding-top: 34px; border-top: 1px dashed var(--line-strong); font-size: 13px; color: var(--text-3); transform: translate(-50%, 0) !important; }
-.sc-peek { --x: 50%; --y: 18%; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text-3); opacity: 0; }
-.sc-peek code { font-size: 13px; }
-.sc-share.s2 .sc-peek { opacity: 1; }
-.sc-share.s3 .sc-peek { opacity: 0; }
 
 /* Leak: the stand-in is yanked, hits the tripwire, and the team is covered. */
 .sc-leak .sc-prog { --x: 16%; --y: 56%; width: 200px; }

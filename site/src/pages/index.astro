@@ -318,15 +318,56 @@ const INCIDENTS = [
     </section>
 
     <section class="wrap" id="team">
-      <div class="head rv">
-        <span class="eyebrow"><Icon name="users" />Share it</span>
-        <h2>Sealed for one person. Unreadable to everyone else.</h2>
-      </div>
-      <div class="scene sc-share" data-scene="share" data-step="0">
-        <div class="sc-person ben"><span class="sc-face">B</span><b>Ben</b></div>
-        <div class="sc-person ann"><span class="sc-face">A</span><b>Ann</b><span class="sc-ok"><Icon name="check" size={14} /></span></div>
-        <span class="sc-lane"><Icon name="chat" size={16} /><span>Slack, email, anything</span></span>
-        <div class="sc-peek"><Icon name="eyeoff" size={20} /><code>Kx9#vQ2…</code></div>
+      <h2 class="big-q rv">Seal a key into their card. <br /><span class="pearl-text">Only their computer can open it.</span></h2>
+      <!-- Ben packs the page's key into Ann's KeyHandoff card, tosses the card
+           across a chat, an email or a folder, and Ann's KeyHandoff opens it and
+           the key pops back out (keypath.ts scene "share"). -->
+      <div class="scene sc-sh" data-scene="share" data-step="0" aria-hidden="true">
+        <div class="sh-side">
+          <span class="sh-who"><span class="sh-face">B</span>Ben</span>
+          <div class="kh sh-win sh-ben">
+            <div class="app">
+              <header class="titlebar"><span class="brand"><Logo height={22} /></span><span class="name">KeyHandoff</span></header>
+              <div class="safe sealed">
+                <div class="top"><AppIcon name="shield" /><b>Send a key</b><span>for Ann</span></div>
+                <div class="safe-body">
+                  <div class="safe-stage">
+                    <div class="card-file key-card sh-card"><span class="key-card-mark"><IdCard size={30} strokeWidth={1.5} /><KeyRound size={15} strokeWidth={2.2} /></span><span><strong>Key for Ann</strong><small>Key for Ann.handoff</small></span></div>
+                    <h2 class="display">Sealed</h2><p class="sub">Only Ann&rsquo;s computer can open it.</p>
+                  </div>
+                  <div class="below"><button class="btn primary" tabindex="-1">Copy as text</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sh-mid">
+          <svg class="sh-arc" viewBox="0 0 200 80" preserveAspectRatio="none"><path d="M4 70C60 4 140 4 196 70" /></svg>
+          <span class="sh-ways"><MessageSquare size={20} /><Mail size={20} /><Folder size={20} /></span>
+        </div>
+        <div class="sh-side">
+          <span class="sh-who"><span class="sh-face ann">A</span>Ann</span>
+          <div class="kh sh-win sh-ann">
+            <div class="app">
+              <header class="titlebar"><span class="brand"><Logo height={22} /></span><span class="name">KeyHandoff</span></header>
+              <div class="sheet">
+                <div class="head">
+                  <AppGlyph mark="check" />
+                  <div><span class="lede">Ben sent you a key</span><h2 class="display md">STRIPE_SECRET_KEY</h2></div>
+                </div>
+                <div class="keep-block"><div class="keep-buttons">
+                  <button tabindex="-1"><AppIcon name="once" />Use once</button>
+                  <button tabindex="-1"><AppIcon name="calendar" />Keep 30 days</button>
+                  <button class="pick" tabindex="-1"><AppIcon name="forever" />Keep forever</button>
+                </div></div>
+                <span class="grow-space"></span>
+                <button class="btn primary" tabindex="-1">Done</button>
+              </div>
+              <div class="sh-land"><div class="card-file key-card sh-landed"><span class="key-card-mark"><IdCard size={30} strokeWidth={1.5} /><KeyRound size={15} strokeWidth={2.2} /></span><span><strong>Key for Ann</strong><small>Key for Ann.handoff</small></span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="kh sh-fly"><div class="card-file key-card"><span class="key-card-mark"><IdCard size={30} strokeWidth={1.5} /><KeyRound size={15} strokeWidth={2.2} /></span><span><strong>Key for Ann</strong><small>Key for Ann.handoff</small></span></div></div>
       </div>
     </section>
 
