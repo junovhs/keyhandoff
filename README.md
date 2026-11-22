@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/junovhs/keyhandoff/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/junovhs/keyhandoff?style=for-the-badge&labelColor=0b1220&color=1a6dff&label=release"></a>
   <a href="https://github.com/junovhs/keyhandoff/actions/workflows/check.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/junovhs/keyhandoff/check.yml?branch=main&style=for-the-badge&labelColor=0b1220&label=checks"></a>
-  <img alt="Windows and Linux" src="https://img.shields.io/badge/platform-windows%20%7C%20linux-6aa2ff?style=for-the-badge&labelColor=0b1220">
+  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-6aa2ff?style=for-the-badge&labelColor=0b1220">
   <img alt="No servers, no accounts" src="https://img.shields.io/badge/servers-none-14b88a?style=for-the-badge&labelColor=0b1220">
   <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache%202.0-a7b0c0?style=for-the-badge&labelColor=0b1220"></a>
 </p>
@@ -51,9 +51,11 @@ Click **Add a key**, copy the key on the provider's page and name it. **Safe Cop
 
 Safe Copy reads the clipboard only after you ask it to. It catches one copy, then switches off, or stops after 60 seconds. Nothing watches the clipboard the rest of the time. After a catch it wipes the clipboard, and removes the copy from clipboard history where the system allows it.
 
-While it listens on Linux, KeyHandoff also puts harmless bait on the clipboard. If another program reads it before you copy, Safe Copy warns you then, while you can still close it. (Windows will follow.)
+While it listens on Linux, KeyHandoff also puts harmless bait on the clipboard. If another program reads it before you copy, Safe Copy warns you then, while you can still close it. (Windows and macOS will follow.)
 
-When it turns on, it checks the running programs against a short list of known clipboard managers, such as Ditto or CopyQ, and names any it finds, since they can read the key as you copy it. Clipboard extensions built into a desktop shell don't show up as programs, so an empty list isn't a promise.
+macOS sends no notice when the clipboard changes, so there Safe Copy checks it every 10 ms while it listens, and only then.
+
+When it turns on, it checks the running programs against a short list of known clipboard managers, such as Ditto, CopyQ, Maccy or Paste, and names any it finds, since they can read the key as you copy it. Clipboard extensions built into a desktop shell don't show up as programs, so an empty list isn't a promise.
 
 </details>
 
@@ -137,6 +139,12 @@ On Linux the program only ever holds a look-alike key. KeyHandoff swaps the real
 
 On Windows the installer puts the `keyhandoff` command on your PATH, so this works in any new terminal (cmd, PowerShell, Git Bash). Node.js programs (`node`, `npm`, `npx`) get look-alikes there too, swapped only for the key's verified server. Other programs, Python included, get the real key in their environment for now, with every printed form of it hidden.
 
+On macOS it's the same: Node.js programs get look-alikes, and other programs get the real key, hidden when printed, because macOS strips the hook's loader variable from Apple's own programs. KeyHandoff links the `keyhandoff` command into `/usr/local/bin` when it can write there. If that folder isn't there (a Mac without Homebrew), run this once:
+
+```bash
+sudo mkdir -p /usr/local/bin && sudo ln -sf /Applications/KeyHandoff.app/Contents/MacOS/keyhandoff /usr/local/bin/keyhandoff
+```
+
 <details>
 <summary><b>The full walkthrough</b></summary>
 <br>
@@ -148,6 +156,8 @@ On Windows the installer puts the `keyhandoff` command on your PATH, so this wor
 4. **Use it.** The value goes into the program's own environment. Nothing is written to disk. A key the program prints shows as `[KeyHandoff: Dialpad hidden]`, plain, base64, hex, URL-encoded or backwards. Your code has to read it from the environment: code that opens `.env` and reads the value itself (python-dotenv's `dotenv_values()`, `override=True`, a hand-written parser, docker compose `env_file:`) gets the pointer text instead. Read the environment first and fall back to the file; see [Code that reads .env itself](https://keyhandoff.dev/docs/reads-env-file/).
 
 On **Linux X11**, click **Type** on a saved key. A small floating panel stays above your work: click the destination field, check the window named by the panel, then click **Type into …**. The panel leaves keyboard focus in the field and types without the clipboard. It disarms after 30 seconds and stops if focus moves. The field may show the key; keyboard watchers can still read synthetic keystrokes. Known chat and mail apps are refused by window class, but browser tabs cannot be identified reliably. Windows typing is still to come.
+
+On **macOS**, Type works the same way through Accessibility: the first time, macOS asks you to allow KeyHandoff under **Privacy & Security → Accessibility**. Each character goes to the destination app only, and typing stops if focus moves or a modifier key is held.
 
 </details>
 
@@ -184,7 +194,7 @@ It locks again when the computer sleeps, when the screen locks, and from the loc
 
 **Security**, at the bottom of the home screen, has two options:
 
-- **PIN instead of the passphrase**, where the computer has a TPM KeyHandoff can use. The key is sealed inside the TPM, which checks the PIN and stops anyone guessing it, so the PIN can be short. On Linux the TPM belongs to the `tss` group: run `sudo usermod -aG tss $USER` and sign in again. A TPM that's switched off in the firmware settings shows as none. Windows uses Windows Hello instead (coming).
+- **PIN instead of the passphrase**, where the computer has a TPM KeyHandoff can use. The key is sealed inside the TPM, which checks the PIN and stops anyone guessing it, so the PIN can be short. On Linux the TPM belongs to the `tss` group: run `sudo usermod -aG tss $USER` and sign in again. A TPM that's switched off in the firmware settings shows as none. Windows uses Windows Hello instead (coming), and macOS Touch ID (coming).
 - **Remember on this computer**, which opens KeyHandoff without asking and keeps it open through sleep and screen lock. It's off unless you turn it on: any program running as you could then open your keys.
 
 The passphrase and recovery code always work. If you lose both, the keys can't be opened by anyone, you included.
@@ -197,9 +207,9 @@ The passphrase and recovery code always work. If you lose both, the keys can't b
 
 ## Install
 
-Download it from **[keyhandoff.dev](https://keyhandoff.dev/#download)** or [GitHub releases](https://github.com/junovhs/keyhandoff/releases): a Windows installer, or a `.deb` or AppImage for Linux (X11). Installed copies check GitHub for a signed update at launch and every six hours. While KeyHandoff is locked, a Windows or AppImage update installs and restarts on its own; otherwise **Restart to update** shows in the title bar. A `.deb` update always waits for that click, because installing it asks for your password.
+Download it from **[keyhandoff.dev](https://keyhandoff.dev/#download)** or [GitHub releases](https://github.com/junovhs/keyhandoff/releases): a Windows installer, a `.dmg` for macOS (Intel and Apple silicon, from 0.3.0), or a `.deb` or AppImage for Linux (X11). Installed copies check GitHub for a signed update at launch and every six hours. While KeyHandoff is locked, a Windows, macOS or AppImage update installs and restarts on its own; otherwise **Restart to update** shows in the title bar. A `.deb` update always waits for that click, because installing it asks for your password.
 
-Windows and Linux (X11). macOS and Wayland aren't supported. [What works on which system](docs/parity.md) lists the few things that work on one but not yet the other.
+Windows, macOS 10.15 or later, and Linux (X11). Wayland isn't supported. The Mac app isn't notarized yet, so the first time, right-click it in Applications and choose **Open** (on macOS 15, **System Settings → Privacy & Security → Open Anyway**). [What works on which system](docs/parity.md) lists the few things that work on one but not yet the other.
 
 <br>
 
@@ -232,7 +242,7 @@ cd src-tauri && cargo test
 cd src-tauri && cargo test clipboard::tests -- --ignored --test-threads=1   # real clipboard checks
 ```
 
-Tests only ever use synthetic keys. On Linux the real clipboard checks need `DISPLAY` and `xclip`.
+Tests only ever use synthetic keys. On Linux the real clipboard checks need `DISPLAY` and `xclip`. On macOS they use `pbcopy` and `pbpaste` and replace what's on your clipboard; `cargo test os::macos -- --ignored --test-threads=1` also runs the Keychain check.
 
 The typing integration test needs an isolated X server and Python GTK3 (never point it at your working desktop):
 
@@ -249,7 +259,7 @@ See [the typing implementation notes](docs/typing.md) for the native interface a
 <summary><b>Release</b></summary>
 <br>
 
-Set `version` in `src-tauri/Cargo.toml` and add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md). Once both are on `main`, [the release workflow](.github/workflows/release.yml) builds the Windows installer, `.deb` and AppImage and drafts a release with `SHA256SUMS`. CI never holds the updater key: the owner signs the draft offline and publishes it with `scripts/sign-release.sh`, which also writes the updater's `latest.json`, then deploys keyhandoff.dev from the owner's computer so its download links follow. See [docs/releasing.md](docs/releasing.md). The repository holds no secrets.
+Set `version` in `src-tauri/Cargo.toml` and add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md). Once both are on `main`, [the release workflow](.github/workflows/release.yml) builds the Windows installer, `.deb`, AppImage and a universal macOS `.dmg` and drafts a release with `SHA256SUMS`. CI never holds the updater key: the owner signs the draft offline and publishes it with `scripts/sign-release.sh`, which also writes the updater's `latest.json`, then deploys keyhandoff.dev from the owner's computer so its download links follow. See [docs/releasing.md](docs/releasing.md). The repository holds no secrets.
 
 </details>
 

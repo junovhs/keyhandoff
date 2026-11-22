@@ -3445,7 +3445,7 @@ mod tests {
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(any(target_os = "linux", windows))]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
     #[test]
     fn session_grants_follow_the_runner_and_stop_at_the_scope_boundary() {
         use crate::run::tests::finished;
@@ -3475,6 +3475,9 @@ mod tests {
         let (agent, shell_from, shared_arg, python) = (me.data.join("codex.exe"), std::env::var_os("ComSpec").unwrap(), "/Q", "python");
         #[cfg(target_os = "linux")]
         let (agent, shell_from, shared_arg, python) = (me.data.join("codex"), std::ffi::OsString::from("/bin/sh"), "-s", "python3");
+        // macOS's /bin/sh starts another shell in its place; bash stays itself.
+        #[cfg(target_os = "macos")]
+        let (agent, shell_from, shared_arg, python) = (me.data.join("codex"), std::ffi::OsString::from("/bin/bash"), "-s", "python3");
         fs::copy(shell_from, &agent).unwrap();
         let launch = |args: &[&str]| {
             Command::new(&agent).args(args).env_remove("CLAUDECODE").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
@@ -3495,7 +3498,7 @@ mod tests {
                 writeln!(input, "set /p KEYHANDOFF_TEST_RUN=<spec.json\r").unwrap();
                 writeln!(input, "\"{}\" run::tests::runner_entry --exact -q\r", runner.display()).unwrap();
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(unix)]
             {
                 writeln!(input, "cd '{}'", dir.display()).unwrap();
                 writeln!(input, "KEYHANDOFF_TEST_RUN=\"$(cat spec.json)\" '{}' run::tests::runner_entry --exact -q", runner.display()).unwrap();
@@ -3542,7 +3545,7 @@ mod tests {
         fs::remove_dir_all(me.data).unwrap();
     }
 
-    #[cfg(any(target_os = "linux", windows))]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
     fn key_client(profile: &str) -> Box<dyn os::KeyStream> {
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         loop {
@@ -3554,7 +3557,7 @@ mod tests {
         }
     }
 
-    #[cfg(any(target_os = "linux", windows))]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
     #[test]
     fn hostile_key_frames_are_refused_without_releasing_a_key() {
         use std::io::{BufRead, BufReader, Write};
@@ -3588,12 +3591,12 @@ mod tests {
             assert_eq!(me.handoff.view().keys.len(), 1, "bad input consumed a Once key");
             assert!(me.handoff.view().program.is_none());
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(unix)]
         let _ = fs::remove_file(os::key_socket(&profile));
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(any(target_os = "linux", windows))]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
     #[test]
     fn slow_key_connections_are_bounded_cut_off_and_normal_requests_recover() {
         use std::io::{BufRead, BufReader, Write};
@@ -3642,12 +3645,12 @@ mod tests {
         BufReader::new(client).read_line(&mut reply).unwrap();
         let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(reply["values"]["Key"], "synthetic-flood-key");
-        #[cfg(target_os = "linux")]
+        #[cfg(unix)]
         let _ = fs::remove_file(os::key_socket(&profile));
         let _ = fs::remove_dir_all(me.data);
     }
 
-    #[cfg(any(target_os = "linux", windows))]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
     #[test]
     fn a_client_that_never_reads_its_key_reply_is_cut_off() {
         use std::io::Write;
@@ -3675,7 +3678,7 @@ mod tests {
         let result = received.recv_timeout(Duration::from_secs(7));
         drop(client);
         assert!(result.is_ok(), "a nonreading client held a worker indefinitely");
-        #[cfg(target_os = "linux")]
+        #[cfg(unix)]
         let _ = fs::remove_file(os::key_socket(&profile));
         let _ = fs::remove_dir_all(me.data);
     }
@@ -3780,14 +3783,14 @@ mod tests {
     /// every form it prints, from it and from a shell it starts; an edited
     /// script asks again; and a run whose parent chain includes a process
     /// named `claude` prompts again without a verified session.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
     fn keyhandoff_run_binds_approval_to_the_command_names_agents_and_masks_output() {
         use crate::run::tests::{finished, start};
         use std::process::Command;
         const STRIPE: &[u8] = b"sk_test_51SyntheticRunKey0123456789abcdefXYZ";
-        if Command::new("python3").arg("--version").output().is_err() || Command::new("setsid").arg("--version").output().is_err() {
-            eprintln!("skipped: no python3 or setsid");
+        if Command::new("python3").arg("--version").output().is_err() {
+            eprintln!("skipped: no python3");
             return;
         }
         let me = app("Juno");
@@ -3846,7 +3849,7 @@ print("len", len(k))
         let agent_dir = me.data.join("agent");
         fs::create_dir_all(&agent_dir).unwrap();
         let claude = agent_dir.join("claude");
-        fs::copy("/bin/sh", &claude).unwrap();
+        fs::copy(if cfg!(target_os = "macos") { "/bin/bash" } else { "/bin/sh" }, &claude).unwrap();
         let out = start(&project, &profile, &["python3", "report.py"], Some(&claude));
         let (shown, text, code) = wait_or_answer(&out, Some(Answer::Always));
         assert_eq!(shown.unwrap().agent.as_deref(), Some("Claude Code"));
