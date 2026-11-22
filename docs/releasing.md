@@ -21,6 +21,8 @@ Installed copies install any update signed with the updater key, so that key dec
    - checks every signature against the public key in `src-tauri/tauri.conf.json`, so a wrong key file is caught before anything is uploaded;
    - uploads the signatures and `latest.json`.
 4. **Publish.** The script asks `Publish v0.2.0 to everyone now?`. Answering `y` publishes the release. That creates the tag, the script deploys the website from your computer so its download links follow (`scripts/deploy-site.sh`), and installed copies take it **48 hours after you signed it** (SR-14). That window is for noticing a release you didn't make: GitHub emails you about every release, so pull any you don't recognise. There's no way to skip the wait yet, so even an urgent fix takes two days to reach installed copies; new downloads from the website get it at once. Any other answer leaves a signed draft; publish it later with `gh release edit v0.2.0 --draft=false --latest`.
+
+**Publishing before you can sign.** If the signing drive isn't at hand, you can publish the draft from its GitHub page (**Publish release**). New downloads work at once; installed copies don't see the release yet, because it has no `latest.json`. When you have the key, run `scripts/sign-release.sh VERSION` as usual: it accepts the published release, compares hashes the same way (so still check them against the `draft` step's log), uploads the signatures and `latest.json`, and deploys the website. The 48-hour wait for installed copies starts then.
 5. **Unplug the signing drive.**
 
 The script needs `gh` (signed in), `git`, `jq`, `node`, `npx` and `sha256sum`. Git Bash on Windows has all of them once `gh` and Node are installed.

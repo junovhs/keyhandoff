@@ -26,10 +26,14 @@ for tool in gh git jq node npx sha256sum; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
 
-# 1. The draft: it must exist, still be a draft, and target a commit on main
-#    whose version is the one being signed.
-[ "$(gh release view "v$v" -R "$repo" --json isDraft --jq .isDraft)" = true ] \
-  || die "v$v is not a draft release (already published, or never drafted)"
+# 1. The release: a draft, or one published unsigned so downloads could go
+#    out before the key was at hand (installed copies don't see it until its
+#    latest.json is uploaded here). It must target a commit on main whose
+#    version is the one being signed.
+draft=$(gh release view "v$v" -R "$repo" --json isDraft --jq .isDraft 2>/dev/null) || die "there's no v$v release (has the release workflow drafted it?)"
+if [ "$draft" != true ]; then
+  echo "v$v is already published; signing it so installed copies can update to it."
+fi
 target=$(gh release view "v$v" -R "$repo" --json targetCommitish --jq .targetCommitish)
 git fetch -q origin main
 git cat-file -e "$target^{commit}" 2>/dev/null || die "draft targets $target, which isn't in this checkout"
@@ -71,7 +75,12 @@ node scripts/verify-update-sig.mjs "${packages[@]/#/$work/}" \
 gh release view "v$v" -R "$repo" --json body --jq .body > "$work/notes.md"
 bash scripts/updater-manifest.sh "$v" "$work" "$work/notes.md" > "$work/latest.json"
 gh release upload "v$v" -R "$repo" --clobber "$work"/*.sig "$work/latest.json"
-echo "Signatures and latest.json are on the draft."
+echo "Signatures and latest.json are on the release."
+if [ "$draft" != true ]; then
+  echo "Installed copies will now update to v$v."
+  bash scripts/deploy-site.sh || echo "The site didn't update; run scripts/deploy-site.sh again from main."
+  exit 0
+fi
 
 # 5. Publishing makes the tag and reaches installed copies; then the site is
 # deployed from here so its download links follow.
