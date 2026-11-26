@@ -82,6 +82,12 @@ pub struct Approval {
     /// Approvals from before commands were bound have none and no longer count.
     #[serde(default)]
     pub command: Option<[u8; 32]>,
+    /// Also when the command runs in the background (a systemd timer or
+    /// service, cron, at, Task Scheduler, launchd). Set only from a person's
+    /// own prompt, or by extending an approval such a prompt made; absent in
+    /// older files, so their approvals still ask at every background run.
+    #[serde(default)]
+    pub background: bool,
 }
 
 /// What placeholders have caught: every run's stand-ins, so one found later

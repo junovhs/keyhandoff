@@ -4,6 +4,19 @@ Each version's notes become its GitHub Release. To release, set `version` in
 `src-tauri/Cargo.toml` and add its section here; the release workflow builds and
 publishes it once both are on `main`.
 
+## [Unreleased]
+
+- **Background jobs run unattended.** A command started by a systemd timer or
+  service, cron, at, Task Scheduler or launchd can use an approval you marked
+  for background runs. Run its command once yourself and tick **also in the
+  background** with **Always allow**. If you already allowed it, its next
+  background run offers **Allow in the background**. A background prompt still
+  can't create a lasting approval; a command an AI agent started never gets
+  one; an edited script, other arguments, another folder or another key asks
+  again.
+- `systemd-run --user` services count as background requests even with
+  `--pty`, so an agent can't use one to look like a person at a terminal.
+
 ## [0.3.1] - 2026-11-22
 
 KeyHandoff is still pre-release and has not had a security audit: use it with

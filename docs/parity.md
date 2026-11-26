@@ -42,7 +42,7 @@ Linux means X11. Wayland isn't supported yet on any row. macOS means 10.15 or la
 | Approvals bound to the exact command and its files | yes | yes | yes | Shared code. |
 | AI coding agents recognised, saved approvals don't count | yes | yes | yes | |
 | Approve for one agent session | yes | yes | yes | |
-| Unattended jobs (services, scheduled tasks, cron, systemd, launchd) always ask | yes | yes | yes | Windows: services, Task Scheduler, WMI. Linux: cron, at, systemd system and user services and timers. macOS: cron, at, launchd agents and daemons. |
+| Unattended jobs (services, scheduled tasks, cron, systemd, launchd) can't create a lasting approval, and use only ones a person marked for background runs | yes | yes | yes | Windows: services, Task Scheduler, WMI. Linux: cron, at, systemd system and user services and timers, `systemd-run --user` (even with `--pty`). macOS: cron, at, launchd agents and daemons. The marking is shared core logic. |
 | Lasting approvals confirmed by the OS's own prompt | no (FEAT-19) | no (PAR-06) | no (ISS-14) | Windows Hello on Windows; polkit on Linux; Touch ID on macOS. |
 | Type a saved key into a field | no (HAND-14) | yes | partly (ISS-10) | X11 only on Linux. macOS uses Accessibility, which you allow once; built, keystrokes not yet checked by hand. |
 

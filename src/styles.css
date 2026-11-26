@@ -614,3 +614,5 @@ button:disabled { opacity: .45; cursor: default; }
 .history-list ul { list-style: none; padding-left: 0; }
 .history-list ul li { position: relative; padding-left: 14px; }
 .history-list ul li::before { content: ""; position: absolute; left: 1px; top: .72em; width: 6px; height: 1px; background: var(--text-3); }
+.bg-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.bg-check input { margin: 0; accent-color: var(--ok); }

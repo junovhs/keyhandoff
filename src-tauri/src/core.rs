@@ -83,8 +83,14 @@ enum Safe {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Answer {
-    /// Whenever this command runs in this folder.
+    /// Whenever this command runs in this folder, from a terminal or the app.
     Always,
+    /// Always, and also when this exact command runs in the background (a
+    /// systemd timer or service, cron, at, Task Scheduler, launchd). Offered
+    /// only by a person's own prompt, or by a background prompt to extend an
+    /// approval a person's prompt already made for this exact command.
+    #[serde(rename = "always-background")]
+    AlwaysBackground,
     /// This command, for 30 minutes: what's offered when an AI agent started it.
     #[serde(rename = "30min")]
     ForNow,
@@ -155,6 +161,10 @@ struct ProgramAsk {
     keys: Vec<[u8; 16]>,
     session: Option<SessionScope>,
     unattended: Option<&'static str>,
+    /// For a background request: every key it asks for already has an
+    /// approval made at a person's prompt for this exact command and folder,
+    /// so the prompt may extend those to background runs.
+    extends: bool,
     reply: mpsc::Sender<Answer>,
 }
 
@@ -282,6 +292,9 @@ pub struct SafeView {
 pub struct ProgramView {
     pub id: u64,
     pub unattended: Option<&'static str>,
+    /// A background request whose keys a person already allowed for this
+    /// exact command and folder: the prompt can let it run in the background.
+    pub extends: bool,
     pub session: Option<String>,
     pub session_image: Option<String>,
     /// `python3`, `node.exe`.
@@ -1461,7 +1474,7 @@ impl Handoff {
                 .iter()
                 .map(|n| core.vault.find(n).ok_or_else(|| format!("No kept key is named {n}.")))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut new: Vec<_> = ids.iter().copied().filter(|&k| unattended.is_some() || !core.allowed(peer, session.as_ref(), binding, k)).collect();
+            let mut new: Vec<_> = ids.iter().copied().filter(|&k| !core.allowed(peer, session.as_ref(), binding, k, unattended.is_some())).collect();
             new.sort_unstable();
             new.dedup();
             if new.is_empty() {
@@ -1479,7 +1492,10 @@ impl Handoff {
             let (reply, answer) = mpsc::channel();
             core.asks += 1;
             let id = core.asks;
-            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), session: session.clone(), unattended, reply });
+            // A background prompt never creates a lasting approval; it can only
+            // extend ones a person's prompt made for this exact command.
+            let extends = unattended.is_some() && peer.agent.is_none() && new.iter().all(|&k| core.approval(peer, binding, k).is_some());
+            core.program = Some(ProgramAsk { id, peer: peer.clone(), keys: new.clone(), session: session.clone(), unattended, extends, reply });
             (ids, new, id, answer)
         };
         (self.notify)();
@@ -1491,12 +1507,15 @@ impl Handoff {
             }
             // A grant for another key in this request may have been revoked or
             // expired while the newly requested keys were on screen.
-            if ids.iter().any(|k| !new.contains(k) && !core.allowed(peer, session.as_ref(), binding, *k)) {
+            if ids.iter().any(|k| !new.contains(k) && !core.allowed(peer, session.as_ref(), binding, *k, unattended.is_some())) {
                 Err("An approval changed. Run the command again.".into())
             } else {
                 let released = match (answer, &session, &peer.agent) {
                     (Answer::Deny, _, _) => Err("Not allowed in KeyHandoff.".into()),
-                    (Answer::Always, _, None) if unattended.is_none() => core.allow(peer, binding, &new).and_then(|()| core.release(&ids, runner)),
+                    (Answer::Always | Answer::AlwaysBackground, _, None) if unattended.is_none() => {
+                        core.allow(peer, binding, &new, answer == Answer::AlwaysBackground).and_then(|()| core.release(&ids, runner))
+                    }
+                    (Answer::AlwaysBackground, _, None) => core.extend_to_background(peer, binding, &new).and_then(|()| core.release(&ids, runner)),
                     (Answer::Session | Answer::ForNow, Some(scope), Some(agent)) => {
                         let released = core.release(&ids, runner)?;
                         core.grants.push(SessionGrant {
@@ -1600,8 +1619,8 @@ impl Handoff {
     pub fn answer_request(&self, id: u64, answer: Answer) -> Result<(), String> {
         let mut core = self.lock();
         let ask = core.program.as_ref().filter(|ask| ask.id == id).ok_or("This request has ended.")?;
-        if ask.unattended.is_some() && !matches!(answer, Answer::Once | Answer::Deny) {
-            return Err("An unattended request can only be allowed once.".into());
+        if ask.unattended.is_some() && !matches!(answer, Answer::Once | Answer::Deny) && !(ask.extends && answer == Answer::AlwaysBackground) {
+            return Err("A background request can only be allowed once, unless you already allowed this exact command yourself.".into());
         }
         let ask = core.program.take().ok_or("No program is waiting.")?;
         let _ = ask.reply.send(answer);
@@ -1978,17 +1997,45 @@ impl Core {
         }
     }
 
-    fn allowed(&self, peer: &Peer, session: Option<&SessionScope>, binding: [u8; 32], key: [u8; 16]) -> bool {
+    /// Whether `key` is already allowed for this request. A background
+    /// (`unattended`) request counts only approvals marked for background runs.
+    fn allowed(&self, peer: &Peer, session: Option<&SessionScope>, binding: [u8; 32], key: [u8; 16], unattended: bool) -> bool {
         if peer.agent.is_some() {
-            return self.grants.iter().any(|g| Some(&g.scope) == session && g.expires > Instant::now()
+            // Session grants never cover a background request (give_scoped drops the scope).
+            return !unattended && self.grants.iter().any(|g| Some(&g.scope) == session && g.expires > Instant::now()
                 && g.keys.contains(&key) && g.command.is_none_or(|c| c == binding));
         }
-        self.approvals.iter().any(|a| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding))
+        self.approval(peer, binding, key).is_some_and(|a| a.background || !unattended)
     }
 
-    fn allow(&mut self, peer: &Peer, binding: [u8; 32], keys: &[[u8; 16]]) -> Result<(), String> {
+    /// The saved approval for exactly this command, in this folder, for `key`.
+    fn approval(&self, peer: &Peer, binding: [u8; 32], key: [u8; 16]) -> Option<&Approval> {
+        self.approvals.iter().find(|a| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding))
+    }
+
+    /// Save Always for `keys`, from a person's prompt; `background` lets the
+    /// same command use it when it runs in the background.
+    fn allow(&mut self, peer: &Peer, binding: [u8; 32], keys: &[[u8; 16]], background: bool) -> Result<(), String> {
         for &key in keys {
-            self.approvals.push(Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding) });
+            match self.approvals.iter_mut().find(|a| a.key == key && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding)) {
+                Some(a) => a.background |= background,
+                None => self.approvals.push(Approval { program: peer.program.clone(), folder: peer.folder.clone(), key, command: Some(binding), background }),
+            }
+        }
+        self.prune_approvals()
+    }
+
+    /// From a background prompt: let approvals a person's prompt already made
+    /// for this exact command and folder cover its background runs too. Never
+    /// creates one; a key without such an approval fails the whole answer.
+    fn extend_to_background(&mut self, peer: &Peer, binding: [u8; 32], keys: &[[u8; 16]]) -> Result<(), String> {
+        if peer.agent.is_some() || keys.iter().any(|&k| self.approval(peer, binding, k).is_none()) {
+            return Err("An approval changed. Run the command again.".into());
+        }
+        for a in &mut self.approvals {
+            if keys.contains(&a.key) && a.program == peer.program && a.folder == peer.folder && a.command == Some(binding) {
+                a.background = true;
+            }
         }
         self.prune_approvals()
     }
@@ -2188,6 +2235,7 @@ impl Core {
         ProgramView {
             id: ask.id,
             unattended: ask.unattended,
+            extends: ask.extends,
             session_image: ask.session.as_ref().map(|s| s.process.image.display().to_string()),
             session: ask.session.as_ref().map(|s| format!("{} · PID {}", ask.peer.agent.as_deref().unwrap_or("Agent"), s.process.pid)),
             name: display_name(&ask.peer.program),
@@ -3077,37 +3125,163 @@ mod tests {
         Peer { pid: 0, program: program.into(), folder: Some(folder.into()), command: Some(format!("{program} report.py")), args: vec!["report.py".into()], agent: None }
     }
 
+    /// The program now asking, once it asks.
+    fn asked(h: &Handoff) -> ProgramView {
+        (0..400).find_map(|_| {
+            let program = h.view().program;
+            if program.is_none() {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            program
+        }).expect("a prompt")
+    }
+
+    fn ask_from(h: &Arc<Handoff>, who: &Peer, key: &str, unattended: Option<&'static str>) -> std::thread::JoinHandle<Result<(Vec<Secret>, Option<String>), String>> {
+        let (h, who, key) = (h.clone(), who.clone(), key.to_string());
+        std::thread::spawn(move || h.give_scoped(&who, &[key], None, false, unattended))
+    }
+
+    /// A background request (a timer, cron, Task Scheduler) can't create a
+    /// lasting approval or use a plain one. A person's prompt can mark one
+    /// for background runs; or, once a person allowed this exact command, a
+    /// background prompt can extend that approval. After that the same
+    /// command runs in the background with no prompt.
     #[test]
     fn unattended_launch_cannot_reuse_or_create_a_lasting_grant() {
         let me = app("Juno");
         let h = me.handoff.clone();
         h.lock().vault.add("Dialpad", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
         let script = peer("/usr/bin/python3", "/home/juno/report");
-        let ask = |unattended| {
-            let h = h.clone();
-            let script = script.clone();
-            std::thread::spawn(move || h.give_scoped(&script, &["Dialpad".into()], None, false, unattended))
-        };
+        const TIMER: Option<&str> = Some("a systemd user service or timer");
 
-        let interactive = ask(None);
+        // Nothing allowed yet: a background prompt offers Allow once only.
+        let first = ask_from(&h, &script, "Dialpad", TIMER);
+        let shown = asked(&h);
+        assert_eq!(shown.unattended, TIMER);
+        assert!(!shown.extends, "nothing to extend");
+        for answer in [Answer::Always, Answer::AlwaysBackground, Answer::Session, Answer::ForNow] {
+            assert!(h.answer_request(shown.id, answer).is_err(), "{answer:?} from a background prompt");
+        }
+        h.answer_request(shown.id, Answer::Once).unwrap();
+        assert_eq!(first.join().unwrap().unwrap().0[0].expose(), KEY);
+        assert!(h.lock().approvals.is_empty(), "a background prompt saved nothing");
+
+        // A person's plain Always doesn't cover background runs...
+        let interactive = ask_from(&h, &script, "Dialpad", None);
         answer_when_asked(&h, Answer::Always);
         assert!(interactive.join().unwrap().is_ok());
-
-        let unattended = ask(Some("Windows Task Scheduler"));
-        let shown = (0..200).find_map(|_| {
-            let program = h.view().program;
-            if program.is_none() {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            program
-        }).expect("a scheduled launch needs fresh approval even with an existing interactive grant");
+        assert!(!h.lock().approvals[0].background);
+        let unattended = ask_from(&h, &script, "Dialpad", Some("Windows Task Scheduler"));
+        let shown = asked(&h);
         assert_eq!(shown.unattended, Some("Windows Task Scheduler"));
+        // ...but its prompt may extend it, and nothing else.
+        assert!(shown.extends);
         for answer in [Answer::Always, Answer::Session, Answer::ForNow] {
             assert!(h.answer_request(shown.id, answer).is_err());
         }
-        h.answer_request(shown.id, Answer::Once).unwrap();
-        let (keys, _) = unattended.join().unwrap().unwrap();
+        h.answer_request(shown.id, Answer::AlwaysBackground).unwrap();
+        assert_eq!(unattended.join().unwrap().unwrap().0[0].expose(), KEY);
+        assert_eq!(h.lock().approvals.len(), 1, "extended, not added");
+        assert!(h.lock().approvals[0].background);
+
+        // From then on it runs in the background with no prompt.
+        let (keys, _) = h.give_scoped(&script, &["Dialpad".into()], None, false, TIMER).unwrap();
         assert_eq!(keys[0].expose(), KEY);
+        assert!(h.view().program.is_none());
+    }
+
+    /// Always with "also in the background" at a person's prompt lets the
+    /// same command, in the same folder, for the same key, run in the
+    /// background unprompted. Anything else about it asks again, Once only.
+    #[test]
+    fn a_background_approval_covers_only_that_command_folder_and_key() {
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        for name in ["Plaid", "Other"] {
+            h.lock().vault.add(name, None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+        }
+        let project = std::env::temp_dir().join(format!("kh-bg-{}", std::process::id()));
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("sync.mjs"), "console.log('sync')").unwrap();
+        let job = Peer { pid: 0, program: "/usr/bin/node".into(), folder: Some(project.clone()), command: Some("node sync.mjs".into()), args: vec!["sync.mjs".into()], agent: None };
+        const TIMER: Option<&str> = Some("a systemd user service or timer");
+
+        let interactive = ask_from(&h, &job, "Plaid", None);
+        answer_when_asked(&h, Answer::AlwaysBackground);
+        assert!(interactive.join().unwrap().is_ok());
+        assert!(h.lock().approvals[0].background);
+        let (keys, _) = h.give_scoped(&job, &["Plaid".into()], None, false, TIMER).unwrap();
+        assert_eq!(keys[0].expose(), KEY);
+        // A person running it again isn't asked either.
+        assert!(h.give_scoped(&job, &["Plaid".into()], None, false, None).is_ok());
+
+        let must_ask_once_only = |who: &Peer, key: &str| {
+            let pending = ask_from(&h, who, key, TIMER);
+            let shown = asked(&h);
+            assert!(!shown.extends, "{:?} {key} isn't what was allowed", who.command);
+            assert!(h.answer_request(shown.id, Answer::AlwaysBackground).is_err());
+            assert!(h.answer_request(shown.id, Answer::Always).is_err());
+            h.answer_request(shown.id, Answer::Deny).unwrap();
+            assert!(pending.join().unwrap().is_err());
+        };
+        // Another key, another folder, other arguments.
+        must_ask_once_only(&job, "Other");
+        must_ask_once_only(&Peer { folder: Some(std::env::temp_dir()), ..job.clone() }, "Plaid");
+        must_ask_once_only(&Peer { args: vec!["sync.mjs".into(), "--all".into()], ..job.clone() }, "Plaid");
+        // An edited script.
+        fs::write(project.join("sync.mjs"), "console.log('exfiltrate')").unwrap();
+        must_ask_once_only(&job, "Plaid");
+        assert_eq!(h.lock().approvals.len(), 1);
+        let _ = fs::remove_dir_all(&project);
+    }
+
+    /// A command an AI agent started never gets or uses a lasting approval,
+    /// whether it runs in the foreground or was pushed into the background
+    /// (systemd-run, cron, at, Task Scheduler) with the agent still found,
+    /// even when a person already allowed that exact command for background runs.
+    #[test]
+    fn an_agent_cannot_get_or_use_a_background_approval() {
+        let me = app("Juno");
+        let h = me.handoff.clone();
+        h.lock().vault.add("Plaid", None, None, &Secret::new(KEY.to_vec()), Keep::Forever, now());
+        let person = peer("/usr/bin/node", "/home/juno/financeboy");
+        let agent = Peer { agent: Some("Claude Code".into()), ..person.clone() };
+
+        // At its own prompt, Always and Always-in-the-background save nothing.
+        for answer in [Answer::Always, Answer::AlwaysBackground] {
+            let pending = ask_from(&h, &agent, "Plaid", None);
+            answer_when_asked(&h, answer);
+            assert!(pending.join().unwrap().is_ok());
+            assert!(h.lock().approvals.is_empty(), "an agent's {answer:?} was saved");
+        }
+        // Launched into the background, it can't create one either.
+        for origin in ["a systemd-run service", "a cron job", "an at job", "Windows Task Scheduler"] {
+            let pending = ask_from(&h, &agent, "Plaid", Some(origin));
+            let shown = asked(&h);
+            assert!(!shown.extends);
+            for answer in [Answer::Always, Answer::AlwaysBackground, Answer::Session, Answer::ForNow] {
+                assert!(h.answer_request(shown.id, answer).is_err(), "{answer:?} for {origin}");
+            }
+            h.answer_request(shown.id, Answer::Deny).unwrap();
+            assert!(pending.join().unwrap().is_err());
+        }
+        assert!(h.lock().approvals.is_empty());
+
+        // A person's background approval for the same command doesn't cover it.
+        let interactive = ask_from(&h, &person, "Plaid", None);
+        answer_when_asked(&h, Answer::AlwaysBackground);
+        assert!(interactive.join().unwrap().is_ok());
+        let pending = ask_from(&h, &agent, "Plaid", None);
+        assert!(!asked(&h).extends);
+        answer_when_asked(&h, Answer::AlwaysBackground);
+        assert!(pending.join().unwrap().is_ok());
+        let pending = ask_from(&h, &agent, "Plaid", Some("a systemd-run service"));
+        let shown = asked(&h);
+        assert!(!shown.extends);
+        assert!(h.answer_request(shown.id, Answer::AlwaysBackground).is_err());
+        h.answer_request(shown.id, Answer::Deny).unwrap();
+        assert!(pending.join().unwrap().is_err());
+        assert_eq!(h.lock().approvals.len(), 1, "still only the person's approval");
     }
 
     /// Wait for a program to be asking, then answer it.
@@ -3598,7 +3772,7 @@ mod tests {
         {
             let mut core = me.handoff.lock();
             core.vault.set_keep(parse_id(&id).unwrap(), Keep::Once);
-            core.allow(&peer, peer.binding(), &[parse_id(&id).unwrap()]).unwrap();
+            core.allow(&peer, peer.binding(), &[parse_id(&id).unwrap()], false).unwrap();
         }
         let profile = format!("test-frames-{}", OsRng.next_u32());
         let h = me.handoff.clone();
@@ -3636,7 +3810,7 @@ mod tests {
         let me = app("Key flood");
         let id = hold(&me, "Key", b"synthetic-flood-key");
         let peer = peer("/usr/bin/python3", "/tmp");
-        me.handoff.lock().allow(&peer, peer.binding(), &[parse_id(&id).unwrap()]).unwrap();
+        me.handoff.lock().allow(&peer, peer.binding(), &[parse_id(&id).unwrap()], false).unwrap();
         let active = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
         let served: os::ServeKeys = {
@@ -3696,7 +3870,7 @@ mod tests {
             ids.push(parse_id(&hold(&me, &name, &vec![1u8; 4096])).unwrap());
             names.push(name);
         }
-        me.handoff.lock().allow(&peer, peer.binding(), &ids).unwrap();
+        me.handoff.lock().allow(&peer, peer.binding(), &ids, false).unwrap();
         let (done, received) = mpsc::channel();
         let h = me.handoff.clone();
         let profile = format!("test-reply-{}", OsRng.next_u32());

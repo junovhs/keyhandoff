@@ -7,6 +7,15 @@ export type Release = { date: string; title: string; notes: string[] };
 
 export const HISTORY: Release[] = [
   {
+    date: "2026-11-25",
+    title: "Background jobs",
+    notes: [
+      "A timer, cron job or scheduled task can get its keys with nobody there. Run its command once yourself and tick also in the background when you choose Always allow.",
+      "Already allowed it? Its next background run offers Allow in the background.",
+      "A background run can't create a lasting approval, an AI agent's command never gets one, and an edited script asks again.",
+    ],
+  },
+  {
     date: "2026-11-22",
     title: "On the Mac",
     notes: [

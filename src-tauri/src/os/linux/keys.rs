@@ -139,12 +139,18 @@ fn unattended_origin(ancestry: &[String], cgroup: &str, tty: bool) -> Option<&'s
     if path.starts_with("/system.slice/") {
         return Some("a system service");
     }
+    let unit = path.rsplit('/').find(|part| !part.is_empty()).unwrap_or("");
+    // `systemd-run --user` names its services run-….service; with --pty it
+    // has a terminal, but it starts outside the caller's process tree and
+    // environment, so an agent could use it to look like a person.
+    if path.contains("/user@") && unit.starts_with("run-") && unit.ends_with(".service") {
+        return Some("a systemd-run service");
+    }
     // A person at a terminal, even one a user service hosts (older
     // gnome-terminal runs its shells inside gnome-terminal-server.service).
     if tty {
         return None;
     }
-    let unit = path.rsplit('/').find(|part| !part.is_empty()).unwrap_or("");
     // Desktops launch apps as app-….scope, or app-….service on KDE; any
     // other service under the user's manager is a user service or timer.
     if path.contains("/user@") && unit.ends_with(".service") && !unit.starts_with("app-") && !unit.starts_with("user@") {
@@ -177,6 +183,12 @@ mod tests {
         assert_eq!(unattended_origin(&names(&["python3"]), "0::/system.slice/report.service\n", true), Some("a system service"));
         // User services and timers (systemd-run --user, a .timer's service).
         assert_eq!(unattended_origin(&names(&["python3"]), &user_unit("report.service"), false), Some("a systemd user service or timer"));
+        // systemd-run --user, with or without --pty: outside the caller's
+        // tree and environment, so a terminal doesn't make it a person.
+        assert_eq!(unattended_origin(&names(&["python3"]), &user_unit("run-u42.service"), true), Some("a systemd-run service"));
+        assert_eq!(unattended_origin(&names(&["python3"]), &user_unit("run-p1234-i1235.service"), false), Some("a systemd-run service"));
+        // A timer's service with no terminal, as financeboy-pull.timer runs.
+        assert_eq!(unattended_origin(&names(&["node", "keyhandoff"]), &user_unit("financeboy-pull.service"), false), Some("a systemd user service or timer"));
 
         // People: a terminal, apps the desktop launched (GNOME scopes, KDE
         // services), a shell hosted by gnome-terminal-server.service, SSH,

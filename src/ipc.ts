@@ -46,7 +46,10 @@ export interface SafeView {
 /** A program asking for kept keys, waiting for Allow. */
 export interface ProgramView {
   id: number;
+  /** What started it when no person did ("a systemd user service or timer"). */
   unattended: string | null;
+  /** A background request whose keys you already allowed for this exact command and folder. */
+  extends: boolean;
   session: string | null;
   session_image: string | null;
   /** `python3`, `node.exe`. */
@@ -61,8 +64,12 @@ export interface ProgramView {
   agent: string | null;
 }
 
-/** `30min`: offered instead of Always when an AI agent started the program. */
-export type Answer = "session" | "always" | "30min" | "once" | "deny";
+/**
+ * `30min`: offered instead of Always when an AI agent started the program.
+ * `always-background`: Always, and also when this exact command runs in the
+ * background (a timer, cron, a service).
+ */
+export type Answer = "session" | "always" | "always-background" | "30min" | "once" | "deny";
 
 /** Someone whose card you opened. */
 export interface ContactView {

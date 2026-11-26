@@ -631,6 +631,8 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
   useEffect(() => void enter(sheet.current, "rise", 360), [program.path, program.folder, program.command]);
   const one = program.keys.length === 1;
   const agent = program.agent;
+  const [background, setBackground] = useState(false);
+  useEffect(() => setBackground(false), [program.id]);
   return (
     <div className="sheet" ref={sheet}>
       <div className="head">
@@ -656,7 +658,9 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
       </div>
       <p className="help">
         {program.unattended ? (
-          `Started by ${program.unattended}. Approval covers this request only.`
+          program.extends
+            ? `Started by ${program.unattended}. You allowed this exact command in this folder yourself. Let it run in the background from now on? A changed script asks again.`
+            : `Started by ${program.unattended}. Approval covers this request only. To let it run on its own, run this exact command once yourself in this folder and choose Always allow, also in the background.`
         ) : agent ? (
           <><Bot size={13} strokeWidth={2} aria-hidden className="inline-ico" /> {program.session
             ? program.session + ". Allow any command from this session to use the listed keys in this folder for 30 minutes."
@@ -665,6 +669,12 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
           "Always covers this exact command in this folder. A changed script asks again."
         )}
       </p>
+      {!agent && !program.unattended && (
+        <label className="help bg-check">
+          <input type="checkbox" checked={background} onChange={(e) => setBackground(e.target.checked)} />{" "}
+          With Always, also when it runs in the background (a timer, cron, a service)
+        </label>
+      )}
       {program.session_image && (
         <details className="help"><summary>Agent executable</summary><span className="mono">{program.session_image}</span></details>
       )}
@@ -679,7 +689,10 @@ function ProgramSheet({ program, run }: { program: ProgramView; run: Run }) {
           <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "session"))}>Allow for 30 minutes</button>
         )}
         {!agent && !program.unattended && (
-          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "always"))}>Always allow</button>
+          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, background ? "always-background" : "always"))}>Always allow</button>
+        )}
+        {!agent && program.unattended && program.extends && (
+          <button className="btn primary grow" onClick={() => void run(api.answer(program.id, "always-background"))}>Allow in the background</button>
         )}
       </div>
     </div>
